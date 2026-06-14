@@ -1,0 +1,353 @@
+scheduler:
+  thresholds:
+    scene: 0.65
+    micro_interaction: 0.45
+  forced_scene_ticks: [6, 12, 18, 24]
+  weights:
+    scene:
+      material_urgency: 0.28
+      rent_pressure: 0.28
+      binding_urgency: 0.18
+      conflict_pressure: 0.22
+      recognition_pressure: 0.22
+      repair_debt: 0.15
+      memory_pressure: 0.08
+      mean_fatigue: -0.08
+    micro_interaction:
+      base: 0.25
+      binding_urgency: 0.18
+      conflict_pressure: 0.12
+      memory_pressure: 0.05
+      routine_overlap_bonus: 0.24
+      scene_score: -0.12
+  time_ranges_seconds:
+    latent: [14400, 57600]
+    micro_interaction: [5, 300]
+    scene: [600, 5400]
+
+affordances:
+  base_score: 0.04
+  tick_bias:
+    latent: -0.25
+    micro_interaction: 0.08
+    scene: 0.12
+
+action_selection:
+  base_score: 0.03
+  tick_bias:
+    latent: -0.2
+    micro_interaction: 0.04
+    scene: 0.08
+  weights:
+    affordance_score: 0.45
+    low_inhibition: 0.18
+    low_fate_memory: 0.08
+    speech_block: 0.28
+    defensive_memory: 0.16
+    fate_memory: 0.14
+    conflict_pressure: 0.1
+    repair_debt: 0.18
+    substitution_speech_block: 0.12
+    substitution_defensive_memory: 0.1
+    repairable_affordance: 0.16
+    audience: 0.2
+    face_risk: 0.16
+    public_fate_memory: 0.08
+    injury_memory: 0.14
+    claim_repair_debt: 0.1
+    low_public_risk: 0.06
+
+expression:
+  base_score: 0.03
+  tick_bias:
+    latent: -0.2
+    micro_interaction: 0.03
+    scene: 0.06
+  weights:
+    action_score: 0.35
+    low_speech_block: 0.18
+    low_audience: 0.05
+    conflict_pressure: 0.18
+    repair_debt: 0.12
+    audience: 0.08
+    speech_block: 0.2
+    fatigue: 0.12
+    memory_pressure: 0.1
+    defensive_memory: 0.16
+    fate_memory: 0.12
+    inhibited_action: 0.18
+    injury_memory: 0.12
+    silence_defensive_memory: 0.12
+    silence_fate_memory: 0.1
+    silence_inhibited_action: 0.16
+    public_audience: 0.22
+    face_risk: 0.16
+    substituted_action: 0.1
+
+recognition:
+  effects:
+    granted:
+      repair_event_type: RepairEvent
+      repair_method: explicit recognition
+      repair_debt_delta: -0.08
+      conflict_delta: -0.04
+      demand_pressure_delta: -0.14
+    partial:
+      repair_event_type: RepairEvent
+      repair_method: partial acknowledgment with residue
+      repair_debt_delta: -0.02
+      conflict_delta: -0.01
+      demand_pressure_delta: -0.04
+    misunderstood:
+      repair_event_type: MisrecognitionEvent
+      repair_method: wrong layer addressed
+      repair_debt_delta: 0.05
+      conflict_delta: 0.03
+      demand_pressure_delta: 0.04
+    displaced:
+      repair_event_type: DisplacementEvent
+      repair_method: practical or public substitute
+      repair_debt_delta: 0.06
+      conflict_delta: 0.01
+      demand_pressure_delta: 0.03
+    refused:
+      repair_event_type: MisrecognitionEvent
+      repair_method: recognition claim rejected
+      repair_debt_delta: 0.08
+      conflict_delta: 0.06
+      demand_pressure_delta: 0.06
+    postponed:
+      repair_event_type: AvoidanceEvent
+      repair_method: deferred under timing or audience pressure
+      repair_debt_delta: 0.04
+      conflict_delta: 0.01
+      demand_pressure_delta: 0.03
+    unspeakable:
+      repair_event_type: AvoidanceEvent
+      repair_method: direct recognition made unsayable
+      repair_debt_delta: 0.07
+      conflict_delta: 0.04
+      demand_pressure_delta: 0.05
+
+fate_transitions:
+  min_tick: 6
+  threshold: 0.62
+  irreversibility_threshold: 0.72
+
+memory:
+  min_salience: 0.35
+  decay_per_tick: 0.01
+  source_weights:
+    irreversibility: 0.9
+    classification: 0.75
+    recognition_failure: 0.58
+
+rpp_dynamics:
+  composition_min_intensity: 0.25
+  decay_after_ticks: 3
+  decay_delta: 0.04
+  decay_floor: 0.03
+  compositions:
+    - composition_id: anxious_silence_circuit
+      members: [pursuit_withdrawal, silence_interpretation_loop]
+      threshold: 0.48
+      relation_metric_weights:
+        silence_charge: 0.035
+      effect: uncertainty becomes the main medium of relation
+    - composition_id: debt_lock
+      members: [contribution_debt_loop, repair_avoidance]
+      threshold: 0.5
+      relation_metric_weights:
+        repair_debt: 0.05
+        memory_bias.defensive_reconstruction: 0.035
+      effect: contribution history becomes hard to repair without increasing debt
+    - composition_id: public_face_split
+      members: [public_private_split, face_saving_loop]
+      threshold: 0.48
+      relation_metric_weights:
+        public_private_gap: 0.04
+        face_risk_pressure: 0.025
+      effect: public performance preserves private injury
+    - composition_id: care_bind_double_bind
+      members: [complementary_dependency, double_bind]
+      threshold: 0.52
+      relation_metric_weights:
+        care_dependency: 0.035
+        double_bind_pressure: 0.025
+      effect: care and agency become mutually punishing
+    - composition_id: recognition_trap
+      members: [recognition_pursuit, repair_avoidance]
+      threshold: 0.5
+      relation_metric_weights:
+        recognition_pursuit_pressure: 0.025
+      effect: demand for recognition makes recognition harder to grant
+    - composition_id: credit_recognition_lock
+      members: [contribution_debt_loop, recognition_pursuit]
+      threshold: 0.5
+      relation_metric_weights:
+        unrecognized_contribution: 0.025
+      effect: contribution history and recognition demand fuse into symbolic credit conflict
+  suppressions:
+    - dominant: silence_interpretation_loop
+      suppressed: public_private_split
+      dominant_min_intensity: 0.62
+      min_gap: -0.15
+      suppression_delta: 0.04
+      reason: mediated absence absorbs attention before public performance can organize the relation
+    - dominant: complementary_dependency
+      suppressed: pursuit_withdrawal
+      dominant_min_intensity: 0.68
+      min_gap: -0.15
+      suppression_delta: 0.05
+      reason: care obligation keeps contact mandatory, reducing the explanatory role of pursuit
+    - dominant: double_bind
+      suppressed: repair_avoidance
+      dominant_min_intensity: 0.62
+      min_gap: -0.15
+      suppression_delta: 0.04
+      reason: blocked meta-communication makes avoidance a symptom rather than the dominant pattern
+
+rpps:
+  pursuit_withdrawal:
+    threshold: 0.5
+    weights:
+      delayed_signal: 0.28
+      abandonment_relevance: 0.24
+      autonomy_threat: 0.22
+      recognition_pressure: 0.2
+      repair_debt: 0.12
+      injury_memory: 0.035
+      defensive_memory: 0.02
+    effects:
+      checking_tendency_delta: 0.06
+      ambiguity_tolerance_delta: -0.04
+      p2_direct_need_inhibition_delta: 0.03
+      stabilization_delta: 0.08
+      conflict_pressure_delta: 0.08
+
+  repair_avoidance:
+    threshold: 0.48
+    weights:
+      apology_inhibition: 0.28
+      face_risk: 0.18
+      injury_present: 0.22
+      practical_signal: 0.18
+      conflict_pressure: 0.14
+      defensive_memory: 0.06
+    effects:
+      repair_debt_delta: 0.1
+      conflict_pressure_delta: -0.03
+      stabilization_delta: 0.07
+      p1_resentment_delta: 0.08
+
+  contribution_debt_loop:
+    threshold: 0.55
+    weights:
+      unrecognized_contribution: 0.32
+      unrecognized_sacrifice: 0.32
+      recognition_pressure: 0.24
+      material_urgency: 0.2
+      rent_pressure: 0.2
+      contribution_signal: 0.18
+      injury_memory: 0.035
+    effects:
+      p1_resentment_delta: 0.1
+      p1_stabilization_delta: 0.09
+      p2_stabilization_delta: 0.05
+      conflict_pressure_delta: 0.07
+
+  double_bind:
+    primary_gate: 0.44
+    threshold: 0.46
+    weights:
+      double_bind_pressure: 0.34
+      speech_inhibition: 0.22
+      binding_urgency: 0.2
+      recognition_pressure: 0.2
+    effects:
+      p1_direct_need_inhibition_delta: 0.06
+      p2_disobedience_threat_delta: 0.04
+      conflict_pressure_delta: 0.06
+      self_reinforcement_delta: 0.05
+      stabilization_delta: 0.07
+
+  public_private_split:
+    primary_gate: 0.42
+    threshold: 0.48
+    weights:
+      public_private_gap: 0.34
+      audience_pressure: 0.22
+      unrecognized_contribution: 0.18
+      public_performance_signal: 0.16
+    effects:
+      gap_delta: 0.06
+      repair_debt_delta: 0.06
+      p1_resentment_delta: 0.06
+      p2_apology_inhibition_delta: 0.04
+      stabilization_delta: 0.07
+
+  silence_interpretation_loop:
+    primary_gate: 0.46
+    threshold: 0.48
+    weights:
+      silence_charge: 0.3
+      delay_relevance: 0.24
+      silence_signal: 0.18
+      low_ambiguity_tolerance: 0.18
+      repair_debt: 0.12
+      injury_memory: 0.03
+    effects:
+      checking_tendency_delta: 0.07
+      ambiguity_tolerance_delta: -0.05
+      p2_direct_need_inhibition_delta: 0.03
+      silence_charge_delta: 0.05
+      stabilization_delta: 0.07
+
+  complementary_dependency:
+    primary_gate: 0.5
+    threshold: 0.5
+    weights:
+      care_dependency: 0.3
+      caretaker_fatigue: 0.2
+      dependency_admission_inhibition: 0.2
+      binding_urgency: 0.18
+      unrecognized_contribution: 0.14
+      memory_pressure: 0.025
+    effects:
+      dependency_delta: 0.05
+      conflict_pressure_delta: 0.05
+      p1_resentment_delta: 0.07
+      p2_dependency_inhibition_delta: 0.05
+      stabilization_delta: 0.07
+
+  face_saving_loop:
+    primary_gate: 0.45
+    threshold: 0.47
+    weights:
+      face_risk_pressure: 0.28
+      audience_pressure: 0.22
+      apology_inhibition: 0.22
+      repair_debt: 0.16
+      defensive_memory: 0.03
+      public_performance_signal: 0.12
+    effects:
+      face_risk_delta: 0.05
+      repair_debt_delta: 0.06
+      p2_apology_inhibition_delta: 0.05
+      stabilization_delta: 0.07
+
+  recognition_pursuit:
+    primary_gate: 0.5
+    threshold: 0.5
+    weights:
+      recognition_pursuit_pressure: 0.28
+      recognition_pressure: 0.24
+      checking_tendency: 0.18
+      unrecognized_contribution: 0.18
+      injury_memory: 0.0
+    effects:
+      recognition_pursuit_delta: 0.06
+      conflict_pressure_delta: 0.06
+      checking_tendency_delta: 0.05
+      p2_control_threat_delta: 0.04
+      stabilization_delta: 0.07

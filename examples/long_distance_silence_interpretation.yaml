@@ -1,0 +1,78 @@
+﻿id: long_distance_silence_interpretation
+name: Long Distance Silence Interpretation
+description: >
+  Two partners are bound by a future promise and a message channel. Delay and
+  absence become the main medium through which recognition and abandonment are
+  interpreted.
+field_state:
+  material_pressures:
+    material_urgency: 0.36
+  spatial_constraints:
+    text_thread: 0.9
+    time_zone_gap: 0.8
+  audience_pressure:
+    mutual_friends_online: 0.35
+  enacted_micro_worlds:
+    - read_receipts_as_scene
+
+relation_metrics:
+  unrecognized_contribution: 0.32
+  silence_charge: 0.95
+  recognition_pursuit_pressure: 0.62
+  conflict_pressure: 0.04
+  repair_debt: 0.0
+  operative_label_count: 0.0
+  repair_debt_growth: 0.08
+  irreversibility_threshold: 1.2
+  locked_in_repair_threshold: 0.9
+  cold_war_repair_threshold: 0.3
+
+processes:
+  p1:
+    display_name: Waiting Partner
+    fatigue: 0.55
+    speech_inhibition:
+      direct_need: 0.68
+      anger: 0.62
+    threat_sensitivity:
+      being_used: 0.62
+      being_ignored: 0.9
+    relevance_triggers:
+      unacknowledged_help: 0.55
+      delayed_reply: 0.95
+  p2:
+    display_name: Traveling Partner
+    fatigue: 0.72
+    speech_inhibition:
+      apology: 0.74
+      dependency_admission: 0.66
+      direct_need: 0.45
+    threat_sensitivity:
+      being_controlled: 0.88
+    relevance_triggers:
+      repeated_questions: 0.9
+bindings:
+  - binding_id: future_visit_promise
+    binding_type: temporal
+    process_ids: [p1, p2]
+    strength: 0.82
+    exit_cost: {p1: 0.7, p2: 0.55}
+  - binding_id: unresolved_message_delay
+    binding_type: recognition
+    process_ids: [p1, p2]
+    strength: 0.78
+    exit_cost: {p1: 0.78, p2: 0.45}
+recognition_demands:
+  - demand_id: rec_still_chosen
+    holder_process_id: p1
+    demanded_from: p2
+    recognition_type: admit_i_mattered
+    explicitness: 0.2
+    vulnerability_cost: 0.82
+    threat_if_denied: 0.9
+    identity_dependency: 0.74
+    current_pressure: 0.58
+config_overrides:
+  scheduler:
+    forced_scene_ticks: [6, 13, 20, 27]
+

@@ -1,0 +1,76 @@
+﻿id: medical_care_decision_conflict
+name: Medical Care Decision Conflict
+description: >
+  A patient and a family decision-helper are bound by bodily vulnerability.
+  Protection and agency become mutually threatening.
+field_state:
+  material_pressures:
+    material_urgency: 0.46
+  spatial_constraints:
+    hospital_room: 0.9
+    consent_form: 0.8
+  audience_pressure:
+    doctor: 0.7
+    family_group: 0.6
+  enacted_micro_worlds:
+    - consent_forms_as_family_conflict
+
+relation_metrics:
+  unrecognized_contribution: 0.52
+  care_dependency: 0.84
+  double_bind_pressure: 0.66
+  face_risk_pressure: 0.58
+  conflict_pressure: 0.05
+  repair_debt: 0.02
+  operative_label_count: 0.0
+  repair_debt_growth: 0.25
+  irreversibility_threshold: 1.0
+  locked_in_repair_threshold: 0.85
+  cold_war_repair_threshold: 0.3
+
+processes:
+  p1:
+    display_name: Patient
+    fatigue: 0.85
+    speech_inhibition:
+      direct_need: 0.65
+      anger: 0.7
+    threat_sensitivity:
+      being_used: 0.55
+      being_ignored: 0.86
+    relevance_triggers:
+      unacknowledged_help: 0.6
+      delayed_reply: 0.5
+  p2:
+    display_name: Family Decision Helper
+    fatigue: 0.72
+    speech_inhibition:
+      apology: 0.76
+      dependency_admission: 0.78
+      direct_need: 0.45
+    threat_sensitivity:
+      being_controlled: 0.82
+    relevance_triggers:
+      repeated_questions: 0.78
+bindings:
+  - binding_id: medical_care_binding
+    binding_type: care
+    process_ids: [p1, p2]
+    strength: 0.94
+    exit_cost: {p1: 0.95, p2: 0.82}
+  - binding_id: agency_recognition_conflict
+    binding_type: recognition
+    process_ids: [p1, p2]
+    strength: 0.82
+    exit_cost: {p1: 0.85, p2: 0.62}
+recognition_demands:
+  - demand_id: rec_agency
+    holder_process_id: p1
+    demanded_from: p2
+    recognition_type: respect_me
+    explicitness: 0.3
+    vulnerability_cost: 0.8
+    threat_if_denied: 0.9
+    identity_dependency: 0.82
+    current_pressure: 0.58
+

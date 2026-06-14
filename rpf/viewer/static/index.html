@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RPF 模拟查看器</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="mark">RPF</div>
+          <div>
+            <h1>模拟查看器</h1>
+            <p id="runDir">加载中...</p>
+          </div>
+        </div>
+        <nav class="nav">
+          <a href="#overview">总览</a>
+          <a href="#simulation">持续模拟</a>
+          <a href="#story">故事回放</a>
+          <a href="#llm">LLM 渲染</a>
+          <a href="#timeline">时间线</a>
+          <a href="#patterns">模式</a>
+          <a href="#traces">轨迹</a>
+          <a href="#events">事件</a>
+        </nav>
+        <div class="legend">
+          <span><i class="dot scene"></i>场景</span>
+          <span><i class="dot micro"></i>微交互</span>
+          <span><i class="dot latent"></i>潜伏</span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section id="overview" class="section">
+          <div class="section-title">
+            <h2>关系总览</h2>
+            <span id="eventCount"></span>
+          </div>
+          <div class="summary-grid">
+            <div class="metric">
+              <label>阶段</label>
+              <strong id="phase">-</strong>
+            </div>
+            <div class="metric">
+              <label>信任</label>
+              <strong id="trust">-</strong>
+            </div>
+            <div class="metric">
+              <label>怨恨压力</label>
+              <strong id="resentment">-</strong>
+            </div>
+            <div class="metric">
+              <label>修复能力</label>
+              <strong id="repair">-</strong>
+            </div>
+          </div>
+          <div class="two-col">
+            <div class="panel">
+              <h3>人物表层</h3>
+              <div id="personViews" class="person-list"></div>
+            </div>
+            <div class="panel">
+              <h3>不可逆</h3>
+              <div id="irreversibles" class="text-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="simulation" class="section">
+          <div class="section-title">
+            <h2>持续模拟</h2>
+            <span>按真实世界墙钟时间持续运行，并可自动渲染</span>
+          </div>
+          <div class="simulation-layout">
+            <div class="panel">
+              <h3>运行设置</h3>
+              <div class="form-grid">
+                <label>
+                  真实运行长度
+                  <input id="simDurationValue" type="number" min="1" step="1" value="1" />
+                </label>
+                <label>
+                  时间单位
+                  <select id="simDurationUnit">
+                    <option value="minutes">分钟</option>
+                    <option value="hours" selected>小时</option>
+                    <option value="days">天</option>
+                  </select>
+                </label>
+                <label>
+                  随机种子
+                  <input id="simSeed" type="number" step="1" value="42" />
+                </label>
+                <label>
+                  Tick 间隔秒
+                  <input id="simTickInterval" type="number" min="0.1" step="0.1" value="30" />
+                </label>
+                <label>
+                  自动渲染
+                  <select id="simRenderMode">
+                    <option value="deterministic">确定性故事</option>
+                    <option value="llm">DeepSeek LLM</option>
+                    <option value="none">不自动渲染</option>
+                  </select>
+                </label>
+                <label>
+                  最长等待 tick
+                  <input id="simRenderEvery" type="number" min="1" step="1" value="5" />
+                </label>
+                <label>
+                  微交互闭合数
+                  <input id="segmentMicroCount" type="number" min="1" step="1" value="3" />
+                </label>
+                <label>
+                  潜伏闭合小时
+                  <input id="segmentLatentHours" type="number" min="1" step="1" value="6" />
+                </label>
+                <label>
+                  最大段落天数
+                  <input id="segmentMaxDays" type="number" min="1" step="1" value="1" />
+                </label>
+                <label>
+                  最大 tick 上限
+                  <input id="simMaxSteps" type="number" min="1" step="1" value="10000" />
+                </label>
+              </div>
+              <div class="llm-actions">
+                <button id="startSimulation">开始持续模拟</button>
+                <button id="stopSimulation">停止</button>
+              </div>
+              <p id="simulationStatus" class="status-text">尚未开始</p>
+            </div>
+            <div class="panel">
+              <h3>运行进度</h3>
+              <div id="simulationProgress" class="state-box"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="story" class="section">
+          <div class="section-title">
+            <h2>故事回放</h2>
+            <span>由事件流确定性生成</span>
+          </div>
+          <div class="story-layout">
+            <div class="panel">
+              <h3>关系变化</h3>
+              <div id="storyFrames" class="story-list"></div>
+            </div>
+            <div class="panel">
+              <h3>当前状态</h3>
+              <div id="stateChange" class="state-box"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="llm" class="section">
+          <div class="section-title">
+            <h2>LLM 渲染</h2>
+            <span>DeepSeek V4 只负责把模拟事实写成故事</span>
+          </div>
+          <div class="llm-layout">
+            <div class="panel">
+              <h3>渲染配置</h3>
+              <div id="renderCanon" class="canon-box"></div>
+              <div class="form-grid">
+                <label>
+                  API Key
+                  <input id="llmApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+                </label>
+                <div class="key-actions">
+                  <button id="saveLlmKey" type="button">保存 Key</button>
+                  <button id="clearLlmKey" type="button">清除</button>
+                  <span id="keySaveStatus">未保存</span>
+                </div>
+                <label>
+                  模型
+                  <select id="llmModel">
+                    <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
+                    <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
+                  </select>
+                </label>
+                <label>
+                  Thinking
+                  <select id="llmThinking">
+                    <option value="disabled">关闭</option>
+                    <option value="enabled">开启</option>
+                  </select>
+                </label>
+                <label>
+                  最大帧数
+                  <input id="llmMaxFrames" type="number" min="1" step="1" placeholder="留空表示全部" />
+                </label>
+              </div>
+              <div class="llm-actions">
+                <button id="renderLlm">生成 LLM 故事</button>
+                <button id="renderDeterministic">生成确定性故事</button>
+              </div>
+              <p id="llmStatus" class="status-text">尚未渲染</p>
+            </div>
+            <div class="panel">
+              <h3>故事文本</h3>
+              <div id="llmOutput" class="markdown-output">生成后会显示在这里。</div>
+            </div>
+          </div>
+        </section>
+
+        <section id="timeline" class="section">
+          <div class="section-title">
+            <h2>演化时间线</h2>
+            <div class="toolbar">
+              <button data-filter="all" class="active">全部</button>
+              <button data-filter="scene">场景</button>
+              <button data-filter="micro_interaction">微交互</button>
+              <button data-filter="latent">潜伏</button>
+            </div>
+          </div>
+          <div id="tickStrip" class="tick-strip"></div>
+          <div id="tickDetail" class="tick-detail"></div>
+        </section>
+
+        <section id="patterns" class="section">
+          <div class="section-title">
+            <h2>主导模式</h2>
+          </div>
+          <div class="three-col">
+            <div class="panel">
+              <h3>RPP</h3>
+              <div id="rppBars" class="bars"></div>
+            </div>
+            <div class="panel">
+              <h3>组合吸引子</h3>
+              <div id="compositionBars" class="bars"></div>
+            </div>
+            <div class="panel">
+              <h3>事件类型</h3>
+              <div id="eventBars" class="bars"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="traces" class="section">
+          <div class="section-title">
+            <h2>行动-表达-记忆</h2>
+          </div>
+          <div class="trace-grid">
+            <div class="panel">
+              <h3>行动</h3>
+              <div id="actionTrace" class="trace-list"></div>
+            </div>
+            <div class="panel">
+              <h3>表达</h3>
+              <div id="expressionTrace" class="trace-list"></div>
+            </div>
+            <div class="panel">
+              <h3>识别</h3>
+              <div id="recognitionTrace" class="trace-list"></div>
+            </div>
+            <div class="panel">
+              <h3>记忆</h3>
+              <div id="memoryTrace" class="trace-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="events" class="section">
+          <div class="section-title">
+            <h2>事件流</h2>
+            <input id="eventSearch" placeholder="搜索事件类型 / 内容" />
+          </div>
+          <div id="eventList" class="event-list"></div>
+        </section>
+      </main>
+    </div>
+    <script src="/viewer.js"></script>
+  </body>
+</html>

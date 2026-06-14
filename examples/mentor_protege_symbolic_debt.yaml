@@ -1,0 +1,76 @@
+﻿id: mentor_protege_symbolic_debt
+name: Mentor Protege Symbolic Debt
+description: >
+  A protege depends on a mentor's symbolic capital and access. Gratitude becomes
+  debt, and separation becomes interpretable as betrayal.
+field_state:
+  material_pressures:
+    material_urgency: 0.4
+  spatial_constraints:
+    studio_office: 0.65
+    recommendation_email: 0.75
+  audience_pressure:
+    selection_committee: 0.7
+    peers: 0.55
+  enacted_micro_worlds:
+    - recommendation_as_control_point
+
+relation_metrics:
+  unrecognized_contribution: 0.68
+  recognition_pursuit_pressure: 0.82
+  face_risk_pressure: 0.5
+  public_private_gap: 0.38
+  conflict_pressure: 0.05
+  repair_debt: 0.04
+  operative_label_count: 0.0
+  repair_debt_growth: 0.5
+  irreversibility_threshold: 0.85
+  locked_in_repair_threshold: 0.75
+  cold_war_repair_threshold: 0.35
+
+processes:
+  p1:
+    display_name: Protege
+    fatigue: 0.58
+    speech_inhibition:
+      direct_need: 0.65
+      anger: 0.7
+    threat_sensitivity:
+      being_used: 0.72
+      being_ignored: 0.68
+    relevance_triggers:
+      unacknowledged_help: 0.84
+      delayed_reply: 0.62
+  p2:
+    display_name: Mentor
+    fatigue: 0.5
+    speech_inhibition:
+      apology: 0.8
+      dependency_admission: 0.7
+      direct_need: 0.42
+    threat_sensitivity:
+      being_controlled: 0.76
+    relevance_triggers:
+      repeated_questions: 0.75
+bindings:
+  - binding_id: recommendation_access
+    binding_type: institutional
+    process_ids: [p1, p2]
+    strength: 0.86
+    exit_cost: {p1: 0.88, p2: 0.45}
+  - binding_id: symbolic_debt
+    binding_type: recognition
+    process_ids: [p1, p2]
+    strength: 0.8
+    exit_cost: {p1: 0.7, p2: 0.5}
+recognition_demands:
+  - demand_id: rec_not_owned_by_help
+    holder_process_id: p1
+    demanded_from: p2
+    recognition_type: release_me
+    explicitness: 0.18
+    vulnerability_cost: 0.78
+    threat_if_denied: 0.84
+    identity_dependency: 0.72
+    current_pressure: 0.54
+

@@ -1,0 +1,294 @@
+from __future__ import annotations
+
+import json
+import os
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+from rpf.viewer.server import build_viewer_payload
+
+
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-flash"
+
+LABELS = {
+    "locked-in": "锁定",
+    "cold-war": "冷战",
+    "repair-avoidant": "回避修复",
+    "fragile": "脆弱",
+    "micro_interaction": "微交互",
+    "scene": "场景",
+    "latent": "潜伏",
+    "lease": "租约绑定",
+    "unrecognized_contribution": "未被承认的付出",
+    "contribution_debt_loop": "付出-债务循环",
+    "repair_avoidance": "修复回避",
+    "recognition_pursuit": "承认追逐",
+    "pursuit_withdrawal": "追逐-退缩",
+    "admit_what_happened": "承认发生过什么",
+}
+
+
+SYSTEM_PROMPT = """你是 RPF 的叙事渲染器，不是剧情作者。
+
+硬性规则：
+1. 只能渲染输入中已经发生的事实。
+2. 不能添加新的事件、动机、因果、回忆、未来预告。
+3. 不能把人物标签当作本质人格，只能说“看起来”“呈现为”。
+4. 不能改变模拟状态、关系阶段、承认结果、不可逆记录。
+5. 不要解释数值机制，不要写成分析报告。
+6. 输出中文。
+7. 姓名、性别、代词、称谓、地点、文风、禁区只能继承 render_canon。
+8. 如果 render_canon 没有提供某个具体事实，不能自行补充。
+9. 每个场景必须能追溯到输入 story 中的 source_ticks。
+
+目标：
+在不越过事实边界的前提下，把结构化故事底稿渲染为克制、有文学性、清晰可读的关系演化文本。"""
+
+
+def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dict[str, Any]:
+    payload = build_viewer_payload(output_dir)
+    story = payload.get("story", [])
+    if max_frames is not None and max_frames > 0:
+        story = story[:max_frames]
+    return {
+        "run_dir": payload.get("run_dir"),
+        "render_canon": payload.get("render_canon", {}),
+        "summary": payload.get("summary"),
+        "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
+        "person_views": payload.get("derived_views", {}).get("person_views", {}),
+        "irreversibility": payload.get("irreversibility", {}),
+        "story": story,
+    }
+
+
+def deterministic_markdown(render_payload: dict[str, Any]) -> str:
+    summary = render_payload.get("summary", {})
+    relationship = render_payload.get("relationship_view", {})
+    canon = render_payload.get("render_canon", {})
+    title = canon.get("title") or "RPF 故事回放"
+    lines = [
+        f"# {title}",
+        "",
+        "## 总览",
+        "",
+        f"- 关系阶段：{_label(summary.get('phase', '-'))}",
+        f"- 事件数：{summary.get('event_count', '-')}",
+        f"- 活跃绑定：{'，'.join(_label(item) for item in (relationship.get('active_bindings', []) or ['-']))}",
+        f"- 反复出现的关系模式：{'，'.join(_label(item) for item in (relationship.get('recurring_rpps', []) or ['-']))}",
+        f"- 识别冲突：{'，'.join(_label(item) for item in (relationship.get('recognition_conflicts', []) or ['-']))}",
+        "",
+        "## 时间线",
+        "",
+    ]
+    for frame in render_payload.get("story", []):
+        markers = []
+        if frame.get("phase_changed"):
+            markers.append("阶段改变")
+        if frame.get("fate_count"):
+            markers.append("命运转折")
+        if frame.get("memory_count"):
+            markers.append(f"记忆重构 {frame['memory_count']}")
+        marker_text = f" [{' / '.join(markers)}]" if markers else ""
+        lines.extend(
+            [
+                f"### 第 {frame.get('tick')} 步 · {_label(frame.get('tick_type'))} · {_label(frame.get('phase'))}{marker_text}",
+                "",
+                _participant_line(frame),
+                "",
+                str(frame.get("summary", "")),
+                "",
+            ]
+        )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _label(value: Any) -> str:
+    text = str(value)
+    return LABELS.get(text, text)
+
+
+def _participant_line(frame: dict[str, Any]) -> str:
+    participants = frame.get("participants", {})
+    source = participants.get("source", {})
+    target = participants.get("target", {})
+    names = [item.get("name") for item in (source, target) if item.get("name")]
+    if not names:
+        return "参与者：-"
+    return f"参与者：{'、'.join(names)}"
+
+
+def llm_markdown(
+    render_payload: dict[str, Any],
+    *,
+    api_key: str,
+    base_url: str,
+    model: str,
+    provider: str | None = None,
+    thinking: str | None = None,
+    reasoning_effort: str | None = None,
+    timeout: int = 60,
+) -> str:
+    url = base_url.rstrip("/") + "/chat/completions"
+    user_prompt = {
+        "task": "render_rpf_story",
+        "output_format": {
+            "title": "string",
+            "overview": "short paragraph",
+            "scenes": [
+                {
+                    "tick_range": "string",
+                    "text": "rendered prose grounded only in input",
+                    "source_ticks": ["integer"],
+                }
+            ],
+            "ending_state": "short paragraph",
+            "boundary_note": "one sentence saying rendering did not alter causal state",
+        },
+        "rendering_contract": {
+            "must_inherit": [
+                "render_canon.title",
+                "render_canon.cast.*.name",
+                "render_canon.cast.*.gender",
+                "render_canon.cast.*.pronoun",
+                "render_canon.setting",
+                "render_canon.narration",
+            ],
+            "must_not_invent": [
+                "new characters",
+                "new relationships",
+                "new memories",
+                "new motives",
+                "new locations",
+                "new future events",
+                "changed recognition outcomes",
+                "changed irreversible records",
+            ],
+            "literary_freedom": [
+                "sentence rhythm",
+                "paragraph grouping",
+                "observable gesture description",
+                "low-to-medium metaphor consistent with render_canon",
+                "scene transitions grounded in source_ticks",
+            ],
+        },
+        "input": render_payload,
+    }
+    request_body = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": json.dumps(user_prompt, ensure_ascii=False)},
+        ],
+        "temperature": 0.4,
+    }
+    if _is_deepseek(provider, base_url, model):
+        resolved_thinking = thinking or "disabled"
+        request_body["thinking"] = {"type": resolved_thinking}
+        if resolved_thinking == "enabled":
+            request_body["reasoning_effort"] = reasoning_effort or "high"
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(request_body, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"LLM request failed: HTTP {exc.code}: {body}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"LLM request failed: {exc}") from exc
+    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError("LLM response did not contain text content")
+    return content.strip() + "\n"
+
+
+def render_output(
+    output_dir: Path,
+    *,
+    out_path: Path | None = None,
+    use_llm: bool = False,
+    model: str | None = None,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    provider: str | None = None,
+    thinking: str | None = None,
+    reasoning_effort: str | None = None,
+    max_frames: int | None = None,
+) -> dict[str, Any]:
+    render_payload = build_render_payload(output_dir, max_frames=max_frames)
+    target = out_path or (output_dir / ("rendered_story_llm.md" if use_llm else "rendered_story.md"))
+    if use_llm:
+        resolved_provider = provider or os.environ.get("RPF_LLM_PROVIDER")
+        provider_defaults = _provider_defaults(resolved_provider)
+        resolved_key = (
+            api_key
+            or os.environ.get("RPF_LLM_API_KEY")
+            or (_deepseek_api_key() if resolved_provider == "deepseek" else None)
+        )
+        resolved_base_url = (
+            base_url
+            or os.environ.get("RPF_LLM_BASE_URL")
+            or provider_defaults.get("base_url")
+            or "https://api.openai.com/v1"
+        )
+        resolved_model = (
+            model
+            or os.environ.get("RPF_LLM_MODEL")
+            or provider_defaults.get("model")
+        )
+        if not resolved_key:
+            raise RuntimeError("Missing API key. Set RPF_LLM_API_KEY or pass --api-key.")
+        if not resolved_model:
+            raise RuntimeError("Missing model. Set RPF_LLM_MODEL or pass --model.")
+        text = llm_markdown(
+            render_payload,
+            api_key=resolved_key,
+            base_url=resolved_base_url,
+            model=resolved_model,
+            provider=resolved_provider,
+            thinking=thinking or os.environ.get("RPF_LLM_THINKING"),
+            reasoning_effort=reasoning_effort or os.environ.get("RPF_LLM_REASONING_EFFORT"),
+        )
+        mode = "llm"
+    else:
+        text = deterministic_markdown(render_payload)
+        mode = "deterministic"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    return {
+        "mode": mode,
+        "output": str(target),
+        "source": str(output_dir),
+        "frame_count": len(render_payload.get("story", [])),
+    }
+
+
+def _provider_defaults(provider: str | None) -> dict[str, str]:
+    if provider == "deepseek":
+        return {
+            "base_url": DEEPSEEK_BASE_URL,
+            "model": DEEPSEEK_DEFAULT_MODEL,
+        }
+    return {}
+
+
+def _deepseek_api_key() -> str | None:
+    return os.environ.get("DEEPSEEK_API_KEY")
+
+
+def _is_deepseek(provider: str | None, base_url: str, model: str) -> bool:
+    return (
+        provider == "deepseek"
+        or "deepseek.com" in base_url
+        or model.startswith("deepseek-")
+    )

@@ -1,0 +1,132 @@
+﻿id: shared_apartment_unresolved_sacrifice
+name: Shared Apartment, Unresolved Sacrifice
+description: >
+  Two process positions remain bound by a shared apartment lease and by an
+  unacknowledged rent sacrifice. The scenario is designed to test whether RPF
+  can derive person-like labels, relation phase labels, operative
+  classification, and irreversible history without primitive personality
+  variables.
+
+render_canon:
+  title: 共享公寓：未解决的牺牲
+  setting:
+    place: 共享公寓
+    period: 当代城市
+    atmosphere: 克制、逼仄、日常压力持续存在
+    material_objects:
+      - 电费单
+      - 房租转账记录
+      - 厨房水槽
+      - 玄关鞋柜
+  cast:
+    p1:
+      name: 许知遥
+      gender: 女
+      pronoun: 她
+      age_band: 二十多岁后段
+      surface_role: 更常承担日常事务和费用垫付的人
+      speech_style: 克制、短句、很少直接索取
+      allowed_interiority: 只允许从行为、停顿、语气和选择中推断，不允许直接写内心独白
+    p2:
+      name: 沈砚
+      gender: 男
+      pronoun: 他
+      age_band: 三十岁出头
+      surface_role: 更常回避确认与承认的人
+      speech_style: 解释多于承认，倾向拖延或转移
+      allowed_interiority: 只允许写可观察到的迟疑、回避和言语选择
+  narration:
+    language: 中文
+    tense: 过去时
+    perspective: 第三人称限制视角
+    style: 克制的现实主义文学
+    interiority_level: 低
+    metaphor_level: 低到中
+    sentence_rhythm: 短句与中等长度句子交替，避免华丽堆砌
+    forbidden:
+      - 新增亲属关系
+      - 新增职业
+      - 新增外部地点
+      - 新增童年回忆
+      - 新增恋爱或婚姻状态
+      - 新增未来预告
+      - 直接宣布固定人格本质
+
+field_state:
+  material_pressures:
+    material_urgency: 0.45
+  spatial_constraints:
+    shared_kitchen: 0.8
+    shared_entryway: 0.7
+  audience_pressure:
+    mutual_friends: 0.35
+  enacted_micro_worlds:
+    - kitchen_after_arguments
+
+relation_metrics:
+  unrecognized_contribution: 0.82
+  recognition_pursuit_pressure: 0.55
+  public_private_gap: 0.32
+  care_dependency: 0.28
+  conflict_pressure: 0.06
+  repair_debt: 0.05
+  operative_label_count: 0.0
+  repair_debt_growth: 0.85
+  irreversibility_threshold: 0.68
+  locked_in_repair_threshold: 0.55
+  cold_war_repair_threshold: 0.35
+
+processes:
+  p1:
+    display_name: A
+    fatigue: 0.7
+    speech_inhibition:
+      direct_need: 0.7
+      anger: 0.6
+    threat_sensitivity:
+      being_used: 0.8
+      being_ignored: 0.7
+    relevance_triggers:
+      unacknowledged_help: 0.9
+      delayed_reply: 0.6
+
+  p2:
+    display_name: B
+    fatigue: 0.5
+    speech_inhibition:
+      apology: 0.8
+      dependency_admission: 0.7
+      direct_need: 0.4
+    threat_sensitivity:
+      being_controlled: 0.8
+    relevance_triggers:
+      repeated_questions: 0.8
+
+bindings:
+  - binding_id: lease
+    binding_type: material
+    process_ids: [p1, p2]
+    strength: 0.9
+    exit_cost:
+      p1: 0.8
+      p2: 0.6
+
+  - binding_id: unrecognized_contribution
+    binding_type: recognition
+    process_ids: [p1, p2]
+    strength: 0.75
+    exit_cost:
+      p1: 0.7
+      p2: 0.4
+
+recognition_demands:
+  - demand_id: rec_admit_sacrifice
+    holder_process_id: p1
+    demanded_from: p2
+    recognition_type: admit_what_happened
+    explicitness: 0.2
+    vulnerability_cost: 0.8
+    threat_if_denied: 0.9
+    identity_dependency: 0.7
+    current_pressure: 0.55
+

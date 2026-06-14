@@ -1,0 +1,79 @@
+﻿id: caretaker_dependency_loop
+name: Caretaker Dependency Loop
+description: >
+  A caregiver and a dependent relative remain bound by bodily care. Help
+  restores immediate safety but also stabilizes dependence, debt, and resentment.
+field_state:
+  material_pressures:
+    material_urgency: 0.5
+  spatial_constraints:
+    bedroom_doorway: 0.8
+    medication_table: 0.9
+  audience_pressure:
+    visiting_nurse: 0.35
+    extended_family: 0.55
+  enacted_micro_worlds:
+    - medication_schedule_as_conflict_clock
+
+relation_metrics:
+  unrecognized_contribution: 0.76
+  care_dependency: 0.92
+  double_bind_pressure: 0.48
+  recognition_pursuit_pressure: 0.42
+  conflict_pressure: 0.12
+  repair_debt: 0.12
+  operative_label_count: 0.0
+  repair_debt_growth: 0.75
+  irreversibility_threshold: 0.68
+  locked_in_repair_threshold: 0.55
+  cold_war_repair_threshold: 0.35
+
+processes:
+  p1:
+    display_name: Caregiver
+    fatigue: 0.82
+    speech_inhibition:
+      direct_need: 0.72
+      anger: 0.85
+    threat_sensitivity:
+      being_used: 0.88
+      being_ignored: 0.7
+    relevance_triggers:
+      unacknowledged_help: 0.92
+      delayed_reply: 0.45
+  p2:
+    display_name: Dependent Relative
+    fatigue: 0.7
+    speech_inhibition:
+      apology: 0.76
+      dependency_admission: 0.85
+      direct_need: 0.35
+    threat_sensitivity:
+      being_controlled: 0.86
+    relevance_triggers:
+      repeated_questions: 0.82
+bindings:
+  - binding_id: care_obligation
+    binding_type: care
+    process_ids: [p1, p2]
+    strength: 0.95
+    exit_cost: {p1: 0.9, p2: 0.95}
+  - binding_id: invisible_care_labor
+    binding_type: recognition
+    process_ids: [p1, p2]
+    strength: 0.82
+    exit_cost: {p1: 0.8, p2: 0.55}
+recognition_demands:
+  - demand_id: rec_care_cost
+    holder_process_id: p1
+    demanded_from: p2
+    recognition_type: admit_what_happened
+    explicitness: 0.22
+    vulnerability_cost: 0.8
+    threat_if_denied: 0.86
+    identity_dependency: 0.76
+    current_pressure: 0.6
+config_overrides:
+  scheduler:
+    forced_scene_ticks: [3, 9, 15, 21, 27]
+
