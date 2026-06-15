@@ -56,6 +56,21 @@ After it finishes, open:
 http://YOUR_SERVER_IP/
 ```
 
+Check backend health:
+
+```bash
+curl http://YOUR_SERVER_IP/healthz
+```
+
+Expected fields:
+
+```text
+"ok": true
+"service": "draf-viewer"
+"scenario_id": "yellow_sign_cold_case"
+"title": "黄印镇冷案"
+```
+
 For a custom install location:
 
 ```bash
@@ -135,6 +150,12 @@ Open locally on the server:
 http://127.0.0.1:8765/
 ```
 
+Health check:
+
+```bash
+curl http://127.0.0.1:8765/healthz
+```
+
 ---
 
 ## 3. systemd Service
@@ -166,6 +187,12 @@ Logs:
 journalctl -u draf-viewer -f
 ```
 
+Service health:
+
+```bash
+curl http://127.0.0.1:8765/healthz
+```
+
 ---
 
 ## 4. Nginx Reverse Proxy
@@ -188,6 +215,12 @@ Enable:
 sudo ln -s /etc/nginx/sites-available/draf /etc/nginx/sites-enabled/draf
 sudo nginx -t
 sudo systemctl reload nginx
+```
+
+Public health check:
+
+```bash
+curl http://YOUR_SERVER_IP/healthz
 ```
 
 If using a domain, enable HTTPS:

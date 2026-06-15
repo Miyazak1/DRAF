@@ -202,6 +202,36 @@ def run_catalog(experience_dir: Path = DEFAULT_EXPERIENCE_DIR) -> list[dict[str,
     return runs
 
 
+def _health_payload(output_dir: Path, examples_dir: Path = DEFAULT_EXAMPLES_DIR) -> dict[str, Any]:
+    run_dir = output_dir.resolve()
+    manifest = _read_json(run_dir / "timeline_manifest.json", {})
+    metrics = _read_json(run_dir / "metrics.json", {})
+    metadata = _read_json(run_dir / "run_metadata.json", {})
+    canon = _read_render_canon(run_dir, manifest)
+    scenario_path = str(metadata.get("scenario_path") or manifest.get("scenario_path") or "")
+    scenario_id = str(
+        metadata.get("scenario_id")
+        or Path(scenario_path).stem
+        or run_dir.name
+    )
+    scenarios = scenario_catalog(examples_dir)
+    available_ids = {str(item.get("id")) for item in scenarios}
+    timeline_exists = (run_dir / "timeline.jsonl").exists()
+    return {
+        "ok": bool(timeline_exists and (run_dir / "timeline_manifest.json").exists()),
+        "service": "draf-viewer",
+        "run_dir": str(run_dir),
+        "scenario_id": scenario_id,
+        "title": canon.get("title") or metadata.get("title") or scenario_id,
+        "default_experience": "yellow_sign_cold_case",
+        "scenario_available": scenario_id in available_ids,
+        "event_count": metrics.get("event_count", 0),
+        "tick_count": metrics.get("event_type_counts", {}).get("TickStartedEvent", manifest.get("steps", 0)),
+        "timeline_exists": timeline_exists,
+        "scenario_count": len(scenarios),
+    }
+
+
 def build_run_report(output_dir: Path) -> str:
     payload = build_viewer_payload(output_dir)
     summary = payload.get("summary", {})
@@ -729,6 +759,9 @@ class ViewerHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path in {"/healthz", "/api/health"}:
+            self._send_json(_health_payload(self.server.output_dir, self.server.examples_dir))
+            return
         if parsed.path == "/api/run":
             self._send_json(build_viewer_payload(self.server.output_dir))
             return

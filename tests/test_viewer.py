@@ -131,6 +131,33 @@ def test_viewer_render_endpoint_returns_markdown(tmp_path):
     assert "# 共享公寓：未解决的牺牲" in payload["text"]
 
 
+def test_viewer_health_endpoint_reports_active_run(tmp_path):
+    scenario_path = Path("examples/yellow_sign_cold_case.yaml")
+    sim = Simulator.from_scenario(load_scenario(scenario_path), scenario_path, seed=42)
+    output_dir = tmp_path / "run"
+    sim.run(steps=3, output_dir=output_dir)
+    server = ViewerServer(("127.0.0.1", 0), output_dir)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        conn.request("GET", "/healthz")
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert response.status == 200
+    assert payload["ok"] is True
+    assert payload["service"] == "draf-viewer"
+    assert payload["scenario_id"] == "yellow_sign_cold_case"
+    assert payload["title"] == "黄印镇冷案"
+    assert payload["timeline_exists"] is True
+    assert payload["event_count"] > 0
+
+
 def test_run_report_contains_deterministic_sections(tmp_path):
     scenario_path = Path("examples/shared_apartment_unresolved_sacrifice.yaml")
     sim = Simulator.from_scenario(load_scenario(scenario_path), scenario_path, seed=42)
