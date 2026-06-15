@@ -20,6 +20,7 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     account = json.loads((tmp_path / "run" / "account_trace.json").read_text())
     normativity = json.loads((tmp_path / "run" / "normativity_trace.json").read_text())
     relevance = json.loads((tmp_path / "run" / "relevance_trace.json").read_text())
+    attention = json.loads((tmp_path / "run" / "attention_trace.json").read_text())
     position = json.loads((tmp_path / "run" / "position_trace.json").read_text())
     binding_trace = json.loads((tmp_path / "run" / "binding_trace.json").read_text())
     expectation = json.loads((tmp_path / "run" / "expectation_trace.json").read_text())
@@ -47,7 +48,9 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert all("viability_pressure" in item["input_factors"] for item in scheduler)
     assert all("relation_sediment_load" in item["input_factors"] for item in scheduler)
     assert all("daily_ecology_pressure" in item["input_factors"] for item in scheduler)
+    assert all("attention_pressure" in item["input_factors"] for item in scheduler)
     assert any(item["input_factors"]["daily_ecology_pressure"] > 0 for item in scheduler[1:])
+    assert any(item["input_factors"]["attention_pressure"] > 0 for item in scheduler[1:])
     assert all("viability_rhythm" in item for item in scheduler)
     assert all("scene_readiness" in item["viability_rhythm"] for item in scheduler)
     assert any(item["viability_rhythm"]["scene_viability_bias"] > 0 for item in scheduler)
@@ -81,6 +84,12 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     )
     assert any(
         key.startswith("daily_")
+        for item in affordance
+        for candidate in item["candidates"]
+        for key in candidate["evidence"]
+    )
+    assert any(
+        key.startswith("attention_")
         for item in affordance
         for candidate in item["candidates"]
         for key in candidate["evidence"]
@@ -201,6 +210,12 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert any(item["marker_key"].startswith("relevance_field.") for item in relevance)
     assert any(item["marker"] in {"delayed_reply", "recognition_claim", "public_exposure", "material_cost", "repair_opening"} for item in relevance)
     assert all(item["caused_by_events"] for item in relevance)
+    assert any("AttentionDriftEvent" in item["evidence_event_types"] for item in relevance)
+
+    assert attention
+    assert all(item["event_type"] == "AttentionDriftEvent" for item in attention)
+    assert any(item["dominant_focus"] in {"body_management", "case_fixation", "threat_monitoring", "repair_opportunity", "avoidance_route", "memory_intrusion"} for item in attention)
+    assert all(item["caused_by_events"] for item in attention)
 
     assert position
     assert any(item["position_key"].startswith("position_field.") for item in position)
@@ -437,6 +452,7 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     inquiry = json.loads((output_dir / "inquiry_trace.json").read_text())
     scheduler = json.loads((output_dir / "scheduler_diagnostics.json").read_text())
     affordance = json.loads((output_dir / "affordance_trace.json").read_text())
+    attention = json.loads((output_dir / "attention_trace.json").read_text())
     timeline_events = [
         json.loads(line)
         for line in (output_dir / "timeline.jsonl").read_text().splitlines()
@@ -503,9 +519,13 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     assert all("inquiry_pressure" in item["input_factors"] for item in scheduler)
     assert all("institutional_pressure" in item["input_factors"] for item in scheduler)
     assert all("daily_ecology_pressure" in item["input_factors"] for item in scheduler)
+    assert all("attention_pressure" in item["input_factors"] for item in scheduler)
     assert any(item["input_factors"]["inquiry_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["institutional_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["daily_ecology_pressure"] > 0 for item in scheduler[1:])
+    assert any(item["input_factors"]["attention_pressure"] > 0 for item in scheduler[1:])
+    assert attention
+    assert any(item["dominant_focus"] in {"case_fixation", "threat_monitoring", "memory_intrusion"} for item in attention)
     assert any(
         key.startswith("inquiry_")
         for item in affordance
@@ -526,6 +546,12 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     )
     assert any(
         key.startswith("daily_")
+        for item in affordance
+        for candidate in item["candidates"]
+        for key in candidate["evidence"]
+    )
+    assert any(
+        key.startswith("attention_")
         for item in affordance
         for candidate in item["candidates"]
         for key in candidate["evidence"]

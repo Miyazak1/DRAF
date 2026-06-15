@@ -104,6 +104,12 @@ class AffordanceEngine:
             material.get("object_friction", 0.0),
         )
         daily_waiting_pressure = state.relation_metrics.get("daily_ecology.waiting_pressure", 0.0)
+        attention_body_management = self._attention_focus(state, "body_management")
+        attention_case_fixation = self._attention_focus(state, "case_fixation")
+        attention_threat_monitoring = self._attention_focus(state, "threat_monitoring")
+        attention_repair_opportunity = self._attention_focus(state, "repair_opportunity")
+        attention_avoidance_route = self._attention_focus(state, "avoidance_route")
+        attention_memory_intrusion = self._attention_focus(state, "memory_intrusion")
         remembered_history = memory_pressure(state)
         injury_history = injury_memory(state)
         defensive_history = defensive_memory(state)
@@ -153,6 +159,7 @@ class AffordanceEngine:
                 "material_urgency": urgency * 0.12,
                 "daily_unfinished_tasks": daily_unfinished_tasks * 0.08,
                 "daily_object_friction": daily_object_friction * 0.08,
+                "attention_repair_opportunity": attention_repair_opportunity * 0.08,
                 "defensive_memory": defensive_history * 0.02,
                 "sedimented_charged_objects": charged_objects * 0.04,
                 "relation_repair_access_narrowing": repair_access_narrowing * 0.05,
@@ -227,6 +234,7 @@ class AffordanceEngine:
                 "fatigue": (p1.fatigue + p2.fatigue) / 2 * 0.14,
                 "daily_body_load": daily_body_load * 0.08,
                 "daily_routine_overlap": daily_routine_overlap * 0.06,
+                "attention_body_management": attention_body_management * 0.08,
                 "care_bind_double_bind": (0.24 if composition == "care_bind_double_bind" else 0.0),
                 "dependency_inhibition": p2.speech_inhibition.get("dependency_admission", 0.0) * 0.12,
                 "remembered_history": remembered_history * 0.015,
@@ -275,6 +283,7 @@ class AffordanceEngine:
                 "daily_unfinished_tasks": daily_unfinished_tasks * 0.14,
                 "daily_routine_overlap": daily_routine_overlap * 0.1,
                 "daily_object_friction": daily_object_friction * 0.1,
+                "attention_body_management": attention_body_management * 0.08,
                 "remembered_history": remembered_history * 0.01,
                 "sedimented_charged_objects": charged_objects * 0.06,
                 "relation_symbolic_accounting": symbolic_accounting * 0.04,
@@ -298,6 +307,8 @@ class AffordanceEngine:
                 "conflict": conflict * 0.16,
                 "daily_body_load": daily_body_load * 0.08,
                 "daily_waiting_pressure": daily_waiting_pressure * 0.08,
+                "attention_avoidance_route": attention_avoidance_route * 0.09,
+                "attention_threat_monitoring": attention_threat_monitoring * 0.06,
                 "recognition_trap": (0.2 if composition == "recognition_trap" else 0.0),
                 "pursuit_withdrawal": active.get("pursuit_withdrawal", 0.0) * 0.1,
                 "defensive_memory": defensive_history * 0.025,
@@ -325,6 +336,7 @@ class AffordanceEngine:
                 "institutional_silence": institutional_silence * 0.16,
                 "pattern_attraction": p2.threat_sensitivity.get("pattern_attraction", 0.0) * 0.14,
                 "procedural_gap": p2.relevance_triggers.get("procedural_gap", 0.0) * 0.12,
+                "attention_case_fixation": attention_case_fixation * 0.12,
                 "recognition_trial": frame["recognition_trial"] * 0.05,
                 "material_accounting": frame["material_accounting"] * 0.04,
                 "memory_saturation": memory_saturation * 0.04,
@@ -362,6 +374,8 @@ class AffordanceEngine:
                 "institutional_gatekeeping": institutional_gatekeeping * 0.12,
                 "witness_strategy_protective_silence": witness_protective_silence * 0.2,
                 "witness_strategy_confirmation_risk": witness_confirmation_risk * 0.14,
+                "attention_case_fixation": attention_case_fixation * 0.1,
+                "attention_threat_monitoring": attention_threat_monitoring * 0.08,
             },
             0.78,
             "your memory is needed, but using it may damage the shared reality",
@@ -388,6 +402,8 @@ class AffordanceEngine:
                 "institutional_public_exposure": institutional_exposure * 0.1,
                 "witness_strategy_confirmation_risk": witness_confirmation_risk * 0.12,
                 "witness_strategy_protective_silence": witness_protective_silence * 0.08,
+                "attention_threat_monitoring": attention_threat_monitoring * 0.12,
+                "attention_memory_intrusion": attention_memory_intrusion * 0.08,
             },
             0.86,
             "the symbol cannot be verified, but not naming it now changes the case",
@@ -481,3 +497,13 @@ class AffordanceEngine:
             basal = max((process.relevance_triggers.get(marker, 0.0) for process in state.processes.values()), default=0.0)
             result[marker] = max(dynamic, basal)
         return result
+
+    def _attention_focus(self, state: SimulationState, focus: str) -> float:
+        return max(
+            (
+                float(value or 0.0)
+                for key, value in state.relation_metrics.items()
+                if key.startswith("attention_drift.") and key.endswith(f".{focus}")
+            ),
+            default=0.0,
+        )

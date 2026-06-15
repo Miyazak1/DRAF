@@ -204,6 +204,8 @@ class RelevanceLandscapeEngine:
                         )
             elif event_type == "RelationSedimentationEvent":
                 updates.extend(self._relation_updates(state, event, refs))
+            elif event_type == "AttentionDriftEvent":
+                updates.extend(self._attention_updates(state, event, refs))
         return [update for update in updates if update.previous_value != update.new_value]
 
     def _affordance_updates(
@@ -350,6 +352,39 @@ class RelevanceLandscapeEngine:
                 [event.event_type],
             )
             for process_id in state.processes
+        ]
+
+    def _attention_updates(
+        self,
+        state: SimulationState,
+        event: Event,
+        refs: list[str],
+    ) -> list[RelevanceShift]:
+        process_id = str(event.payload.get("process_id", ""))
+        if process_id not in state.processes:
+            return []
+        focus = str(event.payload.get("dominant_focus", ""))
+        drift = self._payload_float(event, "drift_intensity")
+        marker = {
+            "body_management": "material_cost",
+            "case_fixation": "recognition_claim",
+            "threat_monitoring": "exit_threat",
+            "repair_opportunity": "repair_opening",
+            "avoidance_route": "delayed_reply",
+            "memory_intrusion": "recognition_claim",
+        }.get(focus)
+        if not marker or drift <= 0.0:
+            return []
+        return [
+            self._delta(
+                state,
+                process_id,
+                marker,
+                drift * 0.16,
+                f"attention drift toward {focus} makes {marker} more relevant",
+                refs,
+                [event.event_type],
+            )
         ]
 
     def _coalesce(self, updates: list[RelevanceShift]) -> list[RelevanceShift]:

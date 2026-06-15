@@ -72,6 +72,12 @@ ZH = {
     "commute_overlap": "通勤重叠",
     "late_return": "晚归",
     "waiting_time": "等待时间",
+    "body_management": "身体管理",
+    "case_fixation": "案件固着",
+    "threat_monitoring": "威胁监控",
+    "repair_opportunity": "修复机会",
+    "avoidance_route": "回避路径",
+    "memory_intrusion": "记忆侵入",
     "claimant": "索取承认者位置",
     "debtor": "负债者位置",
     "defender": "防御者位置",
@@ -140,6 +146,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "account": _read_json(run_dir / "account_trace.json", []),
         "normativity": _read_json(run_dir / "normativity_trace.json", []),
         "relevance": _read_json(run_dir / "relevance_trace.json", []),
+        "attention": _read_json(run_dir / "attention_trace.json", []),
         "position": _read_json(run_dir / "position_trace.json", []),
         "expectation": _read_json(run_dir / "expectation_trace.json", []),
         "memory": _read_json(run_dir / "memory_trace.json", []),
@@ -402,6 +409,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "account_trace.json",
         "normativity_trace.json",
         "relevance_trace.json",
+        "attention_trace.json",
         "position_trace.json",
         "expectation_trace.json",
         "memory_trace.json",
@@ -432,6 +440,9 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
     positions_by_tick: dict[int, list[dict[str, Any]]] = {}
     for position_update in payload.get("position", []):
         positions_by_tick.setdefault(int(position_update.get("tick", 0)), []).append(position_update)
+    attention_by_tick: dict[int, list[dict[str, Any]]] = {}
+    for attention_update in payload.get("attention", []):
+        attention_by_tick.setdefault(int(attention_update.get("tick", 0)), []).append(attention_update)
     daily_ecology_by_tick = {
         int(item.get("tick", 0)): item
         for item in payload.get("environment", [])
@@ -456,6 +467,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
         viability = _viability_summary(viability_by_tick.get(tick_index, {}), tick)
         frame_definition = _frame_definition_summary(frames_by_tick.get(tick_index, []))
         position_field = _position_summary(positions_by_tick.get(tick_index, []))
+        attention_drift = _attention_summary(attention_by_tick.get(tick_index, []))
         daily_ecology = daily_ecology_by_tick.get(tick_index, {})
         memories = memories_by_tick.get(tick_index, [])
         fates = fate_by_tick.get(tick_index, [])
@@ -473,6 +485,8 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
             summary_parts.append(_frame_definition_sentence(frame_definition))
         if position_field:
             summary_parts.append(_position_sentence(position_field))
+        if attention_drift:
+            summary_parts.append(_attention_sentence(attention_drift))
         if daily_ecology:
             summary_parts.append(_daily_ecology_sentence(daily_ecology))
         if recognition:
@@ -501,6 +515,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "viability": viability,
                 "frame_definition": frame_definition,
                 "position_field": position_field,
+                "attention_drift": attention_drift,
                 "daily_ecology": daily_ecology,
                 "memory_count": len(memories),
                 "case_memory_count": _case_memory_count(memories),
@@ -694,6 +709,30 @@ def _position_sentence(position_field: dict[str, Any]) -> str:
     if strength >= 0.35:
         return f"关系把 {process_id} 明显推入{label}。"
     return f"关系开始把 {process_id} 推向{label}。"
+
+
+def _attention_summary(updates: list[dict[str, Any]]) -> dict[str, Any]:
+    if not updates:
+        return {}
+    strongest = max(updates, key=lambda item: float(item.get("drift_intensity") or 0.0))
+    return {
+        "process_id": strongest.get("process_id"),
+        "dominant_focus": strongest.get("dominant_focus"),
+        "focus_label": _zh(strongest.get("dominant_focus", "")),
+        "previous_focus": strongest.get("previous_focus"),
+        "drift_intensity": strongest.get("drift_intensity"),
+        "focus_scores": strongest.get("focus_scores", {}),
+        "reason": strongest.get("reason"),
+    }
+
+
+def _attention_sentence(attention: dict[str, Any]) -> str:
+    if not attention:
+        return ""
+    process_id = attention.get("process_id", "某一方")
+    label = attention.get("focus_label") or _zh(attention.get("dominant_focus", ""))
+    intensity = _fmt_report(attention.get("drift_intensity"))
+    return f"{process_id} 的注意力漂向{label}，漂移强度 {intensity}。"
 
 
 def _daily_ecology_sentence(daily: dict[str, Any]) -> str:

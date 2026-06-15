@@ -21,6 +21,7 @@ class TemporalScheduler:
         inquiry_pressure = self._inquiry_pressure(state)
         institutional_pressure = self._institutional_pressure(state)
         daily_ecology_pressure = self._daily_ecology_pressure(state)
+        attention_pressure = self._attention_pressure(state)
         fatigue = sum(p.fatigue for p in state.processes.values()) / max(1, len(state.processes))
         recognition = max(
             (d.current_pressure for p in state.processes.values() for d in p.recognition_demands),
@@ -54,6 +55,7 @@ class TemporalScheduler:
             + inquiry_pressure * scene_weights.get("inquiry_pressure", 0.075)
             + institutional_pressure * scene_weights.get("institutional_pressure", 0.052)
             + daily_ecology_pressure * scene_weights.get("daily_ecology_pressure", 0.04)
+            + attention_pressure * scene_weights.get("attention_pressure", 0.035)
             + fatigue * scene_weights["mean_fatigue"]
             + scene_viability_bias
         )
@@ -66,6 +68,7 @@ class TemporalScheduler:
             + inquiry_pressure * micro_weights.get("inquiry_pressure", 0.045)
             + institutional_pressure * micro_weights.get("institutional_pressure", 0.028)
             + daily_ecology_pressure * micro_weights.get("daily_ecology_pressure", 0.06)
+            + attention_pressure * micro_weights.get("attention_pressure", 0.04)
             + (state.tick % 3 == 1) * micro_weights["routine_overlap_bonus"]
             + scene_score * micro_weights["scene_score"]
             + micro_viability_bias
@@ -101,6 +104,7 @@ class TemporalScheduler:
                 "inquiry_pressure": round(inquiry_pressure, 4),
                 "institutional_pressure": round(institutional_pressure, 4),
                 "daily_ecology_pressure": round(daily_ecology_pressure, 4),
+                "attention_pressure": round(attention_pressure, 4),
                 "mean_fatigue": round(fatigue, 4),
                 "recognition_pressure": round(recognition, 4),
                 "viability_pressure": round(viability_preview.get("viability_pressure", 0.0), 4),
@@ -172,3 +176,11 @@ class TemporalScheduler:
         material = float(state.field_state.material_pressures.get("daily_task_debt", 0.0) or 0.0)
         spatial = float(state.field_state.spatial_constraints.get("routine_overlap", 0.0) or 0.0)
         return min(1.0, sum(values) * 0.45 + material * 0.22 + spatial * 0.18)
+
+    def _attention_pressure(self, state: SimulationState) -> float:
+        values = [
+            float(value or 0.0)
+            for key, value in state.relation_metrics.items()
+            if key.startswith("attention_drift.")
+        ]
+        return min(1.0, sum(values) * 0.35)

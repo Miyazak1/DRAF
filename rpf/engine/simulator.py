@@ -25,6 +25,7 @@ from rpf.engine.aggregation import aggregate_views
 from rpf.engine.actions import ActionSelectionEngine
 from rpf.engine.account import AccountPressureEngine
 from rpf.engine.affordances import AffordanceEngine
+from rpf.engine.attention import AttentionDriftEngine
 from rpf.engine.binding import BindingEvolutionEngine
 from rpf.engine.disposition import ProcessDispositionEngine
 from rpf.engine.expression import ExpressionEngine
@@ -91,6 +92,7 @@ class Simulator:
         self.normativity = NormativePressureEngine()
         self.positioning = PositioningEngine()
         self.relevance = RelevanceLandscapeEngine()
+        self.attention = AttentionDriftEngine()
         self.environment = EnvironmentSedimentationEngine()
         self.disposition = ProcessDispositionEngine()
         self.relation = RelationSedimentationEngine()
@@ -123,6 +125,7 @@ class Simulator:
         self.normativity_trace: list[dict[str, Any]] = []
         self.position_trace: list[dict[str, Any]] = []
         self.relevance_trace: list[dict[str, Any]] = []
+        self.attention_trace: list[dict[str, Any]] = []
         self.environment_trace: list[dict[str, Any]] = []
         self.disposition_trace: list[dict[str, Any]] = []
         self.relation_trace: list[dict[str, Any]] = []
@@ -323,6 +326,7 @@ class Simulator:
         (output_dir / "normativity_trace.json").write_text(json.dumps(self.normativity_trace, indent=2), encoding="utf-8")
         (output_dir / "position_trace.json").write_text(json.dumps(self.position_trace, indent=2), encoding="utf-8")
         (output_dir / "relevance_trace.json").write_text(json.dumps(self.relevance_trace, indent=2), encoding="utf-8")
+        (output_dir / "attention_trace.json").write_text(json.dumps(self.attention_trace, indent=2), encoding="utf-8")
         (output_dir / "environment_trace.json").write_text(json.dumps(self.environment_trace, indent=2), encoding="utf-8")
         (output_dir / "disposition_trace.json").write_text(json.dumps(self.disposition_trace, indent=2), encoding="utf-8")
         (output_dir / "relation_trace.json").write_text(json.dumps(self.relation_trace, indent=2), encoding="utf-8")
@@ -390,6 +394,7 @@ class Simulator:
         local.extend(self._update_accounts(local))
         local.extend(self._update_normativity(local))
         local.extend(self._update_frames(local))
+        local.extend(self._update_attention(context, local))
         local.extend(self._update_relevance(local))
         local.extend(self._update_positions(local))
         views = aggregate_views(self.state, [e.event_id for e in self.events])
@@ -556,6 +561,22 @@ class Simulator:
                 self._event(
                     "RelevanceShiftEvent",
                     "relevance",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
+
+    def _update_attention(self, context: TickContext, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        updates = self.attention.update(self.state, context, local_events)
+        for update in updates:
+            payload = update.payload()
+            self.attention_trace.append({"tick": self.state.tick, "event_type": "AttentionDriftEvent", **payload})
+            emitted.append(
+                self._event(
+                    "AttentionDriftEvent",
+                    "attention",
                     payload,
                     update.causal_refs,
                 )

@@ -98,6 +98,8 @@ def test_yellow_sign_payload_contains_case_ledger(tmp_path):
     assert payload["story"][-1]["inquiry"]
     assert payload["story"][-1]["inquiry"]["witness_strategy"]
     assert payload["story"][-1]["daily_ecology"]
+    assert payload["story"][-1]["attention_drift"]
+    assert payload["attention"]
     assert any(item.get("event_type") == "DailyEcologyEvent" for item in payload["environment"])
     assert any(item.get("event_type") == "WitnessStrategyEvent" for item in payload["inquiry"])
     assert any(frame["case_memory_count"] > 0 for frame in payload["story"])

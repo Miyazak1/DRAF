@@ -120,6 +120,12 @@ const ZH = {
   commute_overlap: "通勤重叠",
   late_return: "晚归",
   waiting_time: "等待时间",
+  body_management: "身体管理",
+  case_fixation: "案件固着",
+  threat_monitoring: "威胁监控",
+  repair_opportunity: "修复机会",
+  avoidance_route: "回避路径",
+  memory_intrusion: "记忆侵入",
   public_mask: "公开面具",
   spoken: "言说",
   tonal_shift: "语气变化",
@@ -521,6 +527,7 @@ function renderStory() {
           ${action.action_id ? `<span class="tag">行动：${zh(action.action_id)}</span>` : ""}
           ${expression.expression_id ? `<span class="tag">表达：${zh(expression.expression_id)}</span>` : ""}
           ${recognition.outcome ? `<span class="tag">承认：${zh(recognition.outcome)}</span>` : ""}
+          ${frame.attention_drift?.dominant_focus ? `<span class="tag">注意：${zh(frame.attention_drift.dominant_focus)}</span>` : ""}
           ${frame.daily_ecology?.routine_phase ? `<span class="tag">日常：${zh(frame.daily_ecology.routine_phase)}</span>` : ""}
           ${frame.memory_count ? `<span class="tag">记忆重构：${frame.memory_count}</span>` : ""}
           ${frame.fate_count ? `<span class="tag">命运转折：${frame.fate_count}</span>` : ""}
