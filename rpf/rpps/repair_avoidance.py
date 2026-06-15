@@ -3,7 +3,7 @@ from __future__ import annotations
 from rpf.core.models import SimulationState, TickContext, clamp
 from rpf.core.events import Event
 from rpf.core.semantics import defensive_memory, unrecognized_contribution
-from rpf.rpps.base import Activation, BaseRPP
+from rpf.rpps.base import Activation, BaseRPP, activation_evidence, future_constraint_pressure
 
 
 class RepairAvoidanceRPP(BaseRPP):
@@ -15,6 +15,11 @@ class RepairAvoidanceRPP(BaseRPP):
         face_risk = p2.threat_sensitivity.get("being_controlled", 0.0)
         injury_present = unrecognized_contribution(state)
         practical_signal = any(e.payload.get("signal_type") in {"practical_repair", "topic_change"} for e in events)
+        future_pressure, future_refs = future_constraint_pressure(
+            events,
+            requirements={"repair_availability", "face_continuation", "speech_access"},
+            type_terms={"control", "public", "identity", "absence"},
+        )
         weights = self.config["weights"]  # type: ignore[index]
         score = (
             apology_inhibition * weights["apology_inhibition"]
@@ -23,9 +28,10 @@ class RepairAvoidanceRPP(BaseRPP):
             + (weights["practical_signal"] if practical_signal else 0.0)
             + state.relation_metrics.get("conflict_pressure", 0.0) * weights["conflict_pressure"]
             + defensive_memory(state) * weights.get("defensive_memory", 0.0)
+            + future_pressure * weights.get("future_constraint_pressure", 0.05)
         )
         if context.tick_type == "scene" and score >= self.config["threshold"]:  # type: ignore[operator]
-            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], [e.event_id for e in events[-4:]], "repair pressure displaced into avoidance or practical help")
+            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], activation_evidence(events, future_refs), "repair pressure displaced into avoidance or practical help")
         return None
 
     def apply(self, state: SimulationState, activation: Activation) -> None:

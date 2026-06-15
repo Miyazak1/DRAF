@@ -346,6 +346,20 @@ CoPresenceBinding
 
 If no binding remains above threshold, future encounter generation must become unlikely or latent.
 
+`CoPresenceBinding` is initialized from scenario data but is not fixed.
+
+It may be updated by:
+
+- `BindingUpdatedEvent`
+- `BindingDecayedEvent`
+
+Binding evolution may change:
+
+- `strength`
+- `exit_cost`
+
+Valid causal sources include field pressure, repair, avoidance, displacement, and relation sedimentation.
+
 ---
 
 ## 7. RelationalProcessPattern
@@ -527,9 +541,85 @@ The complete event taxonomy is defined in `rpf-event-taxonomy.md`.
 
 ---
 
-## 13. Derived Views
+## 13. Relational Viability Trace Models
 
-### 13.1 PersonView
+These are trace-only models for the deeper substrate beneath conflict. They are append-only evidence, not writable causal state.
+
+```text
+ViabilityConstraint
+- constraint_id
+- constraint_type
+- source_layer
+- affected_processes
+- affected_requirements
+- intensity
+- activation_condition
+- duration_policy
+- decay_rate
+- reversibility
+- downstream_effects
+- evidence_refs
+```
+
+```text
+ViabilityRequirement
+- requirement_id
+- requirement_type
+- holder_process_id
+- target_process_id optional
+- urgency
+- negotiability
+- minimum_satisfaction_condition
+- failure_cost
+- deformation_tendency
+- source
+- evidence_refs
+```
+
+```text
+AffordanceWidth
+- tick
+- process_id
+- width
+- narrowing_constraints
+- direct_response_cost
+- evidence_refs
+```
+
+```text
+DeformationTrace
+- deformation_id
+- source_process_id
+- target_process_id
+- visible_form
+- blocked_requirement_id optional
+- deformation_type
+- deformation_distance
+- ambiguity
+- observer_risk
+- expected_recognition_failure_modes
+- evidence_refs
+```
+
+```text
+ViabilityTickTrace
+- tick
+- tick_type
+- constraints
+- requirements
+- affordance_widths
+- deformations
+- dramatic_tension
+- evidence_refs
+```
+
+These models may explain and later gently bias downstream engines, but they must not directly mutate `PersonView`, `RelationshipView`, or other derived views.
+
+---
+
+## 14. Derived Views
+
+### 14.1 PersonView
 
 ```text
 PersonView
@@ -548,7 +638,7 @@ PersonView
 - evidence_refs: list[EventId]
 ```
 
-### 13.2 RelationshipView
+### 14.2 RelationshipView
 
 ```text
 RelationshipView
@@ -567,7 +657,7 @@ RelationshipView
 - evidence_refs
 ```
 
-### 13.3 RelationalAggregateView
+### 14.3 RelationalAggregateView
 
 ```text
 RelationalAggregateView
@@ -586,7 +676,7 @@ All derived views must include evidence references.
 
 ---
 
-## 14. Write Permissions by Object
+## 15. Write Permissions by Object
 
 ```text
 Writable causal state:
@@ -602,6 +692,7 @@ Append-only:
 - Event
 - EpisodeRecord
 - Snapshot
+- ViabilityTickTrace
 
 Derived only:
 - PersonView
@@ -612,7 +703,7 @@ Derived only:
 
 ---
 
-## 15. Validation Rules
+## 16. Validation Rules
 
 The implementation must reject:
 
@@ -623,10 +714,11 @@ The implementation must reject:
 - irreversible records without source event
 - RPP activation without eligibility evidence
 - LLM output that proposes causal mutation outside event schemas
+- viability trace that cannot cite lower-layer event evidence
 
 ---
 
-## 16. Minimal Pydantic Skeleton
+## 17. Minimal Pydantic Skeleton
 
 ```python
 class SimulationState(BaseModel):

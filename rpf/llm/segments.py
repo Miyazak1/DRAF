@@ -153,6 +153,9 @@ def deterministic_segment_markdown(segment: dict[str, Any]) -> str:
             lines.append(f"第 {frame.get('tick')} 步，{names}：{frame.get('summary', '')}")
         else:
             lines.append(f"第 {frame.get('tick')} 步：{frame.get('summary', '')}")
+        viability = _viability_brief(frame)
+        if viability:
+            lines.append(f"  - 底层依据：{viability}")
     return "\n".join(lines).strip() + "\n"
 
 
@@ -163,6 +166,30 @@ def render_segment_stream(records: list[dict[str, Any]], canon: dict[str, Any]) 
         lines.append(str(record.get("text", "")).strip())
         lines.append("")
     return "\n".join(lines).strip() + "\n"
+
+
+def _viability_brief(frame: dict[str, Any]) -> str:
+    viability = frame.get("viability", {}) or {}
+    if not viability:
+        return ""
+    parts = []
+    for label, key in (
+        ("可存续性压力", "viability_pressure"),
+        ("可行动宽度", "affordance_width"),
+        ("直接回应成本", "direct_response_cost"),
+        ("派生张力", "dramatic_tension"),
+    ):
+        value = viability.get(key)
+        if value is None:
+            continue
+        try:
+            parts.append(f"{label} {float(value):.2f}")
+        except (TypeError, ValueError):
+            continue
+    deformation = viability.get("deformation", {}) or {}
+    if deformation.get("type"):
+        parts.append(f"变形 {deformation.get('type')} {float(deformation.get('distance') or 0.0):.2f}")
+    return "；".join(parts)
 
 
 def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str, Any]:

@@ -154,6 +154,15 @@ style realization comes from the LLM
   "relationship_view": {},
   "relevance_landscapes": {},
   "recognition_conflicts": [],
+  "viability": {
+    "viability_pressure": 0.0,
+    "affordance_width": 1.0,
+    "direct_response_cost": 0.0,
+    "deformation_distance": 0.0,
+    "blocked_requirement": "recognition|repair|exit|care|null",
+    "failure_modes": ["direct_response_too_costly"],
+    "evidence_refs": ["event_id"]
+  },
   "forbidden_knowledge": [],
   "style_constraints": {
     "no_exposition_of_hidden_state": true,
@@ -188,8 +197,52 @@ Rendering may not introduce:
 - new facts not present in source events
 - new names, genders, occupations, locations, or relationships not present in render_canon
 - hidden motives outside perspective limits
+- causes not present in viability, action, expression, or recognition evidence
 - future predictions
 - direct explanations like "because his trust score fell"
+
+---
+
+### 4.4 Viability Evidence Boundary
+
+Scene frames may include a `viability` block.
+
+This block is bottom-layer evidence, not story permission.
+
+The LLM may use viability evidence to render:
+
+- narrowed action space
+- hesitation, compression, delay, or inhibition
+- pressure in space, timing, objects, and silence
+- visible deformation of expression or action
+- the feeling that a direct response has become costly
+
+The LLM may not use viability evidence to invent:
+
+- a new motive
+- a new memory
+- a new backstory
+- a new private intention
+- a new relationship fact
+- a new irreversible consequence
+
+Raw values such as `viability_pressure`, `affordance_width`, and `deformation_distance` should not appear in literary prose. They should be translated into observable texture only.
+
+Valid:
+
+```text
+她没有立刻说话，账单被推到桌角，像一个所有人都看见却没人愿意先碰的东西。
+```
+
+Invalid:
+
+```text
+因为她的可存续性压力达到 0.82，她意识到自己已经不爱他了。
+```
+
+The LLM can make the bottom layer legible.
+
+It cannot make the bottom layer causal.
 
 ---
 

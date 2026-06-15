@@ -33,8 +33,13 @@ A tick is not a turn in a conversation. A tick is a structured update cycle.
 Tick
 -> field pressure evaluation
 -> binding evaluation
+-> trace-only constraint activation
+-> trace-only viability requirement activation
+-> trace-only affordance width measurement
+-> derived future-constraint feedback from prior history
 -> situated affordance selection
 -> scene crystallization
+-> trace-only deformation and derived dramatic tension measurement
 -> RPP activation
 -> relevance update
 -> ritual framing
@@ -44,6 +49,11 @@ Tick
 -> repair / escalation / avoidance
 -> stabilization update
 -> irreversibility update
+-> memory reconstruction
+-> environment sedimentation
+-> process disposition sedimentation
+-> relation sedimentation
+-> binding / expectation / account / norm / frame / relevance / position field refresh
 -> aggregation and projection
 -> persistence
 ```
@@ -546,9 +556,48 @@ LatentRelationEvent
 
 may be emitted.
 
+Bindings are not static rails.
+
+At the end of a tick, relation history may update binding strength or exit cost. The next tick's scheduler and viability evaluation then consume the changed binding.
+
+Valid binding evolution sources:
+
+- `FieldPressureEvent`
+- `RepairEvent`
+- `AvoidanceEvent`
+- `DisplacementEvent`
+- `RelationSedimentationEvent`
+
+Outputs:
+
+```text
+BindingUpdatedEvent
+BindingDecayedEvent
+binding_trace.json
+```
+
+Rules:
+
+- binding evolution must cite event evidence
+- changes must remain bounded and gradual
+- latent time may slightly loosen unrenewed binding strength
+- unresolved recognition, symbolic accounting, repair narrowing, public definition, asymmetry, shared fate, and future lock may tighten relevant bindings or raise exit cost
+- repair may reduce exit cost without deleting co-presence
+- binding changes affect later ticks, not the already selected current tick
+
+This is the runtime mechanism for why two processes continue to cross paths even when neither "chooses" a scene.
+
 ### Step 4: Crystallize Candidate Scene
 
 The simulator first selects a situated affordance: the interaction form made most available by the current field, bindings, process constraints, and active RPP/composition ecology.
+
+Sedimented field pressures may also shape affordance selection.
+
+Examples:
+
+- `spatial_constraints.avoidance_paths` makes delay, bodily avoidance, or route-based non-contact more available
+- `material_pressures.charged_objects` makes practical repair or material pressure intrusion more available
+- `audience_pressure.imagined_audience` makes public performance or face-saving forms more available
 
 Do not ask:
 
@@ -701,19 +750,45 @@ RPPNonActivationEvent optional
 
 ### Step 10: Update Relevance Landscapes
 
-For each process position, compute:
+For each process position, update event-sourced relevance markers:
 
-- what becomes salient
-- what becomes threat
-- what becomes opportunity
-- which memories are activated
-- what becomes unsayable
+- delayed reply / absence salience
+- recognition claim salience
+- public exposure salience
+- being controlled salience
+- double bind salience
+- material cost salience
+- repair opening salience
+- exit threat salience
+
+These are not private attention meters. They are relation-and-field-produced markers of what the process can no longer treat as background.
+
+Valid sources include:
+
+- `FieldPressureEvent`
+- `AffordanceSelectionEvent`
+- `MicroSignalEvent`
+- `ObservationEvent`
+- `RecognitionEvent`
+- `MemoryReconstructionEvent`
+- `NormativePressureEvent`
+- `FrameDefinitionEvent`
+- `RelationSedimentationEvent`
 
 Emit:
 
 ```text
 RelevanceShiftEvent
+relevance_trace.json
 ```
+
+Rules:
+
+- relevance shifts must cite event evidence.
+- relevance markers use the `relevance_field.{process}.{marker}` prefix.
+- relevance may influence later scheduler rhythm, affordance selection, RPP activation, and memory reconstruction.
+- relevance must decay when not renewed.
+- relevance must not be rendered as a private motive unless the lower event chain is cited.
 
 ### Step 9: Establish Ritual Frame
 
@@ -777,6 +852,218 @@ ObservationEvent
 MisinterpretationEvent optional
 ```
 
+### Step 11.5: Expectation Sedimentation
+
+Observed interaction may sediment into second-order expectations:
+
+- expected refusal
+- expected misrecognition
+- expected withdrawal
+- expected public exposure
+- expected repair avoidance
+
+Valid sources:
+
+- `ObservationEvent`
+- `RecognitionEvent`
+- `RepairEvent`
+- `AvoidanceEvent`
+- `DisplacementEvent`
+- `RelationSedimentationEvent`
+
+Output:
+
+```text
+ExpectationSedimentationEvent
+expectation_trace.json
+```
+
+Rules:
+
+- expectation sedimentation is relation-specific
+- it must cite observable events
+- it is not private belief, inner monologue, or motive
+- it may affect later `ActionSelectionEvent` and `ExpressionSelectionEvent`
+- unreinforced expectations decay over time
+
+This is the mechanism by which a process acts not only toward the other, but toward what it expects the other will see, refuse, misunderstand, or avoid.
+
+### Step 11.6: Account Pressure Projection
+
+Observable history may also project into account pressure:
+
+- safety
+- dignity
+- control
+- relation
+- meaning
+- energy
+
+These are not primitive inner meters. They are bounded, event-sourced viability pressures.
+
+Valid sources:
+
+- `FieldPressureEvent`
+- `RecognitionEvent`
+- `RepairEvent`
+- `AvoidanceEvent`
+- `DisplacementEvent`
+- `MisrecognitionEvent`
+- `ExpectationSedimentationEvent`
+- `RelationSedimentationEvent`
+
+Output:
+
+```text
+AccountPressureEvent
+account_trace.json
+```
+
+Rules:
+
+- account pressure must cite event evidence
+- it may affect later action, expression, and recognition evaluation
+- it must decay when not reinforced
+- it must not be rendered as private emotion unless the renderer cites the event chain
+
+This layer explains why the same act can become costly as dignity threat, control threat, meaning collapse, relation strain, safety strain, or energy depletion without making emotion a primitive variable.
+
+### Step 11.7: Normative Pressure Projection
+
+Observable history may also project into normative pressure:
+
+- claim entitlement
+- repair obligation
+- public face obligation
+- legitimacy contestation
+- reciprocity obligation
+- exit justification
+- mutual obligation
+- irreversible precedent
+
+These are not moral truths and not hidden values. They are bounded, event-sourced social-form pressures: what the relation has made claimable, owed, contestable, publicly risky, or easier to justify.
+
+Valid sources:
+
+- `FieldPressureEvent`
+- `RecognitionEvent`
+- `RepairEvent`
+- `AvoidanceEvent`
+- `DisplacementEvent`
+- `MisrecognitionEvent`
+- `OperativeClassificationEvent`
+- `IrreversibilityEvent`
+- `ExpectationSedimentationEvent`
+- `AccountPressureEvent`
+- `RelationSedimentationEvent`
+
+Output:
+
+```text
+NormativePressureEvent
+normativity_trace.json
+```
+
+Rules:
+
+- normative pressure must cite event evidence.
+- it may affect later action, expression, and recognition evaluation.
+- it must decay when not socially renewed.
+- it must not decide who is morally correct.
+- it must not be rendered as narrator judgment unless the renderer cites the event chain.
+
+This layer explains how injury, expectation, audience pressure, and relation sediment become obligations and entitlements without making "morality" a primitive variable.
+
+### Step 11.8: Interaction Frame Definition
+
+Observable history may also sediment a definition of what kind of situation the interaction has become:
+
+- debt accounting
+- repair scene
+- avoidance scene
+- public performance
+- care/control
+- double bind
+- material accounting
+- recognition trial
+
+These are not narrative scenes and not private interpretations. They are bounded, event-sourced frame pressures that define which meanings and actions become easier to take up next.
+
+Valid sources:
+
+- `AffordanceSelectionEvent`
+- `ExpressionSelectionEvent`
+- `RecognitionEvent`
+- `NormativePressureEvent`
+- `RelationSedimentationEvent`
+- `FieldUpdateEvent`
+- `RPPCompositionEvent`
+
+Output:
+
+```text
+FrameDefinitionEvent
+frame_trace.json
+```
+
+Rules:
+
+- frame definition must cite event evidence.
+- it may affect later affordance, expression, and recognition evaluation.
+- it must decay when not renewed.
+- it must not invent scenes, motives, or plot beats.
+- LLM rendering may use it only as a constraint on wording, not as authority to add events.
+
+This layer explains why the same visible act can become help, control, debt collection, public performance, avoidance, or repair depending on the operative interaction frame.
+
+### Step 11.9: Relation-Generated Positioning
+
+Observable history may also push each process into a relation-generated position:
+
+- claimant
+- debtor
+- defender
+- caretaker
+- controlled
+- public performer
+- withdrawer
+- trapped party
+- repair partner
+- bound party
+
+These are not roles, identities, traits, or motives. They are bounded, event-sourced positions produced by recognition outcomes, obligations, frames, relevance shifts, relation sediment, RPP composition, and binding evolution.
+
+Valid sources:
+
+- `RecognitionEvent`
+- `MisrecognitionEvent`
+- `RepairEvent`
+- `AvoidanceEvent`
+- `DisplacementEvent`
+- `NormativePressureEvent`
+- `FrameDefinitionEvent`
+- `RelevanceShiftEvent`
+- `RelationSedimentationEvent`
+- `RPPCompositionEvent`
+- `BindingUpdatedEvent`
+
+Output:
+
+```text
+PositioningEvent
+position_trace.json
+```
+
+Rules:
+
+- positioning must cite event evidence.
+- position metrics use the `position_field.{process}.{position_type}` prefix.
+- it may affect later action selection and recognition evaluation through bounded `position_*` evidence.
+- unreinforced positions decay.
+- it must not directly create a scene, personality label, fixed social role, relationship label, or rendered prose.
+
+This layer explains why a process does not merely "choose" an action. The relation may have already made it available as claimant, defensible as defender, costly as debtor, almost unsayable as trapped party, or distorted as caretaker/control.
+
 ### Step 12: Recognition Evaluation
 
 Evaluate active recognition demands.
@@ -808,6 +1095,7 @@ Recognition outcome is selected by a dedicated engine from:
 - speech inhibition
 - repair debt
 - unrecognized contribution
+- relation-generated position field from prior history
 
 It must emit outcome scores and evidence. It must not use a single repair-debt threshold as the outcome rule.
 
@@ -990,6 +1278,17 @@ Primary triggers:
 - operative classification
 - irreversibility
 
+Future constraints may modulate memory reconstruction.
+
+If a `FutureConstraintEvent` already exists in the tick, and it affects the remembering process plus the relevant requirement type, it may slightly increase the salience and confidence of an already produced memory candidate.
+
+It may not create a memory by itself.
+
+Consumed future constraints are recorded in:
+
+- `memory_trace.json` evidence as `future_constraint_refs`
+- `MemoryReconstructionEvent.causal_refs`
+
 Each run writes:
 
 ```text
@@ -1013,8 +1312,140 @@ These pressures feed:
 - affordance selection, making some actions more visible or more unavailable
 - recognition evaluation, altering whether a claim is granted, refused, displaced, postponed, misunderstood, or unspeakable
 - RPP activation, allowing repeated relation patterns to be triggered by history, not only by current signal
+- future-constraint generation, allowing remembered history to narrow later viability
 
 Memory bias decays over time. Decay prevents the simulator from turning one early event into an infinite deterministic lock unless later interaction keeps reconstructing the same history.
+
+### Step 17.4 Environment Sedimentation
+
+The field is not only an input.
+
+After memory reconstruction, relation history may sediment back into the environment.
+
+This layer may update:
+
+- `field_state.spatial_constraints`
+- `field_state.material_pressures`
+- `field_state.audience_pressure`
+- `field_state.enacted_micro_worlds`
+
+Valid sources:
+
+- `RPPActivationEvent`
+- `RPPCompositionEvent`
+- `FutureConstraintEvent`
+- `MemoryReconstructionEvent`
+- `IrreversibilityEvent`
+- prior-tick `RelationSedimentationEvent`
+
+Outputs:
+
+```text
+FieldUpdateEvent
+EnactedMicroWorldEvent
+environment_trace.json
+```
+
+Rules:
+
+- environment sedimentation may only cite prior relation events from the same or earlier tick
+- it may not create recognition, memory, RPP, or irreversibility by itself
+- it must remain bounded and gradual
+- sedimented pressures decay when not renewed, so one event cannot permanently monopolize the field
+- sedimented spatial pressure may be read by the viability layer on later ticks
+- relation sediment may attach recognition debt to objects, repair narrowing to avoidance paths, public definition to imagined audiences, and fate load to memory-saturated spaces
+- relation sediment is consumed with a one-tick delay to avoid same-tick self-amplification
+
+This is the mechanism by which rooms, objects, routines, audiences, and avoided paths become part of the relation rather than neutral background.
+
+### Step 17.5 Process Disposition Sedimentation
+
+Process-level tendencies are not primitive personality parameters.
+
+After memory and environment sedimentation, repeated evidence may slightly alter process dispositions:
+
+- checking tendency
+- ambiguity tolerance
+- risk suspension scope
+- speech inhibition
+- threat sensitivity
+- resentment pressure
+
+Valid sources:
+
+- `MemoryReconstructionEvent`
+- `FieldUpdateEvent`
+- `RPPActivationEvent`
+- consumed `FutureConstraintEvent` refs
+- prior-tick `RelationSedimentationEvent`
+
+Output:
+
+```text
+DispositionSedimentationEvent
+disposition_trace.json
+```
+
+Rules:
+
+- disposition sedimentation must cite event evidence
+- it must remain bounded and gradual
+- only the sedimented contribution decays; scenario baselines are not erased
+- unreinforced disposition sediment decays over later ticks
+- it must not create PersonView labels directly
+- PersonView may later summarize these tendencies as apparent labels
+- relation sediment may alter checking tendency, ambiguity tolerance, speech inhibition, exposure sensitivity, and risk suspension with a one-tick delay
+
+### Step 17.6 Relation Sedimentation
+
+The relation is not a primitive object, but the relation process can acquire historical residue.
+
+After process disposition sedimentation, repeated event evidence may sediment into relation-level constraints:
+
+- recognition debt
+- repair access narrowing
+- symbolic accounting load
+- future lock load
+- shared fate load
+- public definition load
+- asymmetry load
+- memory saturation
+- mutual predictability load
+
+Valid sources:
+
+- `RecognitionEvent`
+- `MisrecognitionEvent`
+- `RepairEvent`
+- `AvoidanceEvent`
+- `DisplacementEvent`
+- `RPPCompositionEvent`
+- `FutureConstraintEvent`
+- `MemoryReconstructionEvent`
+- `FieldUpdateEvent`
+- `DispositionSedimentationEvent`
+- `NormativePressureEvent`
+
+Output:
+
+```text
+RelationSedimentationEvent
+relation_trace.json
+```
+
+Rules:
+
+- relation sedimentation must cite event evidence
+- it must remain bounded and gradual
+- unreinforced relation sediment decays over later ticks
+- it may feed later aggregation, viability, affordance, recognition, repair, and fate calculations
+- it may feed the next tick's scheduler preview as `relation_sediment_load`
+- it may create later relation-sedimentation-backed `FutureConstraintEvent` traces after threshold crossing
+- viability events that consume relation sediment should cite recent `RelationSedimentationEvent` ids where available
+- multiple same-tick updates to the same sediment metric may be coalesced into one event with `reason_details`
+- it must not directly create plot beats, rendered prose, or relationship labels
+
+This is the runtime mechanism by which "relationship" becomes a real evolving constraint without being treated as a primitive entity.
 
 ### Step 18: Persist
 
@@ -1024,6 +1455,13 @@ Persist:
 - new snapshot if scheduled
 - derived views
 - diagnostics
+- environment trace
+- disposition trace
+- relation trace
+- binding trace
+- expectation trace
+- account trace
+- position trace
 - optional rendering
 
 ---
@@ -1138,9 +1576,12 @@ scene_score =
 + recognition_pressure
 + active_rpp_pressure
 + irreversibility_pressure
++ bounded_viability_rhythm_bias
 - avoidance_capacity
 - exit_capacity
 ```
+
+The viability rhythm bias is computed before tick events exist, from current causal state only. It is recorded in scheduler diagnostics and must remain bounded. It may make a near-threshold latent or micro-interaction moment arrive slightly sooner, but it must not force a scene that lacks field pressure, binding, or accumulated relational pressure.
 
 ### 6.2 Required Scene Explanation
 
@@ -1173,6 +1614,17 @@ for each RPP:
   sample or select
   emit RPPActivationEvent
 ```
+
+RPPs may consume `FutureConstraintEvent` as bounded eligibility evidence.
+
+This allows irreversibility, operative classification, and reconstructed memory to make a pattern easier to re-enter on later ticks.
+
+It must remain bounded:
+
+- a future constraint is not a command to activate an RPP
+- the RPP must still pass its normal field, tick, signal, recognition, memory, or relation-metric gate
+- consumed future constraints must appear in `RPPActivationEvent.eligibility_evidence`
+- consumed future constraints must appear in `RPPActivationEvent.causal_refs`
 
 ### 7.2 Activation Thresholds
 
@@ -1254,6 +1706,8 @@ During a continuous session:
 - the viewer polls run status
 - story, traces, metrics, and events update while the session is running
 - optional rendering may run every N ticks
+- each web-created continuous run receives its own archive directory
+- older web-created runs can be reopened without being overwritten
 
 Rendering modes:
 
@@ -1298,10 +1752,31 @@ If `llm` is selected, the renderer receives the same controlled render payload a
 - person-facing views
 - irreversibility
 - story frames
+- per-frame viability evidence summaries
 
 The LLM still may not mutate simulation state.
 
+Per-frame viability summaries are derived from simulator events. They may describe pressure, narrowed affordances, blocked requirements, response cost, deformation, and evidence refs.
+
+They are not a license for the LLM to add hidden motives, new memories, off-screen events, or future consequences.
+
+Future constraints in the render payload are already derived by the simulator from irreversibility, classification, or memory evidence. The LLM may render their felt pressure, but it may not create additional future constraints.
+
 API keys entered in the browser are stored only in browser local storage for user convenience and are sent to the local viewer backend when a rendering request is made. They are not written into scenario files, run output, or documentation.
+
+Web run archive layout:
+
+```text
+out/experience/runs/<scenario_id>/<timestamp>_<mode>_seed<seed>_<id>/
+```
+
+Each archived run contains the ordinary simulation outputs plus:
+
+```text
+run_metadata.json
+```
+
+The metadata records run id, scenario id, scenario path, seed, mode, title, and creation time. It is used only by the viewer workbench; causal authority remains in the event stream and manifest.
 
 ---
 

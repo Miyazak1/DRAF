@@ -3,7 +3,7 @@ from __future__ import annotations
 from rpf.core.events import Event
 from rpf.core.models import SimulationState, TickContext, clamp
 from rpf.core.semantics import injury_memory, material_urgency, unrecognized_contribution
-from rpf.rpps.base import Activation, BaseRPP
+from rpf.rpps.base import Activation, BaseRPP, activation_evidence, future_constraint_pressure
 
 
 class ContributionDebtLoopRPP(BaseRPP):
@@ -15,6 +15,11 @@ class ContributionDebtLoopRPP(BaseRPP):
         recognition = max((d.current_pressure for d in p1.recognition_demands), default=0.0)
         urgency = material_urgency(state)
         signal = any(e.payload.get("signal_type") in {"material_urgency", "rent_due", "unacknowledged_help", "practical_repair"} for e in events)
+        future_pressure, future_refs = future_constraint_pressure(
+            events,
+            requirements={"recognition_access", "care_availability", "repair_availability"},
+            type_terms={"debt", "owe"},
+        )
         weights = self.config["weights"]  # type: ignore[index]
         score = (
             unrecognized * weights.get("unrecognized_contribution", weights.get("unrecognized_sacrifice", 0.0))
@@ -22,9 +27,10 @@ class ContributionDebtLoopRPP(BaseRPP):
             + urgency * weights.get("material_urgency", weights.get("rent_pressure", 0.0))
             + (weights["contribution_signal"] if signal else 0.0)
             + injury_memory(state) * weights.get("injury_memory", 0.0)
+            + future_pressure * weights.get("future_constraint_pressure", 0.02)
         )
         if score >= self.config["threshold"]:  # type: ignore[operator]
-            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], [e.event_id for e in events[-4:]], "unrecognized contribution becomes relational debt")
+            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], activation_evidence(events, future_refs), "unrecognized contribution becomes relational debt")
         return None
 
     def apply(self, state: SimulationState, activation: Activation) -> None:

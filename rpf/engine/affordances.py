@@ -41,10 +41,28 @@ class AffordanceEngine:
         p1 = state.processes["p1"]
         p2 = state.processes["p2"]
         audience = max(state.field_state.audience_pressure.values(), default=0.0)
+        spatial = state.field_state.spatial_constraints
+        material = state.field_state.material_pressures
         urgency = material_urgency(state)
+        avoidance_paths = spatial.get("avoidance_paths", 0.0)
+        memory_saturated_space = spatial.get("memory_saturated_space", 0.0)
+        charged_objects = max(
+            material.get("charged_objects", 0.0),
+            material.get("symbolic_debt_objects", 0.0),
+        )
+        imagined_audience = max(
+            state.field_state.audience_pressure.get("imagined_audience", 0.0),
+            state.field_state.audience_pressure.get("reputational_echo", 0.0),
+        )
         contribution = unrecognized_contribution(state)
         repair_debt = state.relation_metrics.get("repair_debt", 0.0)
         conflict = state.relation_metrics.get("conflict_pressure", 0.0)
+        recognition_debt = state.relation_metrics.get("relation_sediment.recognition_debt", 0.0)
+        repair_access_narrowing = state.relation_metrics.get("relation_sediment.repair_access_narrowing", 0.0)
+        symbolic_accounting = state.relation_metrics.get("relation_sediment.symbolic_accounting_load", 0.0)
+        public_definition = state.relation_metrics.get("relation_sediment.public_definition_load", 0.0)
+        asymmetry_load = state.relation_metrics.get("relation_sediment.asymmetry_load", 0.0)
+        memory_saturation = state.relation_metrics.get("relation_sediment.memory_saturation", 0.0)
         remembered_history = memory_pressure(state)
         injury_history = injury_memory(state)
         defensive_history = defensive_memory(state)
@@ -53,6 +71,8 @@ class AffordanceEngine:
         binding = max((b.strength for b in state.bindings), default=0.0)
         active = {r.rpp_id: r.intensity for r in state.active_rpps}
         composition = self._dominant_composition(state)
+        frame = self._frame_context(state)
+        relevance = self._relevance_context(state)
         tick_bias = self.config["tick_bias"][context.tick_type]  # type: ignore[index]
 
         delayed = self._candidate(
@@ -69,6 +89,10 @@ class AffordanceEngine:
                 "pursuit_withdrawal": active.get("pursuit_withdrawal", 0.0) * 0.12,
                 "low_ambiguity_tolerance": (1.0 - p1.ambiguity_tolerance) * 0.1,
                 "injury_memory": injury_history * 0.02,
+                "sedimented_avoidance_paths": avoidance_paths * 0.055,
+                "relation_repair_access_narrowing": repair_access_narrowing * 0.06,
+                "frame_avoidance_scene": frame["avoidance_scene"] * 0.07,
+                "relevance_delayed_reply": relevance["delayed_reply"] * 0.08,
             },
             0.75,
             "absence is treated as evidence about being chosen",
@@ -87,6 +111,11 @@ class AffordanceEngine:
                 "debt_lock": (0.18 if composition == "debt_lock" else 0.0),
                 "material_urgency": urgency * 0.12,
                 "defensive_memory": defensive_history * 0.02,
+                "sedimented_charged_objects": charged_objects * 0.04,
+                "relation_repair_access_narrowing": repair_access_narrowing * 0.05,
+                "frame_repair_scene": frame["repair_scene"] * 0.065,
+                "frame_debt_accounting": frame["debt_accounting"] * 0.035,
+                "relevance_repair_opening": relevance["repair_opening"] * 0.07,
             },
             0.58,
             "help appears where acknowledgment is unavailable",
@@ -105,6 +134,18 @@ class AffordanceEngine:
                 "debt_lock": (0.18 if composition == "debt_lock" else 0.0),
                 "resentment": p1.resentment_pressure * 0.1,
                 "injury_memory": injury_history * 0.025,
+                "sedimented_charged_objects": charged_objects * 0.05,
+                "memory_saturated_space": memory_saturated_space * 0.025,
+                "relation_recognition_debt": recognition_debt * 0.08,
+                "relation_symbolic_accounting": symbolic_accounting * 0.06,
+                "frame_debt_accounting": frame["debt_accounting"] * 0.075,
+                "frame_recognition_trial": frame["recognition_trial"] * 0.05,
+                "frame_double_bind_penalty": -frame["double_bind"] * 0.08,
+                "frame_care_control_penalty": -frame["care_control"] * 0.05,
+                "relevance_recognition_claim": relevance["recognition_claim"] * 0.02,
+                "relevance_material_cost": relevance["material_cost"] * 0.01,
+                "relevance_double_bind_penalty": -relevance["double_bind"] * 0.07,
+                "relevance_being_controlled_penalty": -relevance["being_controlled"] * 0.04,
             },
             0.62,
             "my cost is not being recognized",
@@ -122,6 +163,10 @@ class AffordanceEngine:
                 "audience": audience * 0.22,
                 "public_face_split": (0.22 if composition == "public_face_split" else 0.0),
                 "fate_memory": fate_history * 0.02,
+                "sedimented_imagined_audience": imagined_audience * 0.055,
+                "relation_public_definition": public_definition * 0.07,
+                "frame_public_performance": frame["public_performance"] * 0.08,
+                "relevance_public_exposure": relevance["public_exposure"] * 0.11,
             },
             0.68,
             "the public version of us is safer than the private one",
@@ -140,6 +185,10 @@ class AffordanceEngine:
                 "care_bind_double_bind": (0.24 if composition == "care_bind_double_bind" else 0.0),
                 "dependency_inhibition": p2.speech_inhibition.get("dependency_admission", 0.0) * 0.12,
                 "remembered_history": remembered_history * 0.015,
+                "memory_saturated_space": memory_saturated_space * 0.02,
+                "relation_asymmetry_load": asymmetry_load * 0.06,
+                "frame_care_control": frame["care_control"] * 0.07,
+                "relevance_being_controlled": relevance["being_controlled"] * 0.13,
             },
             0.5,
             "care protects and controls at the same time",
@@ -158,6 +207,10 @@ class AffordanceEngine:
                 "care_bind_double_bind": (0.18 if composition == "care_bind_double_bind" else 0.0),
                 "conflict": conflict * 0.1,
                 "fate_memory": fate_history * 0.025,
+                "memory_saturated_space": memory_saturated_space * 0.03,
+                "relation_asymmetry_load": asymmetry_load * 0.05,
+                "frame_double_bind": frame["double_bind"] * 0.08,
+                "relevance_double_bind": relevance["double_bind"] * 0.15,
             },
             0.72,
             "any available answer will later be usable against me",
@@ -175,6 +228,11 @@ class AffordanceEngine:
                 "contribution": contribution * 0.18,
                 "conflict": conflict * 0.08,
                 "remembered_history": remembered_history * 0.01,
+                "sedimented_charged_objects": charged_objects * 0.06,
+                "relation_symbolic_accounting": symbolic_accounting * 0.04,
+                "frame_material_accounting": frame["material_accounting"] * 0.07,
+                "frame_debt_accounting": frame["debt_accounting"] * 0.035,
+                "relevance_material_cost": relevance["material_cost"] * 0.1,
             },
             0.45,
             "the environment forces the relation to account for cost",
@@ -193,6 +251,14 @@ class AffordanceEngine:
                 "recognition_trap": (0.2 if composition == "recognition_trap" else 0.0),
                 "pursuit_withdrawal": active.get("pursuit_withdrawal", 0.0) * 0.1,
                 "defensive_memory": defensive_history * 0.025,
+                "sedimented_avoidance_paths": avoidance_paths * 0.06,
+                "memory_saturated_space": memory_saturated_space * 0.02,
+                "relation_recognition_debt": recognition_debt * 0.06,
+                "relation_memory_saturation": memory_saturation * 0.04,
+                "frame_avoidance_scene": frame["avoidance_scene"] * 0.07,
+                "frame_recognition_trial": frame["recognition_trial"] * 0.035,
+                "relevance_delayed_reply": relevance["delayed_reply"] * 0.075,
+                "relevance_exit_threat": relevance["exit_threat"] * 0.035,
             },
             0.7,
             "the claim is felt before it is answerable",
@@ -243,3 +309,43 @@ class AffordanceEngine:
         if not composition_scores:
             return None
         return max(composition_scores.items(), key=lambda item: item[1])[0]
+
+    def _frame_context(self, state: SimulationState) -> dict[str, float]:
+        return {
+            frame_type: state.relation_metrics.get(f"frame_definition.{frame_type}", 0.0)
+            for frame_type in [
+                "debt_accounting",
+                "repair_scene",
+                "avoidance_scene",
+                "public_performance",
+                "care_control",
+                "double_bind",
+                "material_accounting",
+                "recognition_trial",
+            ]
+        }
+
+    def _relevance_context(self, state: SimulationState) -> dict[str, float]:
+        markers = [
+            "delayed_reply",
+            "recognition_claim",
+            "public_exposure",
+            "being_controlled",
+            "double_bind",
+            "material_cost",
+            "repair_opening",
+            "exit_threat",
+        ]
+        result: dict[str, float] = {}
+        for marker in markers:
+            dynamic = max(
+                (
+                    value
+                    for key, value in state.relation_metrics.items()
+                    if key.startswith("relevance_field.") and key.endswith(f".{marker}")
+                ),
+                default=0.0,
+            )
+            basal = max((process.relevance_triggers.get(marker, 0.0) for process in state.processes.values()), default=0.0)
+            result[marker] = max(dynamic, basal)
+        return result

@@ -11,12 +11,13 @@ class TemporalScheduler:
         self.config = config
         self.last_diagnostics: dict[str, object] = {}
 
-    def decide(self, state: SimulationState, rng: random.Random) -> TickContext:
+    def decide(self, state: SimulationState, rng: random.Random, viability_preview: dict[str, float] | None = None) -> TickContext:
         urgency = material_urgency(state)
         binding_urgency = max((b.strength for b in state.bindings), default=0.0)
         conflict = state.relation_metrics.get("conflict_pressure", 0.0)
         repair_debt = state.relation_metrics.get("repair_debt", 0.0)
         remembered_history = memory_pressure(state)
+        relevance_load = self._relevance_load(state)
         fatigue = sum(p.fatigue for p in state.processes.values()) / max(1, len(state.processes))
         recognition = max(
             (d.current_pressure for p in state.processes.values() for d in p.recognition_demands),
@@ -25,6 +26,20 @@ class TemporalScheduler:
         weights = self.config["weights"]  # type: ignore[index]
         scene_weights = weights["scene"]  # type: ignore[index]
         micro_weights = weights["micro_interaction"]  # type: ignore[index]
+        viability_preview = viability_preview or {}
+        rhythm_weights = weights.get("viability_rhythm", {})  # type: ignore[union-attr]
+        scene_viability_bias = min(
+            0.018,
+            viability_preview.get("scene_readiness", 0.0) * float(rhythm_weights.get("scene_readiness", 0.012)),
+        )
+        micro_viability_bias = min(
+            0.014,
+            viability_preview.get("micro_readiness", 0.0) * float(rhythm_weights.get("micro_readiness", 0.01)),
+        )
+        latent_relief = min(
+            0.012,
+            viability_preview.get("latent_instability", 0.0) * float(rhythm_weights.get("latent_instability", 0.008)),
+        )
         scene_score = (
             urgency * scene_weights.get("material_urgency", scene_weights["rent_pressure"])
             + binding_urgency * scene_weights["binding_urgency"]
@@ -32,15 +47,20 @@ class TemporalScheduler:
             + recognition * scene_weights["recognition_pressure"]
             + repair_debt * scene_weights["repair_debt"]
             + remembered_history * scene_weights.get("memory_pressure", 0.0)
+            + relevance_load * scene_weights.get("relevance_load", 0.045)
             + fatigue * scene_weights["mean_fatigue"]
+            + scene_viability_bias
         )
         micro_score = (
             micro_weights["base"]
             + binding_urgency * micro_weights["binding_urgency"]
             + conflict * micro_weights["conflict_pressure"]
             + remembered_history * micro_weights.get("memory_pressure", 0.0)
+            + relevance_load * micro_weights.get("relevance_load", 0.035)
             + (state.tick % 3 == 1) * micro_weights["routine_overlap_bonus"]
             + scene_score * micro_weights["scene_score"]
+            + micro_viability_bias
+            - latent_relief
         )
         thresholds = self.config["thresholds"]  # type: ignore[index]
         forced_scene = state.tick in set(self.config["forced_scene_ticks"])  # type: ignore[arg-type]
@@ -68,8 +88,17 @@ class TemporalScheduler:
                 "conflict_pressure": round(conflict, 4),
                 "repair_debt": round(repair_debt, 4),
                 "memory_pressure": round(remembered_history, 4),
+                "relevance_load": round(relevance_load, 4),
                 "mean_fatigue": round(fatigue, 4),
                 "recognition_pressure": round(recognition, 4),
+                "viability_pressure": round(viability_preview.get("viability_pressure", 0.0), 4),
+                "relation_sediment_load": round(viability_preview.get("relation_sediment_load", 0.0), 4),
+            },
+            "viability_rhythm": {
+                **{key: round(value, 4) for key, value in viability_preview.items()},
+                "scene_viability_bias": round(scene_viability_bias, 4),
+                "micro_viability_bias": round(micro_viability_bias, 4),
+                "latent_relief": round(latent_relief, 4),
             },
             "tick_type_scores": {
                 "scene": round(scene_score, 4),
@@ -89,3 +118,13 @@ class TemporalScheduler:
             simulated_time_delta_seconds=delta,
             time_mapping_reason=reason,
         )
+
+    def _relevance_load(self, state: SimulationState) -> float:
+        values = [
+            value
+            for key, value in state.relation_metrics.items()
+            if key.startswith("relevance_field.")
+        ]
+        if not values:
+            return 0.0
+        return min(1.0, sum(values) / max(1, len(state.processes)))

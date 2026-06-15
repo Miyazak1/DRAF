@@ -18,8 +18,10 @@
         </div>
         <nav class="nav">
           <a href="#overview">总览</a>
+          <a href="#paper">设计论文</a>
           <a href="#simulation">持续模拟</a>
           <a href="#story">故事回放</a>
+          <a href="#evolution">演化曲线</a>
           <a href="#llm">LLM 渲染</a>
           <a href="#timeline">时间线</a>
           <a href="#patterns">模式</a>
@@ -36,8 +38,73 @@
       <main class="main">
         <section id="overview" class="section">
           <div class="section-title">
-            <h2>关系总览</h2>
+            <h2>案例工作台</h2>
             <span id="eventCount"></span>
+          </div>
+          <div class="workspace-panel">
+            <div>
+              <label for="scenarioSelect">当前案例</label>
+              <select id="scenarioSelect"></select>
+            </div>
+            <div>
+              <label for="bootstrapSteps">载入预演 tick</label>
+              <input id="bootstrapSteps" type="number" min="1" step="1" value="12" />
+            </div>
+            <button id="loadScenario" type="button">载入案例</button>
+            <p id="scenarioStatus">正在读取案例目录...</p>
+          </div>
+          <details class="panel scenario-studio">
+            <summary>创建自定义案例</summary>
+            <div class="studio-grid">
+              <label>标题<input id="newTitle" type="text" value="自定义关系实验" /></label>
+              <label>地点<input id="newPlace" type="text" value="共享空间" /></label>
+              <label>时期<input id="newPeriod" type="text" value="当代" /></label>
+              <label>预演 tick<input id="newBootstrapSteps" type="number" min="1" step="1" value="12" /></label>
+              <label>人物一姓名<input id="newP1Name" type="text" value="许知遥" /></label>
+              <label>人物二姓名<input id="newP2Name" type="text" value="沈砚" /></label>
+              <label>人物一位置<input id="newP1Role" type="text" value="更常承担、等待承认的一方" /></label>
+              <label>人物二位置<input id="newP2Role" type="text" value="更常回避确认的一方" /></label>
+              <label>核心绑定<input id="newBindingLabel" type="text" value="共同生活绑定" /></label>
+              <label>未被承认的事实<input id="newRecognitionLabel" type="text" value="未被承认的付出" /></label>
+              <label>物质紧迫<input id="newMaterialUrgency" type="number" min="0" max="1" step="0.01" value="0.45" /></label>
+              <label>绑定强度<input id="newBindingStrength" type="number" min="0" max="1" step="0.01" value="0.82" /></label>
+              <label>未承认付出<input id="newUnrecognizedContribution" type="number" min="0" max="1" step="0.01" value="0.62" /></label>
+              <label>承认压力<input id="newRecognitionPressure" type="number" min="0" max="1" step="0.01" value="0.55" /></label>
+              <label>冲突压力<input id="newConflictPressure" type="number" min="0" max="1" step="0.01" value="0.08" /></label>
+              <label>修复债<input id="newRepairDebt" type="number" min="0" max="1" step="0.01" value="0.05" /></label>
+              <label>叙事风格<input id="newStyle" type="text" value="克制的现实主义文学" /></label>
+              <label>氛围<input id="newAtmosphere" type="text" value="克制、具体、关系压力持续存在" /></label>
+              <label class="wide">物件（一行一个）<textarea id="newObjects" rows="3">账单
+手机消息
+门口</textarea></label>
+              <label class="wide">禁区（一行一个）<textarea id="newForbidden" rows="4">新增亲属关系
+新增职业
+新增外部地点
+新增未来预告
+直接宣布固定人格本质</textarea></label>
+            </div>
+            <div class="llm-actions">
+              <button id="createScenario" type="button">创建并预演</button>
+            </div>
+            <p id="createScenarioStatus" class="status-text">创建后会写入 examples，并生成一条运行档案。</p>
+          </details>
+          <div class="panel run-history-panel">
+            <div class="panel-head">
+              <h3>运行档案</h3>
+              <div class="run-actions">
+                <button id="generateReport" type="button">生成报告</button>
+                <button id="exportBundle" type="button">导出运行包</button>
+                <button id="refreshRuns" type="button">刷新</button>
+              </div>
+            </div>
+            <div id="runHistory" class="run-history"></div>
+            <div id="runComparison" class="run-comparison"></div>
+            <div id="reportStatus" class="report-status"></div>
+            <div id="exportStatus" class="report-status"></div>
+          </div>
+          <div class="section-title compact">
+            <h2>关系总览</h2>
+            <span>由底层事件聚合得到</span>
           </div>
           <div class="summary-grid">
             <div class="metric">
@@ -69,6 +136,120 @@
           </div>
         </section>
 
+        <section id="paper" class="section paper-section">
+          <div class="section-title">
+            <h2>关系过程场：一种从关系生成“人”的模拟架构</h2>
+            <span>设计理念、系统架构与运行逻辑</span>
+          </div>
+          <article class="paper">
+            <header class="paper-header">
+              <p class="paper-kicker">RPF / Relational Process Field</p>
+              <h3>摘要</h3>
+              <p>
+                本项目试图建立一种不同于传统“人物驱动”叙事模拟的生成模型。它不从完整的个人、固定的人格或预设的关系变量出发，而从场、过程、绑定、场景、观察、承认、稳定化与不可逆历史出发，模拟关系如何逐步稳定成可被识别的“人”、身份与命运。RPF 的核心主张是：人不是最底层的因果单元，而是关系过程在身体、制度、物质、记忆和承认结构中反复沉积后形成的高层界面。
+              </p>
+            </header>
+
+            <div class="paper-grid">
+              <aside class="paper-toc">
+                <a href="#paper-position">1. 问题意识</a>
+                <a href="#paper-ontology">2. 本体论反转</a>
+                <a href="#paper-architecture">3. 架构分层</a>
+                <a href="#paper-runtime">4. 运行逻辑</a>
+                <a href="#paper-data">5. 数据与因果边界</a>
+                <a href="#paper-rendering">6. 叙事渲染边界</a>
+                <a href="#paper-value">7. 项目价值</a>
+              </aside>
+
+              <div class="paper-body">
+                <section id="paper-position" class="paper-block">
+                  <h3>1. 问题意识：不再把“人”当作起点</h3>
+                  <p>
+                    许多叙事模拟系统默认从人物开始：人物拥有目标、性格、情绪和关系数值，然后在环境中做出行动。但这种建模方式容易把人际关系简化为两个稳定主体之间的变量交换，也容易让“信任下降”“怨恨上升”“性格内向”等表层描述反过来成为因果原因。RPF 选择反向提问：如果一个人的可见性格、关系位置和命运感并不是先验给定的，而是在持续的关系过程中被生产出来的，那么模拟系统应该从哪里开始？
+                  </p>
+                  <p>
+                    项目的回答是从关系过程场开始。所谓场，不是背景板；它包含物质依赖、制度分类、空间安排、时间压力、社会观众、记忆残留与可行动空间。所谓过程，也不是某个人的心理状态；它是反复出现的差异、误认、承认索取、回避、修复和不可逆后果。人物只是这些过程在某个时刻被投影成的可读界面。
+                  </p>
+                </section>
+
+                <section id="paper-ontology" class="paper-block">
+                  <h3>2. 本体论反转：从“人形成关系”到“关系稳定成人”</h3>
+                  <p>
+                    RPF 的最重要反转可以概括为：不要模拟人如何形成关系，而要模拟关系过程如何稳定成人。系统内部的基础对象不是 Person，而是 FieldState、ProcessState、CoPresenceBinding、RelationalProcessPattern、SceneState、Event 和 IrreversibilityRegister。PersonView 与 RelationshipView 仍然存在，但它们是投影，是为了检查、阅读和叙事而生成的高层摘要。
+                  </p>
+                  <p>
+                    这意味着“冷漠的人”“控制欲强的人”“亏欠的关系”“低信任关系”都不应该直接驱动行为。它们只有在被说出、被相信、被制度记录、被第三方传播，或被纳入自我叙事时，才会通过 OperativeClassificationEvent 进入因果场。标签不是魔法变量；标签必须获得社会或叙事上的承接，才会改变未来的言说风险、行动可得性、记忆解释和场景压力。
+                  </p>
+                  <div class="paper-formula">
+                    微信号 → 生成参数 → 关系过程模式 → 关系聚合 → 人物/关系视图 → 叙事标签 → 操作性分类 → 场与互动约束 → 新的微信号
+                  </div>
+                </section>
+
+                <section id="paper-architecture" class="paper-block">
+                  <h3>3. 架构分层：九个相互约束的层</h3>
+                  <p>
+                    RPF 不是平面的变量系统，而是递归分层架构。物质再生产层回答谁承担劳动、谁拥有退出能力、谁支付修复成本；场位置层回答谁能定义局面、谁的痛苦被承认、谁的欲望合法；身体-惯习层回答什么话在说出口之前就已经变得危险；相关性层决定什么细节突然成为证据；共在绑定层解释为什么双方不能简单从彼此世界中消失。
+                  </p>
+                  <p>
+                    在更可见的层面，互动仪式层决定一个场景里什么可以说、什么只能伪装成玩笑、沉默或实际帮助；沟通观察层处理二阶观察，即我如何理解你如何看我；承认与误认层构成戏剧引擎；稳定化与不可逆层则把重复的过程沉积为身份、关系阶段和命运式轨迹。
+                  </p>
+                  <div class="layer-list">
+                    <span>物质再生产</span>
+                    <span>场位置</span>
+                    <span>身体-惯习</span>
+                    <span>相关性实现</span>
+                    <span>共在绑定</span>
+                    <span>互动仪式</span>
+                    <span>沟通观察</span>
+                    <span>承认/误认</span>
+                    <span>稳定化/不可逆</span>
+                  </div>
+                </section>
+
+                <section id="paper-runtime" class="paper-block">
+                  <h3>4. 运行逻辑：事件驱动的关系演化</h3>
+                  <p>
+                    模拟以 tick 推进，但 tick 不是一句话、一个回合或固定时间步，而是一次可回放的因果事务。每个 tick 根据当前场压力、绑定强度、RPP 激活、记忆压力和可行动空间，选择潜伏、微交互或场景三种形态之一。潜伏 tick 处理等待、回避、未回复、疲劳和压力累积；微交互 tick 处理眼神、短促回答、读而不回、物件摆放等小信号；场景 tick 则处理争执、道歉、协商、公开表演、暴露或离开。
+                  </p>
+                  <p>
+                    一个完整场景不会直接问“这个人想做什么”，而会问“在这个位置、这个场、这个观众结构和这个历史压力下，哪些行动作为行动变得可用”。行动还要经过表达选择，变成语气、停顿、姿态、沉默或公开面具。随后系统执行观察、承认评估、修复或回避、稳定化、不可逆记录、聚合与投影。所有关键变化都写入事件流，使 replay 能从初始状态与事件历史重建因果状态。
+                  </p>
+                </section>
+
+                <section id="paper-data" class="paper-block">
+                  <h3>5. 数据模型与因果边界</h3>
+                  <p>
+                    项目把数据分为三类：可写因果状态、追加式事实、派生视图。FieldState、ProcessState、ActiveRPP、SceneState、IrreversibilityRegister 和 OperativeClassification 可以参与状态更新；Event、EpisodeRecord 和 Snapshot 作为历史事实追加；PersonView、RelationshipView 与 RelationalAggregateView 只能从下层事件和状态重新计算。
+                  </p>
+                  <p>
+                    这条边界保护了项目的研究目标：信任、亲密、依赖、怨恨、权力不对称和人格都不是原始变量。系统可以展示“信任降低”，但真正发生变化的是风险悬置范围、检查频率、歧义容忍度、受伤记忆、修复债和言说抑制。高层词汇负责让人读懂系统，不负责偷走系统的因果权。
+                  </p>
+                </section>
+
+                <section id="paper-rendering" class="paper-block">
+                  <h3>6. LLM 边界：只渲染事实，不发明因果</h3>
+                  <p>
+                    RPF 可以使用大语言模型生成故事文本，但 LLM 的职责被严格限制在渲染层。它可以把当前场景、人物视图、关系视图、活跃 RPP、不可逆记录和故事帧写成中文叙事；它不能决定谁道歉、谁误认、哪个标签成为因果事实，也不能绕过事件 schema 修改模拟状态。
+                  </p>
+                  <p>
+                    因此，LLM 在这里不是“剧情发动机”，而是“表层叙事显影器”。它负责把深层结构翻译成可读的场景质感、对白候选、沉默、动作和有限视角，而模拟器仍然保留因果权威。这使项目既能获得文学化表达，又能维持可验证、可回放、可诊断的结构完整性。
+                  </p>
+                </section>
+
+                <section id="paper-value" class="paper-block">
+                  <h3>7. 项目价值：让关系成为真正的生成对象</h3>
+                  <p>
+                    RPF 的目标不是生成一段看似合理的故事，而是建立一种可以观察人际过程如何变成身份、关系和命运的实验环境。它适合研究长期关系中的误认、照护负担、沉默解释、公开与私下分裂、阶层差异、债务锁定、修复失败和不可逆转折。它也适合创作，因为它不依赖预设剧情，而从约束、承认、记忆和场景压力中让故事浮现。
+                  </p>
+                  <p>
+                    最终，这个项目试图保留人的复杂性：人既不是自由漂浮的意志，也不是固定性格的容器；人是在关系场中被迫行动、被他人识别、被历史压缩、又仍然可能改变的过程性存在。RPF 要模拟的，正是这种介于约束与生成之间的关系生命。
+                  </p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
         <section id="simulation" class="section">
           <div class="section-title">
             <h2>持续模拟</h2>
@@ -79,7 +260,7 @@
               <h3>运行设置</h3>
               <div class="form-grid">
                 <label>
-                  真实运行长度
+                  真实世界运行长度（墙钟）
                   <input id="simDurationValue" type="number" min="1" step="1" value="1" />
                 </label>
                 <label>
@@ -95,7 +276,7 @@
                   <input id="simSeed" type="number" step="1" value="42" />
                 </label>
                 <label>
-                  Tick 间隔秒
+                  每个 Tick 的真实等待秒数
                   <input id="simTickInterval" type="number" min="0.1" step="0.1" value="30" />
                 </label>
                 <label>
@@ -127,6 +308,7 @@
                   <input id="simMaxSteps" type="number" min="1" step="1" value="10000" />
                 </label>
               </div>
+              <p class="hint">这里的长度是程序在真实世界持续运行多久。例如 18 小时就是后台连续运行 18 个小时；Tick 间隔决定这 18 小时里推进多少次模拟。</p>
               <div class="llm-actions">
                 <button id="startSimulation">开始持续模拟</button>
                 <button id="stopSimulation">停止</button>
@@ -136,6 +318,10 @@
             <div class="panel">
               <h3>运行进度</h3>
               <div id="simulationProgress" class="state-box"></div>
+            </div>
+            <div class="panel live-story-panel">
+              <h3>实时故事流</h3>
+              <div id="liveStoryStream" class="markdown-output compact-output">自动渲染后会不断追加到这里。</div>
             </div>
           </div>
         </section>
@@ -166,6 +352,62 @@
             <div class="panel">
               <h3>渲染配置</h3>
               <div id="renderCanon" class="canon-box"></div>
+              <h3>叙事控制</h3>
+              <div class="canon-editor">
+                <label>
+                  标题
+                  <input id="canonTitle" type="text" />
+                </label>
+                <div id="castEditor" class="cast-editor"></div>
+                <div class="canon-grid">
+                  <label>
+                    地点
+                    <input id="canonPlace" type="text" />
+                  </label>
+                  <label>
+                    时期
+                    <input id="canonPeriod" type="text" />
+                  </label>
+                </div>
+                <label>
+                  氛围
+                  <input id="canonAtmosphere" type="text" />
+                </label>
+                <label>
+                  物件（一行一个）
+                  <textarea id="canonObjects" rows="3"></textarea>
+                </label>
+                <div class="canon-grid">
+                  <label>
+                    文风
+                    <input id="canonStyle" type="text" />
+                  </label>
+                  <label>
+                    视角
+                    <input id="canonPerspective" type="text" />
+                  </label>
+                  <label>
+                    内心描写
+                    <input id="canonInteriority" type="text" />
+                  </label>
+                  <label>
+                    隐喻强度
+                    <input id="canonMetaphor" type="text" />
+                  </label>
+                </div>
+                <label>
+                  句子节奏
+                  <input id="canonRhythm" type="text" />
+                </label>
+                <label>
+                  禁区（一行一个）
+                  <textarea id="canonForbidden" rows="5"></textarea>
+                </label>
+                <div class="llm-actions">
+                  <button id="saveCanon" type="button">保存叙事控制</button>
+                </div>
+                <p id="canonStatus" class="status-text">叙事控制会约束后续 LLM 渲染。</p>
+              </div>
               <div class="form-grid">
                 <label>
                   API Key
@@ -204,6 +446,58 @@
             <div class="panel">
               <h3>故事文本</h3>
               <div id="llmOutput" class="markdown-output">生成后会显示在这里。</div>
+            </div>
+          </div>
+        </section>
+
+        <section id="evolution" class="section">
+          <div class="section-title">
+            <h2>演化曲线</h2>
+            <span>从事件流重建的压力与阶段轨迹</span>
+          </div>
+          <div class="evolution-layout">
+            <div class="panel">
+              <h3>阶段轨迹</h3>
+              <div id="phaseRail" class="phase-rail"></div>
+            </div>
+            <div class="panel">
+              <h3>压力曲线</h3>
+              <div id="pressureChart" class="pressure-chart"></div>
+              <div id="pressureLegend" class="chart-legend"></div>
+            </div>
+            <div class="panel">
+              <h3>关键转折</h3>
+              <div id="turningPoints" class="turning-list"></div>
+            </div>
+            <div class="panel">
+              <h3>当前斜率</h3>
+              <div id="evolutionStats" class="state-box"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="viability" class="section">
+          <div class="section-title">
+            <h2>底层动力学</h2>
+            <span>可存续性压力、可行动宽度、表达变形与承认结果</span>
+          </div>
+          <div class="viability-layout">
+            <div class="panel viability-wide">
+              <h3>可存续性曲线</h3>
+              <div id="viabilityChart" class="viability-chart"></div>
+              <div id="viabilityLegend" class="chart-legend"></div>
+            </div>
+            <div class="panel">
+              <h3>当前 tick</h3>
+              <div id="viabilityTickStats" class="state-box"></div>
+            </div>
+            <div class="panel viability-wide">
+              <h3>因果链</h3>
+              <div id="viabilityChain" class="viability-chain"></div>
+            </div>
+            <div class="panel">
+              <h3>约束与要求</h3>
+              <div id="viabilityConstraints" class="trace-list"></div>
             </div>
           </div>
         </section>

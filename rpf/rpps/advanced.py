@@ -3,7 +3,7 @@ from __future__ import annotations
 from rpf.core.events import Event
 from rpf.core.models import SimulationState, TickContext, clamp
 from rpf.core.semantics import defensive_memory, fate_memory, injury_memory, memory_pressure, unrecognized_contribution
-from rpf.rpps.base import Activation, BaseRPP
+from rpf.rpps.base import Activation, BaseRPP, activation_evidence, future_constraint_pressure
 
 
 def _audience_pressure(state: SimulationState) -> float:
@@ -39,14 +39,20 @@ class DoubleBindRPP(BaseRPP):
         p1 = state.processes["p1"]
         weights = self.config["weights"]  # type: ignore[index]
         inhibition = max(p1.speech_inhibition.get("direct_need", 0.0), p1.speech_inhibition.get("anger", 0.0))
+        future_pressure, future_refs = future_constraint_pressure(
+            events,
+            requirements={"truth_integration", "identity_continuity", "speech_access"},
+            type_terms={"identity", "double_bind", "right"},
+        )
         score = (
             state.relation_metrics.get("double_bind_pressure", 0.0) * weights["double_bind_pressure"]
             + inhibition * weights["speech_inhibition"]
             + _binding_urgency(state) * weights["binding_urgency"]
             + _recognition_pressure(state) * weights["recognition_pressure"]
+            + future_pressure * weights.get("future_constraint_pressure", 0.04)
         )
         if score >= self.config["threshold"]:  # type: ignore[operator]
-            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], [e.event_id for e in events[-4:]], "contradictory demands make any answer costly")
+            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], activation_evidence(events, future_refs), "contradictory demands make any answer costly")
         return None
 
     def apply(self, state: SimulationState, activation: Activation) -> None:
@@ -68,14 +74,20 @@ class PublicPrivateSplitRPP(BaseRPP):
         if state.relation_metrics.get("public_private_gap", 0.0) < self.config.get("primary_gate", 0.0):
             return None
         weights = self.config["weights"]  # type: ignore[index]
+        future_pressure, future_refs = future_constraint_pressure(
+            events,
+            requirements={"face_continuation", "truth_disclosure", "public_performance"},
+            type_terms={"public", "fine"},
+        )
         score = (
             state.relation_metrics.get("public_private_gap", 0.0) * weights["public_private_gap"]
             + _audience_pressure(state) * weights["audience_pressure"]
             + unrecognized_contribution(state) * weights["unrecognized_contribution"]
             + _signal_seen(events, {"unacknowledged_help", "practical_repair"}) * weights["public_performance_signal"]
+            + future_pressure * weights.get("future_constraint_pressure", 0.045)
         )
         if score >= self.config["threshold"]:  # type: ignore[operator]
-            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], [e.event_id for e in events[-4:]], "public performance and private injury diverge")
+            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], activation_evidence(events, future_refs), "public performance and private injury diverge")
         return None
 
     def apply(self, state: SimulationState, activation: Activation) -> None:
@@ -99,6 +111,11 @@ class SilenceInterpretationLoopRPP(BaseRPP):
         p1 = state.processes["p1"]
         weights = self.config["weights"]  # type: ignore[index]
         silence_signal = _signal_seen(events, {"delayed_reply", "gaze_avoidance", "short_answer"})
+        future_pressure, future_refs = future_constraint_pressure(
+            events,
+            requirements={"presence_continuation", "repair_availability", "memory_integration"},
+            type_terms={"absence", "unreachable", "memory"},
+        )
         score = (
             state.relation_metrics.get("silence_charge", 0.0) * weights["silence_charge"]
             + p1.relevance_triggers.get("delayed_reply", 0.0) * weights["delay_relevance"]
@@ -106,9 +123,10 @@ class SilenceInterpretationLoopRPP(BaseRPP):
             + (1.0 - p1.ambiguity_tolerance) * weights["low_ambiguity_tolerance"]
             + state.relation_metrics.get("repair_debt", 0.0) * weights["repair_debt"]
             + injury_memory(state) * weights.get("injury_memory", 0.0)
+            + future_pressure * weights.get("future_constraint_pressure", 0.045)
         )
         if score >= self.config["threshold"]:  # type: ignore[operator]
-            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], [e.event_id for e in events[-3:]], "absence becomes communicative evidence")
+            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], activation_evidence(events, future_refs, window=3), "absence becomes communicative evidence")
         return None
 
     def apply(self, state: SimulationState, activation: Activation) -> None:
@@ -132,6 +150,11 @@ class ComplementaryDependencyRPP(BaseRPP):
         p1 = state.processes["p1"]
         p2 = state.processes["p2"]
         weights = self.config["weights"]  # type: ignore[index]
+        future_pressure, future_refs = future_constraint_pressure(
+            events,
+            requirements={"care_availability", "agency_continuation", "exit_availability"},
+            type_terms={"care", "control", "role"},
+        )
         score = (
             state.relation_metrics.get("care_dependency", 0.0) * weights["care_dependency"]
             + p1.fatigue * weights["caretaker_fatigue"]
@@ -139,9 +162,10 @@ class ComplementaryDependencyRPP(BaseRPP):
             + _binding_urgency(state) * weights["binding_urgency"]
             + unrecognized_contribution(state) * weights["unrecognized_contribution"]
             + _history_pressure(state) * weights.get("memory_pressure", 0.0)
+            + future_pressure * weights.get("future_constraint_pressure", 0.045)
         )
         if score >= self.config["threshold"]:  # type: ignore[operator]
-            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], [e.event_id for e in events[-4:]], "help preserves safety while stabilizing asymmetry")
+            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], activation_evidence(events, future_refs), "help preserves safety while stabilizing asymmetry")
         return None
 
     def apply(self, state: SimulationState, activation: Activation) -> None:
@@ -164,6 +188,11 @@ class FaceSavingLoopRPP(BaseRPP):
             return None
         p2 = state.processes["p2"]
         weights = self.config["weights"]  # type: ignore[index]
+        future_pressure, future_refs = future_constraint_pressure(
+            events,
+            requirements={"face_continuation", "speech_access", "repair_availability"},
+            type_terms={"public", "identity", "control"},
+        )
         score = (
             state.relation_metrics.get("face_risk_pressure", 0.0) * weights["face_risk_pressure"]
             + _audience_pressure(state) * weights["audience_pressure"]
@@ -171,9 +200,10 @@ class FaceSavingLoopRPP(BaseRPP):
             + state.relation_metrics.get("repair_debt", 0.0) * weights["repair_debt"]
             + defensive_memory(state) * weights.get("defensive_memory", 0.0)
             + _signal_seen(events, {"public_politeness"}) * weights.get("public_performance_signal", 0.0)
+            + future_pressure * weights.get("future_constraint_pressure", 0.045)
         )
         if score >= self.config["threshold"]:  # type: ignore[operator]
-            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], [e.event_id for e in events[-4:]], "saving face displaces repair into performance")
+            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], activation_evidence(events, future_refs), "saving face displaces repair into performance")
         return None
 
     def apply(self, state: SimulationState, activation: Activation) -> None:
@@ -195,15 +225,21 @@ class RecognitionPursuitRPP(BaseRPP):
             return None
         p1 = state.processes["p1"]
         weights = self.config["weights"]  # type: ignore[index]
+        future_pressure, future_refs = future_constraint_pressure(
+            events,
+            requirements={"recognition_access", "repair_availability", "memory_integration"},
+            type_terms={"recognition", "debt", "absence"},
+        )
         score = (
             state.relation_metrics.get("recognition_pursuit_pressure", 0.0) * weights["recognition_pursuit_pressure"]
             + _recognition_pressure(state) * weights["recognition_pressure"]
             + p1.checking_tendency * weights["checking_tendency"]
             + unrecognized_contribution(state) * weights["unrecognized_contribution"]
             + injury_memory(state) * weights.get("injury_memory", 0.0)
+            + future_pressure * weights.get("future_constraint_pressure", 0.045)
         )
         if score >= self.config["threshold"]:  # type: ignore[operator]
-            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], [e.event_id for e in events[-4:]], "recognition demand becomes repeated pursuit")
+            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], activation_evidence(events, future_refs), "recognition demand becomes repeated pursuit")
         return None
 
     def apply(self, state: SimulationState, activation: Activation) -> None:

@@ -8,9 +8,34 @@ from rpf.core.views import AggregateViews, PersonView, RelationshipView
 def aggregate_views(state: SimulationState, evidence_refs: list[str]) -> AggregateViews:
     p1 = state.processes["p1"]
     p2 = state.processes["p2"]
-    trust_score = clamp((p1.risk_suspension_scope + p1.ambiguity_tolerance) / 2 - p1.checking_tendency * 0.25 - state.relation_metrics.get("repair_debt", 0.0) * 0.2)
-    resentment = clamp((p1.resentment_pressure + state.relation_metrics.get("repair_debt", 0.0) + unrecognized_contribution(state)) / 3)
-    repair_capacity = clamp(0.75 - state.relation_metrics.get("repair_debt", 0.0) * 0.5 - p2.speech_inhibition.get("apology", 0.0) * 0.25)
+    recognition_debt = state.relation_metrics.get("relation_sediment.recognition_debt", 0.0)
+    repair_access_narrowing = state.relation_metrics.get("relation_sediment.repair_access_narrowing", 0.0)
+    symbolic_accounting = state.relation_metrics.get("relation_sediment.symbolic_accounting_load", 0.0)
+    future_lock = state.relation_metrics.get("relation_sediment.future_lock_load", 0.0)
+    asymmetry = state.relation_metrics.get("relation_sediment.asymmetry_load", 0.0)
+    trust_score = clamp(
+        (p1.risk_suspension_scope + p1.ambiguity_tolerance) / 2
+        - p1.checking_tendency * 0.25
+        - state.relation_metrics.get("repair_debt", 0.0) * 0.2
+        - recognition_debt * 0.08
+        - repair_access_narrowing * 0.06
+    )
+    resentment = clamp(
+        (
+            p1.resentment_pressure
+            + state.relation_metrics.get("repair_debt", 0.0)
+            + unrecognized_contribution(state)
+            + recognition_debt * 0.35
+            + symbolic_accounting * 0.25
+        )
+        / 3
+    )
+    repair_capacity = clamp(
+        0.75
+        - state.relation_metrics.get("repair_debt", 0.0) * 0.5
+        - p2.speech_inhibition.get("apology", 0.0) * 0.25
+        - repair_access_narrowing * 0.15
+    )
 
     person_views = {}
     for pid, process in state.processes.items():
@@ -34,7 +59,7 @@ def aggregate_views(state: SimulationState, evidence_refs: list[str]) -> Aggrega
     active = [r.rpp_id for r in state.active_rpps if r.intensity > 0.1]
     locked_threshold = state.relation_metrics.get("locked_in_repair_threshold", 0.55)
     cold_threshold = state.relation_metrics.get("cold_war_repair_threshold", 0.35)
-    if state.irreversibility_register.records and state.relation_metrics.get("repair_debt", 0.0) > locked_threshold:
+    if state.irreversibility_register.records and state.relation_metrics.get("repair_debt", 0.0) + future_lock * 0.1 > locked_threshold:
         phase = "locked-in"
     elif state.relation_metrics.get("repair_debt", 0.0) > cold_threshold:
         phase = "cold-war"
@@ -51,6 +76,8 @@ def aggregate_views(state: SimulationState, evidence_refs: list[str]) -> Aggrega
         shared_irreversibles=[r.record_id for r in state.irreversibility_register.records],
         evidence_refs=evidence_refs[-10:],
     )
+    if asymmetry > 0.08 and "asymmetric_role_pressure" not in relationship.active_bindings:
+        relationship = relationship.model_copy(update={"active_bindings": relationship.active_bindings + ["asymmetric_role_pressure"]})
     return AggregateViews(
         trust_view={"score": trust_score, "state": "low" if trust_score < 0.4 else "unstable"},
         resentment_pressure_view={"score": resentment, "state": "high" if resentment > 0.55 else "building"},

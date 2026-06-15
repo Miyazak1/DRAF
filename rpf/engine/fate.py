@@ -38,6 +38,13 @@ class FateTransitionEngine:
         double_bind = state.relation_metrics.get("double_bind_pressure", 0.0)
         care_dependency = state.relation_metrics.get("care_dependency", 0.0)
         silence_charge = state.relation_metrics.get("silence_charge", 0.0)
+        recognition_debt = state.relation_metrics.get("relation_sediment.recognition_debt", 0.0)
+        repair_access_narrowing = state.relation_metrics.get("relation_sediment.repair_access_narrowing", 0.0)
+        symbolic_accounting = state.relation_metrics.get("relation_sediment.symbolic_accounting_load", 0.0)
+        future_lock = state.relation_metrics.get("relation_sediment.future_lock_load", 0.0)
+        shared_fate = state.relation_metrics.get("relation_sediment.shared_fate_load", 0.0)
+        public_definition = state.relation_metrics.get("relation_sediment.public_definition_load", 0.0)
+        asymmetry_load = state.relation_metrics.get("relation_sediment.asymmetry_load", 0.0)
 
         evidence: dict[str, float | str] = {
             "affordance": affordance,
@@ -47,6 +54,13 @@ class FateTransitionEngine:
             "repair_debt": round(repair_debt, 4),
             "conflict_pressure": round(conflict, 4),
             "unrecognized_contribution": round(contribution, 4),
+            "relation_recognition_debt": round(recognition_debt, 4),
+            "relation_repair_access_narrowing": round(repair_access_narrowing, 4),
+            "relation_symbolic_accounting": round(symbolic_accounting, 4),
+            "relation_future_lock": round(future_lock, 4),
+            "relation_shared_fate": round(shared_fate, 4),
+            "relation_public_definition": round(public_definition, 4),
+            "relation_asymmetry_load": round(asymmetry_load, 4),
         }
         results: list[FateTransitionResult] = []
         results.extend(
@@ -58,11 +72,11 @@ class FateTransitionEngine:
                 composition,
                 evidence,
                 {
-                    "debt_named": contribution * 0.28 + repair_debt * 0.22 + self._is(composition, {"debt_lock", "credit_recognition_lock"}) * 0.26 + self._is(recognition, {"refused", "misunderstood"}) * 0.12,
-                    "controlling_care": care_dependency * 0.28 + double_bind * 0.2 + self._is(composition, {"care_bind_double_bind"}) * 0.28 + conflict * 0.12,
-                    "public_mask": public_gap * 0.26 + face_risk * 0.2 + audience * 0.18 + self._is(composition, {"public_face_split"}) * 0.26,
-                    "unreachable": silence_charge * 0.32 + self._is(composition, {"anxious_silence_circuit"}) * 0.28 + self._is(affordance, {"mediated_delay"}) * 0.2 + repair_debt * 0.08,
-                    "impossible_to_satisfy": double_bind * 0.34 + self._is(affordance, {"double_bind_response"}) * 0.24 + self._is(recognition, {"unspeakable", "misunderstood"}) * 0.16 + conflict * 0.1,
+                    "debt_named": contribution * 0.28 + repair_debt * 0.22 + self._is(composition, {"debt_lock", "credit_recognition_lock"}) * 0.26 + self._is(recognition, {"refused", "misunderstood"}) * 0.12 + recognition_debt * 0.045 + symbolic_accounting * 0.04,
+                    "controlling_care": care_dependency * 0.28 + double_bind * 0.2 + self._is(composition, {"care_bind_double_bind"}) * 0.28 + conflict * 0.12 + asymmetry_load * 0.04,
+                    "public_mask": public_gap * 0.26 + face_risk * 0.2 + audience * 0.18 + self._is(composition, {"public_face_split"}) * 0.26 + public_definition * 0.045,
+                    "unreachable": silence_charge * 0.32 + self._is(composition, {"anxious_silence_circuit"}) * 0.28 + self._is(affordance, {"mediated_delay"}) * 0.2 + repair_debt * 0.08 + repair_access_narrowing * 0.04,
+                    "impossible_to_satisfy": double_bind * 0.34 + self._is(affordance, {"double_bind_response"}) * 0.24 + self._is(recognition, {"unspeakable", "misunderstood"}) * 0.16 + conflict * 0.1 + asymmetry_load * 0.04,
                 },
             )
         )
@@ -75,11 +89,11 @@ class FateTransitionEngine:
                 composition,
                 evidence,
                 {
-                    "symbolic_debt_lock": contribution * 0.24 + repair_debt * 0.24 + self._is(composition, {"credit_recognition_lock", "debt_lock"}) * 0.32 + conflict * 0.12,
-                    "public_exposure_risk": public_gap * 0.28 + audience * 0.22 + self._is(composition, {"public_face_split"}) * 0.26 + face_risk * 0.12,
-                    "care_role_lock": care_dependency * 0.28 + double_bind * 0.18 + self._is(composition, {"care_bind_double_bind"}) * 0.28 + repair_debt * 0.12,
-                    "silence_becomes_history": silence_charge * 0.28 + self._is(composition, {"anxious_silence_circuit"}) * 0.3 + self._is(recognition, {"postponed", "refused"}) * 0.18 + repair_debt * 0.1,
-                    "double_bind_identity_mark": double_bind * 0.3 + self._is(affordance, {"double_bind_response"}) * 0.22 + self._is(recognition, {"unspeakable", "misunderstood"}) * 0.18 + conflict * 0.12,
+                    "symbolic_debt_lock": contribution * 0.24 + repair_debt * 0.24 + self._is(composition, {"credit_recognition_lock", "debt_lock"}) * 0.32 + conflict * 0.12 + recognition_debt * 0.04 + symbolic_accounting * 0.045,
+                    "public_exposure_risk": public_gap * 0.28 + audience * 0.22 + self._is(composition, {"public_face_split"}) * 0.26 + face_risk * 0.12 + public_definition * 0.04,
+                    "care_role_lock": care_dependency * 0.28 + double_bind * 0.18 + self._is(composition, {"care_bind_double_bind"}) * 0.28 + repair_debt * 0.12 + asymmetry_load * 0.035,
+                    "silence_becomes_history": silence_charge * 0.28 + self._is(composition, {"anxious_silence_circuit"}) * 0.3 + self._is(recognition, {"postponed", "refused"}) * 0.18 + repair_debt * 0.1 + repair_access_narrowing * 0.04,
+                    "double_bind_identity_mark": double_bind * 0.3 + self._is(affordance, {"double_bind_response"}) * 0.22 + self._is(recognition, {"unspeakable", "misunderstood"}) * 0.18 + conflict * 0.12 + future_lock * 0.03 + shared_fate * 0.03,
                 },
             )
         )

@@ -23,14 +23,25 @@ from rpf.core.models import (
 )
 from rpf.engine.aggregation import aggregate_views
 from rpf.engine.actions import ActionSelectionEngine
+from rpf.engine.account import AccountPressureEngine
 from rpf.engine.affordances import AffordanceEngine
+from rpf.engine.binding import BindingEvolutionEngine
+from rpf.engine.disposition import ProcessDispositionEngine
 from rpf.engine.expression import ExpressionEngine
+from rpf.engine.environment import EnvironmentSedimentationEngine
+from rpf.engine.expectation import ExpectationSedimentationEngine
 from rpf.engine.fate import FateTransitionEngine
+from rpf.engine.interaction_frame import InteractionFrameEngine
 from rpf.engine.memory import MemoryReconstructionEngine
 from rpf.engine.metrics import compute_metrics
+from rpf.engine.normativity import NormativePressureEngine
+from rpf.engine.positioning import PositioningEngine
 from rpf.engine.recognition import RecognitionEngine
+from rpf.engine.relevance import RelevanceLandscapeEngine
+from rpf.engine.relation import RelationSedimentationEngine
 from rpf.engine.rpp_dynamics import RPPDynamics
 from rpf.engine.scheduler import TemporalScheduler
+from rpf.engine.viability import RelationalViabilityEngine
 from rpf.rpps import (
     ComplementaryDependencyRPP,
     ContributionDebtLoopRPP,
@@ -69,8 +80,19 @@ class Simulator:
         self.expression = ExpressionEngine(config["expression"])
         self.recognition = RecognitionEngine(config["recognition"])
         self.fate = FateTransitionEngine(config["fate_transitions"])
+        self.frame_definition = InteractionFrameEngine()
+        self.account = AccountPressureEngine()
+        self.binding_evolution = BindingEvolutionEngine()
+        self.expectation = ExpectationSedimentationEngine()
         self.memory = MemoryReconstructionEngine(config["memory"])
+        self.normativity = NormativePressureEngine()
+        self.positioning = PositioningEngine()
+        self.relevance = RelevanceLandscapeEngine()
+        self.environment = EnvironmentSedimentationEngine()
+        self.disposition = ProcessDispositionEngine()
+        self.relation = RelationSedimentationEngine()
         self.rpp_dynamics = RPPDynamics(config["rpp_dynamics"])
+        self.viability = RelationalViabilityEngine()
         self.rpps = [
             PursuitWithdrawalRPP(config["rpps"]["pursuit_withdrawal"]),
             RepairAvoidanceRPP(config["rpps"]["repair_avoidance"]),
@@ -89,7 +111,18 @@ class Simulator:
         self.expression_trace: list[dict[str, Any]] = []
         self.recognition_trace: list[dict[str, Any]] = []
         self.fate_transition_trace: list[dict[str, Any]] = []
+        self.frame_trace: list[dict[str, Any]] = []
+        self.account_trace: list[dict[str, Any]] = []
+        self.binding_trace: list[dict[str, Any]] = []
+        self.expectation_trace: list[dict[str, Any]] = []
         self.memory_trace: list[dict[str, Any]] = []
+        self.normativity_trace: list[dict[str, Any]] = []
+        self.position_trace: list[dict[str, Any]] = []
+        self.relevance_trace: list[dict[str, Any]] = []
+        self.environment_trace: list[dict[str, Any]] = []
+        self.disposition_trace: list[dict[str, Any]] = []
+        self.relation_trace: list[dict[str, Any]] = []
+        self.viability_trace: list[dict[str, Any]] = []
         self.rpp_activation_trace: list[dict[str, Any]] = []
         self.rpp_dynamics_trace: list[dict[str, Any]] = []
         self.projection_trace: list[dict[str, Any]] = []
@@ -127,7 +160,7 @@ class Simulator:
             state,
             scenario_path=scenario_path,
             config=effective_config(scenario),
-            render_canon=scenario.get("render_canon", {}),
+            render_canon=_render_canon_for_scenario(scenario),
         )
 
     def _event(self, event_type: str, source_layer: str, payload: dict[str, Any] | None = None, causal_refs: list[str] | None = None) -> Event:
@@ -276,7 +309,18 @@ class Simulator:
         (output_dir / "expression_trace.json").write_text(json.dumps(self.expression_trace, indent=2), encoding="utf-8")
         (output_dir / "recognition_trace.json").write_text(json.dumps(self.recognition_trace, indent=2), encoding="utf-8")
         (output_dir / "fate_transition_trace.json").write_text(json.dumps(self.fate_transition_trace, indent=2), encoding="utf-8")
+        (output_dir / "frame_trace.json").write_text(json.dumps(self.frame_trace, indent=2), encoding="utf-8")
+        (output_dir / "account_trace.json").write_text(json.dumps(self.account_trace, indent=2), encoding="utf-8")
+        (output_dir / "binding_trace.json").write_text(json.dumps(self.binding_trace, indent=2), encoding="utf-8")
+        (output_dir / "expectation_trace.json").write_text(json.dumps(self.expectation_trace, indent=2), encoding="utf-8")
         (output_dir / "memory_trace.json").write_text(json.dumps(self.memory_trace, indent=2), encoding="utf-8")
+        (output_dir / "normativity_trace.json").write_text(json.dumps(self.normativity_trace, indent=2), encoding="utf-8")
+        (output_dir / "position_trace.json").write_text(json.dumps(self.position_trace, indent=2), encoding="utf-8")
+        (output_dir / "relevance_trace.json").write_text(json.dumps(self.relevance_trace, indent=2), encoding="utf-8")
+        (output_dir / "environment_trace.json").write_text(json.dumps(self.environment_trace, indent=2), encoding="utf-8")
+        (output_dir / "disposition_trace.json").write_text(json.dumps(self.disposition_trace, indent=2), encoding="utf-8")
+        (output_dir / "relation_trace.json").write_text(json.dumps(self.relation_trace, indent=2), encoding="utf-8")
+        (output_dir / "viability_trace.json").write_text(json.dumps(self.viability_trace, indent=2), encoding="utf-8")
         (output_dir / "rpp_activation_trace.json").write_text(json.dumps(self.rpp_activation_trace, indent=2), encoding="utf-8")
         (output_dir / "rpp_dynamics_trace.json").write_text(json.dumps(self.rpp_dynamics_trace, indent=2), encoding="utf-8")
         (output_dir / "projection_trace.json").write_text(json.dumps(self.projection_trace, indent=2), encoding="utf-8")
@@ -293,7 +337,8 @@ class Simulator:
     def tick(self, max_delta_seconds: int | None = None) -> TickContext:
         self.state.tick += 1
         self._order = 0
-        context = self.scheduler.decide(self.state, self.rng)
+        viability_preview = self.viability.scheduler_preview(self.state)
+        context = self.scheduler.decide(self.state, self.rng, viability_preview=viability_preview)
         if max_delta_seconds is not None and context.simulated_time_delta_seconds > max_delta_seconds:
             context = context.model_copy(update={"simulated_time_delta_seconds": max_delta_seconds})
             self.scheduler.last_diagnostics["simulated_time_delta_seconds"] = max_delta_seconds
@@ -311,16 +356,34 @@ class Simulator:
         )
         local: list[Event] = [tick_event]
         local.extend(self._field_and_binding_events(context))
+        viability_history = local + self._recent_relation_sedimentation_events()
+        viability_pre = self.viability.evaluate_pre_response(self.state, context, viability_history)
+        local.extend(self._emit_viability_events(viability_pre, phase="pre_response"))
         if context.tick_type == "latent":
             local.append(self._event("LatentTimeEvent", "scene", {"tick_type": "latent", "accumulated_pressures": self.state.relation_metrics.copy()}))
         else:
-            local.extend(self._scene_and_signal_events(context))
+            local.extend(self._scene_and_signal_events(context, local))
+        viability_post = self.viability.evaluate_post_response(self.state, context, viability_pre, local + self._recent_relation_sedimentation_events())
+        local.extend(self._emit_viability_events(viability_post, phase="post_response"))
+        self.viability_trace.append(viability_post.model_dump(mode="json"))
         local.extend(self._activate_rpps(context, local))
         local.extend(self._update_rpp_dynamics(local))
         if context.tick_type == "scene":
             local.extend(self._recognition_and_repair(local))
         local.extend(self._classification_and_irreversibility(local))
         local.extend(self._update_memory(local))
+        prior_relation_events = self._previous_tick_relation_sedimentation_events()
+        local.extend(self._update_environment(local + prior_relation_events))
+        local.extend(self._update_dispositions(local + prior_relation_events))
+        prior_normativity_events = self._previous_tick_normativity_events()
+        local.extend(self._update_relation(local + prior_normativity_events))
+        local.extend(self._update_bindings(local))
+        local.extend(self._update_expectations(local))
+        local.extend(self._update_accounts(local))
+        local.extend(self._update_normativity(local))
+        local.extend(self._update_frames(local))
+        local.extend(self._update_relevance(local))
+        local.extend(self._update_positions(local))
         views = aggregate_views(self.state, [e.event_id for e in self.events])
         self._event("AggregationEvent", "aggregation", {"trust_view": views.trust_view, "resentment_pressure_view": views.resentment_pressure_view}, [e.event_id for e in local[-5:]])
         self._event("ProjectionEvent", "projection", {"relationship_phase": views.relationship_view.phase_label, "person_labels": {k: v.apparent_labels for k, v in views.person_views.items()}}, [e.event_id for e in local[-5:]])
@@ -335,6 +398,40 @@ class Simulator:
         )
         return context
 
+    def _recent_relation_sedimentation_events(self, limit: int = 8) -> list[Event]:
+        events = [
+            event
+            for event in reversed(self.events)
+            if event.event_type == "RelationSedimentationEvent"
+        ]
+        return list(reversed(events[:limit]))
+
+    def _previous_tick_relation_sedimentation_events(self) -> list[Event]:
+        previous_tick = self.state.tick - 1
+        return [
+            event
+            for event in self.events
+            if event.event_type == "RelationSedimentationEvent" and event.tick == previous_tick
+        ]
+
+    def _previous_tick_normativity_events(self) -> list[Event]:
+        previous_tick = self.state.tick - 1
+        return [
+            event
+            for event in self.events
+            if event.event_type == "NormativePressureEvent" and event.tick == previous_tick
+        ]
+
+    def _emit_viability_events(self, trace: Any, *, phase: str) -> list[Event]:
+        emitted: list[Event] = []
+        for event_type, payload, evidence_refs in self.viability.event_payloads(trace):
+            if phase == "pre_response" and event_type in {"DeformationTraceEvent", "DerivedDramaticTensionEvent"}:
+                continue
+            if phase == "post_response" and event_type not in {"DeformationTraceEvent", "DerivedDramaticTensionEvent"}:
+                continue
+            emitted.append(self._event(event_type, "viability", payload, evidence_refs))
+        return emitted
+
     def _field_and_binding_events(self, context: TickContext) -> list[Event]:
         events: list[Event] = []
         urgency = material_urgency(self.state) or 0.35
@@ -346,7 +443,119 @@ class Simulator:
             events.append(self._event("BindingActivatedEvent", "binding", {"binding_id": binding.binding_id, "binding_type": binding.binding_type, "strength": binding.strength, "exit_cost": binding.exit_cost}))
         return events
 
-    def _scene_and_signal_events(self, context: TickContext) -> list[Event]:
+    def _update_bindings(self, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        updates = self.binding_evolution.update(self.state, local_events)
+        for update in updates:
+            payload = update.payload()
+            self.binding_trace.append({"tick": self.state.tick, "event_type": update.event_type, **payload})
+            emitted.append(
+                self._event(
+                    update.event_type,
+                    "binding",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
+
+    def _update_expectations(self, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        updates = self.expectation.update(self.state, local_events)
+        for update in updates:
+            payload = update.payload()
+            self.expectation_trace.append({"tick": self.state.tick, **payload})
+            emitted.append(
+                self._event(
+                    "ExpectationSedimentationEvent",
+                    "expectation",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
+
+    def _update_accounts(self, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        updates = self.account.update(self.state, local_events)
+        for update in updates:
+            payload = update.payload()
+            self.account_trace.append({"tick": self.state.tick, **payload})
+            emitted.append(
+                self._event(
+                    "AccountPressureEvent",
+                    "account",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
+
+    def _update_normativity(self, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        updates = self.normativity.update(self.state, local_events)
+        for update in updates:
+            payload = update.payload()
+            self.normativity_trace.append({"tick": self.state.tick, **payload})
+            emitted.append(
+                self._event(
+                    "NormativePressureEvent",
+                    "normativity",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
+
+    def _update_frames(self, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        updates = self.frame_definition.update(self.state, local_events)
+        for update in updates:
+            payload = update.payload()
+            self.frame_trace.append({"tick": self.state.tick, **payload})
+            emitted.append(
+                self._event(
+                    "FrameDefinitionEvent",
+                    "frame",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
+
+    def _update_relevance(self, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        updates = self.relevance.update(self.state, local_events)
+        for update in updates:
+            payload = update.payload()
+            self.relevance_trace.append({"tick": self.state.tick, **payload})
+            emitted.append(
+                self._event(
+                    "RelevanceShiftEvent",
+                    "relevance",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
+
+    def _update_positions(self, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        updates = self.positioning.update(self.state, local_events)
+        for update in updates:
+            payload = update.payload()
+            self.position_trace.append({"tick": self.state.tick, **payload})
+            emitted.append(
+                self._event(
+                    "PositioningEvent",
+                    "position",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
+
+    def _scene_and_signal_events(self, context: TickContext, prior_events: list[Event]) -> list[Event]:
         events: list[Event] = []
         affordance = self.affordances.select(self.state, context)
         self.affordance_trace.append(dict(self.affordances.last_diagnostics))
@@ -363,8 +572,10 @@ class Simulator:
             },
         )
         events.append(affordance_event)
-        action = self.actions.select(self.state, context, affordance)
+        viability_events = [event for event in prior_events if event.source_layer == "viability"]
+        action = self.actions.select(self.state, context, affordance, viability_events=viability_events)
         self.action_trace.append(dict(self.actions.last_diagnostics))
+        action_viability_refs = list(self.actions.last_diagnostics.get("viability_context", {}).get("evidence_refs", []))
         action_event = self._event(
             "ActionSelectionEvent",
             "action",
@@ -380,9 +591,10 @@ class Simulator:
                 "substituted_for": action.substituted_for,
                 "relation_claim": action.relation_claim,
                 "evidence": action.evidence,
+                "viability_evidence_refs": action_viability_refs,
                 "affordance_id": affordance.affordance_id,
             },
-            [affordance_event.event_id],
+            sorted(set([affordance_event.event_id] + action_viability_refs)),
         )
         events.append(action_event)
         if action.action_mode == "inhibited":
@@ -413,8 +625,9 @@ class Simulator:
                     [action_event.event_id],
                 )
             )
-        expression = self.expression.select(self.state, context, action)
+        expression = self.expression.select(self.state, context, action, viability_events=viability_events)
         self.expression_trace.append(dict(self.expression.last_diagnostics))
+        expression_viability_refs = list(self.expression.last_diagnostics.get("viability_context", {}).get("evidence_refs", []))
         expression_event = self._event(
             "ExpressionSelectionEvent",
             "expression",
@@ -430,11 +643,12 @@ class Simulator:
                 "relation_claim": expression.relation_claim,
                 "score": expression.score,
                 "evidence": expression.evidence,
+                "viability_evidence_refs": expression_viability_refs,
                 "action_id": action.action_id,
                 "action_mode": action.action_mode,
                 "affordance_id": affordance.affordance_id,
             },
-            [action_event.event_id],
+            sorted(set([action_event.event_id] + expression_viability_refs)),
         )
         events.append(expression_event)
         if context.tick_type == "scene":
@@ -598,6 +812,7 @@ class Simulator:
         emitted: list[Event] = []
         result = self.recognition.evaluate(self.state, local_events)
         self.recognition.apply(self.state, result)
+        recognition_refs = self._recognition_causal_refs(local_events)
         emitted.append(
             self._event(
                 "RecognitionEvent",
@@ -610,7 +825,7 @@ class Simulator:
                     "outcome_scores": result.scores,
                     "evidence": result.evidence,
                 },
-                [e.event_id for e in local_events[-6:]],
+                recognition_refs,
             )
         )
         self.recognition_trace.append(
@@ -679,6 +894,21 @@ class Simulator:
                 )
             )
         return emitted
+
+    def _recognition_causal_refs(self, local_events: list[Event]) -> list[str]:
+        refs = [event.event_id for event in local_events[-6:]]
+        refs.extend(
+            event.event_id
+            for event in local_events
+            if event.source_layer == "viability"
+            and event.event_type in {
+                "ViabilityRequirementEvent",
+                "AffordanceWidthEvent",
+                "DeformationTraceEvent",
+                "DerivedDramaticTensionEvent",
+            }
+        )
+        return sorted(set(refs))
 
     def _classification_and_irreversibility(self, local_events: list[Event]) -> list[Event]:
         emitted: list[Event] = []
@@ -772,7 +1002,54 @@ class Simulator:
                         "reconstruction_biases": memory.reconstruction_biases,
                         "evidence": reconstruction.evidence,
                     },
-                    [memory.source_event_id],
+                    sorted(set([memory.source_event_id] + list(reconstruction.evidence.get("future_constraint_refs", [])))),
+                )
+            )
+        return emitted
+
+    def _update_environment(self, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        sediments = self.environment.update(self.state, local_events)
+        for sediment in sediments:
+            self.environment_trace.append({"tick": self.state.tick, **sediment.trace})
+            emitted.append(
+                self._event(
+                    sediment.event_type,
+                    "field",
+                    sediment.payload,
+                    sediment.causal_refs,
+                )
+            )
+        return emitted
+
+    def _update_dispositions(self, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        updates = self.disposition.update(self.state, local_events)
+        for update in updates:
+            payload = update.payload()
+            self.disposition_trace.append({"tick": self.state.tick, **payload})
+            emitted.append(
+                self._event(
+                    "DispositionSedimentationEvent",
+                    "process",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
+
+    def _update_relation(self, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        updates = self.relation.update(self.state, local_events)
+        for update in updates:
+            payload = update.payload()
+            self.relation_trace.append({"tick": self.state.tick, **payload})
+            emitted.append(
+                self._event(
+                    "RelationSedimentationEvent",
+                    "relation",
+                    payload,
+                    update.causal_refs,
                 )
             )
         return emitted
@@ -784,4 +1061,58 @@ class Simulator:
             "repair_capacity_view": {"sources": ["repair_debt", "speech_inhibition.apology"], "value": views.repair_capacity_view},
             "rpp_dynamics": {"sources": ["composition.*", "active_rpps.intensity"], "value": {"active_composition_count": self.state.relation_metrics.get("active_composition_count", 0.0), "dominant_composition_score": self.state.relation_metrics.get("dominant_composition_score", 0.0)}},
             "memory_pressure": {"sources": ["memory_traces", "memory_bias.*"], "value": self.state.relation_metrics.get("memory_pressure", 0.0)},
+            "field_sedimentation": {"sources": ["environment_trace", "FieldUpdateEvent", "EnactedMicroWorldEvent"], "value": self.state.field_state.model_dump(mode="json")},
+            "process_disposition_sedimentation": {"sources": ["disposition_trace", "DispositionSedimentationEvent"], "value": {pid: {"checking_tendency": p.checking_tendency, "ambiguity_tolerance": p.ambiguity_tolerance, "risk_suspension_scope": p.risk_suspension_scope, "speech_inhibition": p.speech_inhibition, "threat_sensitivity": p.threat_sensitivity} for pid, p in self.state.processes.items()}},
+            "relation_sedimentation": {"sources": ["relation_trace", "RelationSedimentationEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("relation_sediment.")}},
+            "binding_evolution": {"sources": ["binding_trace", "BindingUpdatedEvent", "BindingDecayedEvent"], "value": [binding.model_dump(mode="json") for binding in self.state.bindings]},
+            "expectation_sedimentation": {"sources": ["expectation_trace", "ExpectationSedimentationEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("expectation.")}},
+            "account_pressure": {"sources": ["account_trace", "AccountPressureEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("account_pressure.")}},
+            "normative_pressure": {"sources": ["normativity_trace", "NormativePressureEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("norm_pressure.")}},
+            "frame_definition": {"sources": ["frame_trace", "FrameDefinitionEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("frame_definition.")}},
+            "relevance_landscape": {"sources": ["relevance_trace", "RelevanceShiftEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("relevance_field.")}},
+            "position_field": {"sources": ["position_trace", "PositioningEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("position_field.")}},
         }
+
+
+def _render_canon_for_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
+    canon = scenario.get("render_canon")
+    if isinstance(canon, dict) and canon:
+        return canon
+    cast = {}
+    for pid, process in scenario.get("processes", {}).items():
+        cast[pid] = {
+            "name": process.get("display_name", pid),
+            "gender": "未指定",
+            "pronoun": "",
+            "age_band": "未指定",
+            "surface_role": "由模拟过程逐步显现的位置",
+            "speech_style": "由行动、表达和抑制模式约束",
+            "allowed_interiority": "只允许从行为、停顿、语气和选择中推断，不允许直接写内心独白",
+        }
+    return {
+        "title": scenario.get("name") or scenario.get("id") or "RPF 案例",
+        "setting": {
+            "place": "未指定场域",
+            "period": "未指定时期",
+            "atmosphere": "由场压力、绑定和互动过程决定",
+            "material_objects": [],
+        },
+        "cast": cast,
+        "narration": {
+            "language": "中文",
+            "tense": "过去时",
+            "perspective": "第三人称限制视角",
+            "style": "克制的现实主义文学",
+            "interiority_level": "低",
+            "metaphor_level": "低到中",
+            "forbidden": [
+                "新增亲属关系",
+                "新增职业",
+                "新增外部地点",
+                "新增童年回忆",
+                "新增恋爱或婚姻状态",
+                "新增未来预告",
+                "直接宣布固定人格本质",
+            ],
+        },
+    }

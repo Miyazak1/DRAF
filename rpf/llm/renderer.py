@@ -28,6 +28,14 @@ LABELS = {
     "recognition_pursuit": "承认追逐",
     "pursuit_withdrawal": "追逐-退缩",
     "admit_what_happened": "承认发生过什么",
+    "debt_accounting": "债务记账场面",
+    "repair_scene": "修复场面",
+    "avoidance_scene": "回避场面",
+    "public_performance": "公共表演场面",
+    "care_control": "照顾-控制场面",
+    "double_bind": "双重束缚场面",
+    "material_accounting": "物质核算场面",
+    "recognition_trial": "承认审判场面",
 }
 
 
@@ -43,6 +51,7 @@ SYSTEM_PROMPT = """你是 RPF 的叙事渲染器，不是剧情作者。
 7. 姓名、性别、代词、称谓、地点、文风、禁区只能继承 render_canon。
 8. 如果 render_canon 没有提供某个具体事实，不能自行补充。
 9. 每个场景必须能追溯到输入 story 中的 source_ticks。
+10. viability 字段只能作为底层证据使用，不能被扩写成新的心理动机或未发生事件。
 
 目标：
 在不越过事实边界的前提下，把结构化故事底稿渲染为克制、有文学性、清晰可读的关系演化文本。"""
@@ -99,6 +108,8 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
                 _participant_line(frame),
                 "",
                 str(frame.get("summary", "")),
+                _viability_line(frame),
+                _frame_definition_line(frame),
                 "",
             ]
         )
@@ -118,6 +129,41 @@ def _participant_line(frame: dict[str, Any]) -> str:
     if not names:
         return "参与者：-"
     return f"参与者：{'、'.join(names)}"
+
+
+def _viability_line(frame: dict[str, Any]) -> str:
+    viability = frame.get("viability", {}) or {}
+    if not viability:
+        return ""
+    parts = [
+        f"可存续性压力 {_fmt(viability.get('viability_pressure'))}",
+        f"可行动宽度 {_fmt(viability.get('affordance_width'))}",
+        f"直接回应成本 {_fmt(viability.get('direct_response_cost'))}",
+        f"派生张力 {_fmt(viability.get('dramatic_tension'))}",
+    ]
+    deformation = viability.get("deformation", {}) or {}
+    if deformation.get("type"):
+        parts.append(f"变形：{_label(deformation.get('type'))} {_fmt(deformation.get('distance'))}")
+    return "底层依据：" + "；".join(parts)
+
+
+def _frame_definition_line(frame: dict[str, Any]) -> str:
+    frame_definition = frame.get("frame_definition", {}) or {}
+    if not frame_definition:
+        return ""
+    label = frame_definition.get("frame_label") or _label(frame_definition.get("dominant_frame"))
+    try:
+        strength = float(frame_definition.get("strength") or 0.0)
+    except (TypeError, ValueError):
+        strength = 0.0
+    return f"情境定义：{label} {strength:.2f}"
+
+
+def _fmt(value: Any) -> str:
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return "-"
 
 
 def llm_markdown(
@@ -165,6 +211,7 @@ def llm_markdown(
                 "new future events",
                 "changed recognition outcomes",
                 "changed irreversible records",
+                "causes not present in viability/action/expression/recognition evidence",
             ],
             "literary_freedom": [
                 "sentence rhythm",
@@ -172,6 +219,13 @@ def llm_markdown(
                 "observable gesture description",
                 "low-to-medium metaphor consistent with render_canon",
                 "scene transitions grounded in source_ticks",
+                "implicit atmosphere derived from viability pressure and deformation evidence",
+            ],
+            "viability_use": [
+                "may use viability pressure to control compression and tension",
+                "may use affordance width/direct response cost to render hesitation or constraint",
+                "may use deformation evidence to render silence, gesture, tone, or delay",
+                "must not state inner motives beyond evidence",
             ],
         },
         "input": render_payload,

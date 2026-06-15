@@ -37,6 +37,14 @@ relational-process-field-architecture.md
 
 Defines the RPF ontology, recursive layered aggregation, and the reversal from "people form relationships" to "relational processes stabilize into people".
 
+Read next:
+
+```text
+rpf-relational-viability-process-framework.md
+```
+
+Defines the deeper substrate beneath conflict: constrained relational viability, viability requirements, affordance width, adaptive response, deformation, stabilization, and derived drama.
+
 ### 2. Technical Strategy
 
 Read second:
@@ -47,7 +55,17 @@ rpf-technical-implementation-plan.md
 
 Defines the recommended stack, event-sourced simulator, LLM boundary, implementation phases, and technical invariants.
 
-### 3. Formal Data Model
+### 3. Dramatic Conflict Framework
+
+Read after the core ontology and relational viability framework, before implementing new conflict modes:
+
+```text
+rpf-dramatic-conflict-framework.md
+```
+
+Defines the unified conflict kernel: constraint fields, blocked capacities, dramatic contradictions, expression deformation, and the first implementable recognition-conflict mode.
+
+### 4. Formal Data Model
 
 Read before writing code:
 
@@ -57,7 +75,7 @@ rpf-formal-data-model.md
 
 Defines the implementable objects: `SimulationState`, `FieldState`, `ProcessState`, `RPP`, `SceneState`, `Event`, `PersonView`, and `RelationshipView`.
 
-### 4. Runtime
+### 5. Runtime
 
 Read before implementing the engine:
 
@@ -67,7 +85,7 @@ rpf-simulation-runtime.md
 
 Defines tick lifecycle, episode lifecycle, scene crystallization, RPP activation, recognition evaluation, stabilization, irreversibility, and replay.
 
-### 5. RPP Library
+### 6. RPP Library
 
 Read before authoring dynamics:
 
@@ -77,7 +95,7 @@ rpf-rpp-library.md
 
 Defines how relational process patterns are structured and gives the initial required pattern library.
 
-### 6. Aggregation and Projection
+### 7. Aggregation and Projection
 
 Read before implementing derived views:
 
@@ -87,7 +105,7 @@ rpf-aggregation-projection.md
 
 Defines how lower-level process data aggregates into `TrustView`, `IntimacyView`, `DependencyView`, `PersonView`, and `RelationshipView`.
 
-### 7. Event System
+### 8. Event System
 
 Read before implementing persistence:
 
@@ -97,7 +115,7 @@ rpf-event-taxonomy.md
 
 Defines event schemas, event categories, payload contracts, timeline requirements, and invalid event patterns.
 
-### 8. LLM Boundary
+### 9. LLM Boundary
 
 Read before connecting any model:
 
@@ -107,7 +125,7 @@ rpf-llm-contract.md
 
 Defines what the LLM may and may not do, prompt contracts, output schemas, validation rules, and failure handling.
 
-### 9. Scenario Authoring
+### 10. Scenario Authoring
 
 Read before writing simulations:
 
@@ -117,7 +135,7 @@ rpf-scenario-authoring.md
 
 Defines how to author scenarios without predefined personalities or plots.
 
-### 10. Validation and Evaluation
+### 11. Validation and Evaluation
 
 Read before declaring the simulator successful:
 
@@ -127,7 +145,7 @@ rpf-validation-evaluation.md
 
 Defines ontological integrity tests, runtime integrity tests, emergence metrics, relational plausibility checks, and MVP acceptance thresholds.
 
-### 11. MVP Build Plan
+### 12. MVP Build Plan
 
 Read immediately before writing code:
 
@@ -137,7 +155,7 @@ rpf-mvp-build-plan.md
 
 Defines the first executable implementation slice: exact MVP scope, initial file tree, model subset, three initial RPPs, one demonstration scenario, CLI commands, tests, milestones, and acceptance criteria.
 
-### 12. Implementation Readiness Audit
+### 13. Implementation Readiness Audit
 
 Read when deciding whether to code or continue documenting:
 
@@ -147,7 +165,7 @@ rpf-implementation-readiness-audit.md
 
 Identifies which documents are sufficient for MVP implementation and which non-blocking documents should be added before research-grade or user-facing expansion.
 
-### 13. Expression and Personhood Extensions
+### 14. Expression and Personhood Extensions
 
 Read after the MVP architecture is understood:
 
@@ -157,7 +175,7 @@ rpf-expression-and-personhood-extensions.md
 
 Defines post-MVP mechanisms for generating concrete person-like expression: language style, bodily expression, habits, rituals, desire, taste, relation-specific selves, and expressive continuity.
 
-### 14. Temporal Scheduler and Scene Selection
+### 15. Temporal Scheduler and Scene Selection
 
 Read before implementing tick scheduling:
 
@@ -177,15 +195,18 @@ Recommended build sequence:
 1. Pydantic data models
 2. Event stream and deterministic replay
 3. Runtime tick pipeline
-4. RPP eligibility and activation
-5. Scene crystallization
-6. Recognition and misrecognition engine
-7. Stabilization and irreversibility engine
-8. Aggregation and projection
-9. Scenario loader
-10. LLM rendering boundary
-11. Metrics and validation
-12. Inspector UI
+4. Trace-only relational viability kernel
+5. Trace-only conflict evidence kernel
+6. RPP eligibility and activation
+7. Scene crystallization
+8. Recognition and misrecognition engine
+9. Recognition-conflict integration
+10. Stabilization and irreversibility engine
+11. Aggregation and projection
+12. Scenario loader
+13. LLM rendering boundary
+14. Metrics and validation
+15. Inspector UI
 ```
 
 ---
@@ -240,6 +261,66 @@ out/benchmarks/runs/<scenario_id>/
 
 ---
 
+## Web Workbench
+
+For interactive use, start the local workbench:
+
+```text
+start_viewer.bat
+```
+
+The page opens at:
+
+```text
+http://127.0.0.1:8765/
+```
+
+The workbench can:
+
+- list all scenario files under `examples/`
+- create custom two-process scenarios from the web workbench
+- load a scenario and generate an initial preview run
+- keep a run archive instead of overwriting previous web runs
+- reopen historical runs from the archive
+- compare the current run against archived runs
+- generate deterministic run reports as Markdown
+- export a run bundle as a zip archive
+- run continuous simulation for a real wall-clock duration
+- choose deterministic or DeepSeek LLM automatic segment rendering
+- append closed narrative segments into the live story stream
+- visualize pressure curves and phase trajectories over the whole run
+- inspect derived relationship views, RPP dynamics, traces, and raw events
+
+In the continuous simulation panel, duration means real-world runtime. Selecting `18 hours` means the local backend keeps running for 18 real hours unless stopped or the max tick limit is reached. The tick interval controls how often the simulator advances during that wall-clock window.
+
+Web-created runs are stored under:
+
+```text
+out/experience/runs/<scenario_id>/<timestamp>_<mode>_seed<seed>_<id>/
+```
+
+The workbench writes a `run_metadata.json` file into each run directory. The `运行档案` panel reads those manifests and can reopen older runs without mutating them.
+
+Custom scenarios created in the workbench are written as YAML files under:
+
+```text
+examples/custom_<scenario_id>.yaml
+```
+
+They contain the same causal fields as handwritten scenarios: render canon, field state, relation metrics, process constraints, bindings, and recognition demands.
+
+The `生成报告` action writes:
+
+```text
+run_report.md
+```
+
+inside the current run directory. The report is deterministic and does not call an LLM.
+
+The `导出运行包` action writes a zip archive in the current run directory. The bundle includes the deterministic report, event stream, derived views, metrics, traces, render canon, rendered story files when present, and run metadata.
+
+---
+
 ## Non-Negotiable Invariants
 
 ```text
@@ -251,5 +332,9 @@ out/benchmarks/runs/<scenario_id>/
 6. Scenes require binding, field pressure, or latent tension.
 7. Irreversible events must define future constraints.
 8. Replay from initial state and event stream must reconstruct causal state.
+9. Conflict must be traceable to constraint and blocked-capacity evidence.
+10. Scenario conflict seeds define pressures, not plot outcomes.
+11. Viability requirements are process requirements, not character desires.
+12. Drama is derived from constrained relational viability.
 ```
 

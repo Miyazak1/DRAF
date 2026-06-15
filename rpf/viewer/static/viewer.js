@@ -1,4 +1,6 @@
 let DATA = null;
+let SCENARIOS = [];
+let RUNS = [];
 let currentFilter = "all";
 let selectedTick = 1;
 let statusTimer = null;
@@ -40,6 +42,7 @@ const ZH = {
   aggregation: "聚合",
   projection: "投影",
   diagnostic: "诊断",
+  viability: "可存续性",
   SimulationInitializedEvent: "模拟初始化",
   TickStartedEvent: "Tick 开始",
   FieldPressureEvent: "场压力",
@@ -70,6 +73,12 @@ const ZH = {
   ProjectionEvent: "投影",
   LatentTimeEvent: "潜伏时间",
   SimulationCompletedEvent: "模拟完成",
+  ConstraintActivationEvent: "约束激活",
+  ViabilityRequirementEvent: "可存续性要求",
+  AffordanceWidthEvent: "可行动宽度",
+  DeformationTraceEvent: "变形追踪",
+  FutureConstraintEvent: "未来约束",
+  DerivedDramaticTensionEvent: "派生戏剧张力",
   material_pressure_intrusion: "物质压力闯入",
   unacknowledged_contribution_claim: "未被承认的付出索取",
   practical_repair_offer: "实际帮助式修复",
@@ -136,6 +145,20 @@ const ZH = {
   role_lock: "角色锁定",
   public_reclassification: "公开重分类",
   absence_history: "缺席成为历史",
+  material_pressure: "物质压力",
+  public_face_risk: "公开面子风险",
+  speech_inhibition: "言说抑制",
+  historical_repair_debt: "历史修复债",
+  memory_load: "记忆负荷",
+  future_constraint: "未来约束",
+  recognition_access: "承认可达性",
+  relation_continuation: "关系延续",
+  repair_availability: "修复可达性",
+  inhibition: "抑制",
+  substitution: "替代",
+  expression_distortion: "表达扭曲",
+  public_mask: "公开面具",
+  indirect_adaptation: "间接适应",
   identity_mark: "身份标记",
   injury_reconstruction: "受伤式重构",
   defensive_reconstruction: "防御式重构",
@@ -192,6 +215,8 @@ function short(value, max = 48) {
 }
 
 async function main() {
+  await loadScenarios();
+  await loadRuns();
   await loadData();
   selectedTick = DATA.scheduler[0]?.tick_index || 1;
   restoreLocalSettings();
@@ -206,14 +231,72 @@ async function loadData() {
   DATA = await res.json();
 }
 
+async function loadScenarios() {
+  const res = await fetch("/api/scenarios");
+  const payload = await res.json();
+  SCENARIOS = payload.scenarios || [];
+  renderScenarioOptions(payload.current_output_dir);
+}
+
+async function loadRuns() {
+  const res = await fetch("/api/runs");
+  const payload = await res.json();
+  RUNS = payload.runs || [];
+  renderRunHistory(payload.current_output_dir);
+}
+
 function renderAll() {
   renderOverview();
   renderCanon();
   renderStory();
+  renderLiveStory();
+  renderEvolution();
+  renderViabilityDynamics();
   renderTicks();
   renderPatterns();
   renderTraces();
   renderEvents();
+  renderRunHistory(DATA.run_dir);
+}
+
+function renderScenarioOptions(currentOutputDir) {
+  const select = $("scenarioSelect");
+  if (!select) return;
+  select.innerHTML = SCENARIOS.map((scenario) => `
+    <option value="${escapeHtml(scenario.path)}">${escapeHtml(scenario.title || scenario.id)}</option>
+  `).join("");
+  const current = SCENARIOS.find((scenario) => samePath(scenario.output_dir, currentOutputDir));
+  if (current) select.value = current.path;
+  $("scenarioStatus").textContent = SCENARIOS.length ? `已发现 ${SCENARIOS.length} 个案例` : "没有发现案例文件";
+}
+
+function samePath(left, right) {
+  return String(left || "").replaceAll("\\", "/").toLowerCase() === String(right || "").replaceAll("\\", "/").toLowerCase();
+}
+
+function renderRunHistory(currentOutputDir) {
+  const target = $("runHistory");
+  if (!target) return;
+  target.innerHTML = RUNS.length
+    ? RUNS.slice(0, 12).map((run) => `
+      <article class="run-item ${samePath(run.output_dir, currentOutputDir) ? "active" : ""}">
+        <strong>${escapeHtml(run.title || run.scenario_id || run.run_id)}</strong>
+        <small>${escapeHtml(run.scenario_id || "-")} / ${escapeHtml(run.mode || "-")} / seed ${escapeHtml(run.seed ?? "-")}</small>
+        <small>${escapeHtml(run.created_at || "-")} / Tick ${escapeHtml(run.tick ?? "-")} / 事件 ${escapeHtml(run.event_count ?? "-")} / 阶段 ${escapeHtml(zh(run.phase || "-"))}</small>
+        <small>${escapeHtml(run.output_dir || "")}</small>
+        <div class="run-actions">
+          <button type="button" data-run-dir="${escapeAttr(run.output_dir)}">打开</button>
+          <button type="button" data-compare-dir="${escapeAttr(run.output_dir)}">对比当前</button>
+        </div>
+      </article>
+    `).join("")
+    : "<div class=\"trace\"><small>暂无运行档案。载入案例或开始持续模拟后会生成。</small></div>";
+  target.querySelectorAll("button[data-run-dir]").forEach((button) => {
+    button.addEventListener("click", () => openRun(button.dataset.runDir));
+  });
+  target.querySelectorAll("button[data-compare-dir]").forEach((button) => {
+    button.addEventListener("click", () => compareRun(button.dataset.compareDir));
+  });
 }
 
 function renderStory() {
@@ -255,6 +338,335 @@ function renderStory() {
   `;
 }
 
+function renderLiveStory() {
+  const stream = DATA.rendered_story_stream || "";
+  const target = $("liveStoryStream");
+  if (!target) return;
+  target.innerHTML = stream
+    ? markdownToHtml(stream)
+    : "<p>还没有自动渲染内容。选择自动渲染后，持续模拟每完成一个最短剧情生命周期就会追加到这里。</p>";
+  if (stream && !$("llmOutput").textContent.trim().startsWith("生成后会显示")) {
+    return;
+  }
+  if (stream) $("llmOutput").innerHTML = markdownToHtml(stream);
+}
+
+function renderEvolution() {
+  const points = buildEvolutionPoints();
+  renderPhaseRail(points);
+  renderPressureChart(points);
+  renderTurningPoints(points);
+  renderEvolutionStats(points);
+}
+
+function buildEvolutionPoints() {
+  const framesByTick = Object.fromEntries((DATA.story || []).map((frame) => [Number(frame.tick), frame]));
+  const recognitionByTick = Object.fromEntries((DATA.recognition || []).map((item) => [Number(item.tick), item]));
+  return (DATA.scheduler || []).map((tick) => {
+    const tickIndex = Number(tick.tick_index || tick.tick || 0);
+    const frame = framesByTick[tickIndex] || {};
+    const pressure = tick.input_factors || frame.pressure || {};
+    const recognition = recognitionByTick[tickIndex] || frame.recognition || {};
+    return {
+      tick: tickIndex,
+      tick_type: tick.selected_tick_type || frame.tick_type || "unknown",
+      phase: frame.phase || "-",
+      phase_changed: Boolean(frame.phase_changed),
+      summary: frame.summary || "",
+      recognition_outcome: recognition.outcome || "",
+      memory_count: Number(frame.memory_count || 0),
+      fate_count: Number(frame.fate_count || 0),
+      material_urgency: numberOrNull(pressure.material_urgency),
+      conflict_pressure: numberOrNull(pressure.conflict_pressure ?? recognition.conflict_pressure),
+      repair_debt: numberOrNull(pressure.repair_debt ?? recognition.repair_debt),
+      recognition_pressure: numberOrNull(pressure.recognition_pressure ?? recognition.demand_pressure),
+      memory_pressure: numberOrNull(pressure.memory_pressure),
+    };
+  }).filter((point) => point.tick > 0);
+}
+
+function numberOrNull(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function renderPhaseRail(points) {
+  const target = $("phaseRail");
+  if (!target) return;
+  target.innerHTML = points.length
+    ? points.map((point) => `
+      <div class="phase-segment ${escapeAttr(point.tick_type)} ${point.phase_changed ? "changed" : ""}" title="${escapeAttr(point.summary)}">
+        <strong>${point.tick}</strong>
+        <span>${escapeHtml(zh(point.phase))}</span>
+      </div>
+    `).join("")
+    : "<div class=\"trace\"><small>暂无阶段轨迹</small></div>";
+}
+
+function renderPressureChart(points) {
+  const series = [
+    {key: "material_urgency", label: "物质紧迫", color: "#296b63"},
+    {key: "conflict_pressure", label: "冲突压力", color: "#8a4c32"},
+    {key: "repair_debt", label: "修复债", color: "#a45f1b"},
+    {key: "recognition_pressure", label: "承认压力", color: "#315f8f"},
+    {key: "memory_pressure", label: "记忆压力", color: "#6f5a8f"},
+  ];
+  const width = Math.max(620, points.length * 26);
+  const height = 260;
+  const pad = 32;
+  const values = points.flatMap((point) => series.map((item) => point[item.key]).filter((value) => value !== null));
+  const maxValue = Math.max(1, ...values);
+  const x = (index) => points.length <= 1 ? pad : pad + (index / (points.length - 1)) * (width - pad * 2);
+  const y = (value) => height - pad - (Math.max(0, value) / maxValue) * (height - pad * 2);
+  const grid = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+    const gy = height - pad - ratio * (height - pad * 2);
+    return `<line x1="${pad}" y1="${gy}" x2="${width - pad}" y2="${gy}" stroke="#d8dfda" stroke-width="1" /><text x="6" y="${gy + 4}" fill="#66736d" font-size="11">${(ratio * maxValue).toFixed(2)}</text>`;
+  }).join("");
+  const lines = series.map((item) => {
+    const path = linePath(points, item.key, x, y);
+    return path ? `<path d="${path}" fill="none" stroke="${item.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />` : "";
+  }).join("");
+  const ticks = points.filter((_, index) => index === 0 || index === points.length - 1 || index % Math.ceil(points.length / 8) === 0)
+    .map((point, index, arr) => {
+      const originalIndex = points.findIndex((item) => item.tick === point.tick);
+      const tx = x(originalIndex);
+      return `<text x="${tx}" y="${height - 8}" text-anchor="${index === arr.length - 1 ? "end" : "middle"}" fill="#66736d" font-size="11">${point.tick}</text>`;
+    }).join("");
+  $("pressureChart").innerHTML = points.length
+    ? `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="压力曲线">${grid}${lines}<line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#bfc8c2" />${ticks}</svg>`
+    : "<div class=\"trace\"><small>暂无压力曲线</small></div>";
+  $("pressureLegend").innerHTML = series.map((item) => `
+    <span class="legend-item"><i class="legend-line" style="background:${item.color}"></i>${item.label}</span>
+  `).join("");
+}
+
+function linePath(points, key, x, y) {
+  let path = "";
+  let open = false;
+  points.forEach((point, index) => {
+    const value = point[key];
+    if (value === null) {
+      open = false;
+      return;
+    }
+    path += `${open ? "L" : "M"} ${x(index).toFixed(2)} ${y(value).toFixed(2)} `;
+    open = true;
+  });
+  return path.trim();
+}
+
+function renderTurningPoints(points) {
+  const turns = points.filter((point) =>
+    point.phase_changed ||
+    point.fate_count > 0 ||
+    point.memory_count > 0 ||
+    point.recognition_outcome
+  );
+  $("turningPoints").innerHTML = turns.length
+    ? turns.slice(-24).reverse().map((point) => `
+      <article class="turning-item">
+        <strong>第 ${point.tick} 步 · ${zh(point.tick_type)}</strong>
+        <small>${[
+          point.phase_changed ? `阶段：${zh(point.phase)}` : "",
+          point.recognition_outcome ? `承认：${zh(point.recognition_outcome)}` : "",
+          point.memory_count ? `记忆重构 ${point.memory_count}` : "",
+          point.fate_count ? `命运转折 ${point.fate_count}` : "",
+        ].filter(Boolean).join(" / ")}</small>
+        <p>${escapeHtml(localizeSentence(point.summary))}</p>
+      </article>
+    `).join("")
+    : "<div class=\"trace\"><small>暂无关键转折</small></div>";
+}
+
+function renderEvolutionStats(points) {
+  const last = points[points.length - 1] || {};
+  const previous = points[Math.max(0, points.length - 6)] || {};
+  const rows = [
+    ["物质紧迫", trend(last.material_urgency, previous.material_urgency)],
+    ["冲突压力", trend(last.conflict_pressure, previous.conflict_pressure)],
+    ["修复债", trend(last.repair_debt, previous.repair_debt)],
+    ["承认压力", trend(last.recognition_pressure, previous.recognition_pressure)],
+    ["记忆压力", trend(last.memory_pressure, previous.memory_pressure)],
+  ];
+  $("evolutionStats").innerHTML = rows.map(([label, value]) => `
+    <div class="state-row"><span>${label}</span><b>${value}</b></div>
+  `).join("");
+}
+
+function renderViabilityDynamics() {
+  const points = buildViabilityPoints();
+  renderViabilityChart(points);
+  renderViabilityTickStats(points);
+  renderViabilityChain(points);
+  renderViabilityConstraints();
+}
+
+function buildViabilityPoints() {
+  const schedulerByTick = Object.fromEntries((DATA.scheduler || []).map((item) => [Number(item.tick_index || item.tick), item]));
+  const actionByTick = Object.fromEntries((DATA.action || []).map((item) => [Number(item.tick), item]));
+  const expressionByTick = Object.fromEntries((DATA.expression || []).map((item) => [Number(item.tick), item]));
+  const recognitionByTick = Object.fromEntries((DATA.recognition || []).map((item) => [Number(item.tick), item]));
+  return (DATA.viability || []).map((trace) => {
+    const tick = Number(trace.tick);
+    const widths = trace.affordance_widths || [];
+    const deformations = trace.deformations || [];
+    const requirements = trace.requirements || [];
+    const constraints = trace.constraints || [];
+    const minWidth = minMetric(widths, "width", 1);
+    const directCost = maxMetric(widths, "direct_response_cost");
+    const requirementPressure = maxMetric(requirements, "urgency");
+    const constraintPressure = maxMetric(constraints, "intensity");
+    const deformationDistance = maxMetric(deformations, "deformation_distance");
+    const scheduler = schedulerByTick[tick] || {};
+    const rhythm = scheduler.viability_rhythm || {};
+    return {
+      tick,
+      tick_type: trace.tick_type || scheduler.selected_tick_type || "unknown",
+      viability_pressure: numberOrNull(rhythm.viability_pressure ?? requirementPressure),
+      requirement_pressure: numberOrNull(requirementPressure),
+      constraint_pressure: numberOrNull(constraintPressure),
+      affordance_width: numberOrNull(minWidth),
+      affordance_narrowing: numberOrNull(1 - minWidth),
+      direct_response_cost: numberOrNull(directCost),
+      deformation_distance: numberOrNull(deformationDistance),
+      dramatic_tension: numberOrNull(trace.dramatic_tension),
+      scene_readiness: numberOrNull(rhythm.scene_readiness),
+      action: actionByTick[tick]?.selected_action || {},
+      expression: expressionByTick[tick]?.selected_expression || {},
+      recognition: recognitionByTick[tick] || {},
+      trace,
+    };
+  }).filter((point) => point.tick > 0);
+}
+
+function maxMetric(rows, key, fallback = 0) {
+  const values = (rows || []).map((row) => Number(row[key])).filter(Number.isFinite);
+  return values.length ? Math.max(...values) : fallback;
+}
+
+function minMetric(rows, key, fallback = 0) {
+  const values = (rows || []).map((row) => Number(row[key])).filter(Number.isFinite);
+  return values.length ? Math.min(...values) : fallback;
+}
+
+function renderViabilityChart(points) {
+  const series = [
+    {key: "viability_pressure", label: "可存续性压力", color: "#225f73"},
+    {key: "affordance_narrowing", label: "可行动收窄", color: "#9a5d23"},
+    {key: "direct_response_cost", label: "直接回应成本", color: "#7c4f8f"},
+    {key: "deformation_distance", label: "变形距离", color: "#8a3f3f"},
+    {key: "dramatic_tension", label: "派生张力", color: "#2b6b43"},
+  ];
+  const width = Math.max(620, points.length * 26);
+  const height = 260;
+  const pad = 32;
+  const x = (index) => points.length <= 1 ? pad : pad + (index / (points.length - 1)) * (width - pad * 2);
+  const y = (value) => height - pad - Math.max(0, value) * (height - pad * 2);
+  const grid = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+    const gy = y(ratio);
+    return `<line x1="${pad}" y1="${gy}" x2="${width - pad}" y2="${gy}" stroke="#d8dfda" stroke-width="1" /><text x="6" y="${gy + 4}" fill="#66736d" font-size="11">${ratio.toFixed(2)}</text>`;
+  }).join("");
+  const lines = series.map((item) => {
+    const path = linePath(points, item.key, x, y);
+    return path ? `<path d="${path}" fill="none" stroke="${item.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />` : "";
+  }).join("");
+  const markers = points.map((point, index) => {
+    if (!point.recognition?.outcome && !point.deformation_distance) return "";
+    return `<circle cx="${x(index)}" cy="${y(point.dramatic_tension || 0)}" r="3.5" fill="#26342f"><title>Tick ${point.tick} ${zh(point.recognition?.outcome || point.tick_type)}</title></circle>`;
+  }).join("");
+  const ticks = points.filter((_, index) => index === 0 || index === points.length - 1 || index % Math.ceil(points.length / 8) === 0)
+    .map((point, index, arr) => {
+      const originalIndex = points.findIndex((item) => item.tick === point.tick);
+      const tx = x(originalIndex);
+      return `<text x="${tx}" y="${height - 8}" text-anchor="${index === arr.length - 1 ? "end" : "middle"}" fill="#66736d" font-size="11">${point.tick}</text>`;
+    }).join("");
+  $("viabilityChart").innerHTML = points.length
+    ? `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="底层动力学曲线">${grid}${lines}${markers}<line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#bfc8c2" />${ticks}</svg>`
+    : "<div class=\"trace\"><small>暂无底层动力学曲线</small></div>";
+  $("viabilityLegend").innerHTML = series.map((item) => `
+    <span class="legend-item"><i class="legend-line" style="background:${item.color}"></i>${item.label}</span>
+  `).join("");
+}
+
+function renderViabilityTickStats(points) {
+  const point = points.find((item) => item.tick === selectedTick) || points[points.length - 1] || {};
+  $("viabilityTickStats").innerHTML = [
+    ["Tick", point.tick || "-"],
+    ["类型", zh(point.tick_type || "-")],
+    ["可存续性压力", fmt(point.viability_pressure)],
+    ["可行动宽度", fmt(point.affordance_width)],
+    ["直接回应成本", fmt(point.direct_response_cost)],
+    ["变形距离", fmt(point.deformation_distance)],
+    ["派生张力", fmt(point.dramatic_tension)],
+    ["场景就绪", fmt(point.scene_readiness)],
+  ].map(([label, value]) => `<div class="state-row"><span>${label}</span><b>${value}</b></div>`).join("");
+}
+
+function renderViabilityChain(points) {
+  const point = points.find((item) => item.tick === selectedTick) || points[points.length - 1] || {};
+  if (!point.tick) {
+    $("viabilityChain").innerHTML = "<div class=\"trace\"><small>暂无因果链</small></div>";
+    return;
+  }
+  const trace = point.trace || {};
+  const strongestConstraint = maxBy(trace.constraints || [], "intensity");
+  const strongestRequirement = maxBy(trace.requirements || [], "urgency");
+  const deformation = (trace.deformations || [])[0] || {};
+  const chain = [
+    {label: "约束", value: strongestConstraint ? `${zh(strongestConstraint.constraint_type)} ${fmt(strongestConstraint.intensity)}` : "暂无"},
+    {label: "要求", value: strongestRequirement ? `${zh(strongestRequirement.requirement_type)} ${fmt(strongestRequirement.urgency)}` : "暂无"},
+    {label: "行动", value: point.action?.action_id ? `${zh(point.action.action_id)} / ${zh(point.action.action_mode)}` : "未发生"},
+    {label: "表达", value: point.expression?.expression_id ? `${zh(point.expression.expression_id)} / ${zh(point.expression.expression_mode)}` : "未发生"},
+    {label: "变形", value: deformation.deformation_type ? `${zh(deformation.deformation_type)} ${fmt(deformation.deformation_distance)}` : "无明显变形"},
+    {label: "承认", value: point.recognition?.outcome ? `${zh(point.recognition.outcome)} / ${zh(point.recognition.repair_event_type)}` : "未进入承认评估"},
+  ];
+  $("viabilityChain").innerHTML = chain.map((item, index) => `
+    <div class="chain-node">
+      <small>${index + 1}</small>
+      <strong>${item.label}</strong>
+      <span>${escapeHtml(item.value)}</span>
+    </div>
+  `).join("");
+}
+
+function renderViabilityConstraints() {
+  const traces = DATA.viability || [];
+  const trace = traces.find((item) => Number(item.tick) === selectedTick) || traces[traces.length - 1];
+  if (!trace) {
+    $("viabilityConstraints").innerHTML = "<div class=\"trace\"><small>暂无约束记录</small></div>";
+    return;
+  }
+  const rows = [
+    ...(trace.constraints || []).slice(0, 4).map((item) => ({
+      tick: trace.tick,
+      title: zh(item.constraint_type),
+      body: zh(item.activation_condition),
+      tags: [`强度 ${fmt(item.intensity)}`, ...(item.affected_requirements || []).slice(0, 3).map(zh)],
+    })),
+    ...(trace.requirements || []).slice(0, 3).map((item) => ({
+      tick: trace.tick,
+      title: zh(item.requirement_type),
+      body: zh(item.minimum_satisfaction_condition),
+      tags: [`紧迫 ${fmt(item.urgency)}`, `失败代价 ${fmt(item.failure_cost)}`],
+    })),
+  ];
+  $("viabilityConstraints").innerHTML = traceRows(rows, (item) => item);
+}
+
+function maxBy(rows, key) {
+  const values = (rows || []).filter((row) => Number.isFinite(Number(row[key])));
+  if (!values.length) return null;
+  return values.reduce((best, item) => Number(item[key]) > Number(best[key]) ? item : best, values[0]);
+}
+
+function trend(current, previous) {
+  if (current === null || current === undefined) return "-";
+  if (previous === null || previous === undefined) return fmt(current);
+  const delta = current - previous;
+  const arrow = delta > 0.01 ? "↑" : delta < -0.01 ? "↓" : "→";
+  return `${fmt(current)} ${arrow} ${delta >= 0 ? "+" : ""}${delta.toFixed(3)}`;
+}
+
 function renderCanon() {
   const canon = DATA.render_canon || {};
   const cast = canon.cast || {};
@@ -273,6 +685,38 @@ function renderCanon() {
     <div class="canon-people">${people || "<small>暂无人物显现配置</small>"}</div>
     <div class="tags">${forbidden}</div>
   `;
+  renderCanonEditor(canon);
+}
+
+function renderCanonEditor(canon) {
+  const setting = canon.setting || {};
+  const narration = canon.narration || {};
+  $("canonTitle").value = canon.title || "";
+  $("canonPlace").value = setting.place || "";
+  $("canonPeriod").value = setting.period || "";
+  $("canonAtmosphere").value = setting.atmosphere || "";
+  $("canonObjects").value = (setting.material_objects || []).join("\n");
+  $("canonStyle").value = narration.style || "";
+  $("canonPerspective").value = narration.perspective || "";
+  $("canonInteriority").value = narration.interiority_level || "";
+  $("canonMetaphor").value = narration.metaphor_level || "";
+  $("canonRhythm").value = narration.sentence_rhythm || "";
+  $("canonForbidden").value = (narration.forbidden || []).join("\n");
+  const cast = canon.cast || {};
+  $("castEditor").innerHTML = Object.entries(cast).map(([pid, person]) => `
+    <div class="cast-person" data-pid="${escapeAttr(pid)}">
+      <h4>${escapeHtml(pid)} · ${escapeHtml(person.name || pid)}</h4>
+      <div class="cast-grid">
+        <label>姓名<input data-field="name" value="${escapeAttr(person.name || pid)}" /></label>
+        <label>性别<input data-field="gender" value="${escapeAttr(person.gender || "")}" /></label>
+        <label>代词<input data-field="pronoun" value="${escapeAttr(person.pronoun || "")}" /></label>
+        <label>年龄段<input data-field="age_band" value="${escapeAttr(person.age_band || "")}" /></label>
+      </div>
+      <label>表层位置<input data-field="surface_role" value="${escapeAttr(person.surface_role || "")}" /></label>
+      <label>言说风格<input data-field="speech_style" value="${escapeAttr(person.speech_style || "")}" /></label>
+      <label>内心描写边界<input data-field="allowed_interiority" value="${escapeAttr(person.allowed_interiority || "")}" /></label>
+    </div>
+  `).join("");
 }
 
 function localizeSentence(text) {
@@ -329,6 +773,7 @@ function renderTicks() {
       selectedTick = Number(button.dataset.tick);
       renderTicks();
       renderTickDetail();
+      renderViabilityDynamics();
     });
   });
   renderTickDetail();
@@ -510,6 +955,12 @@ function bindControls() {
   $("eventSearch").addEventListener("input", renderEvents);
   $("renderLlm").addEventListener("click", () => renderMarkdownStory(true));
   $("renderDeterministic").addEventListener("click", () => renderMarkdownStory(false));
+  $("saveCanon").addEventListener("click", saveCanon);
+  $("generateReport").addEventListener("click", generateReport);
+  $("exportBundle").addEventListener("click", exportBundle);
+  $("refreshRuns").addEventListener("click", refreshRuns);
+  $("createScenario").addEventListener("click", createScenario);
+  $("loadScenario").addEventListener("click", loadSelectedScenario);
   $("startSimulation").addEventListener("click", startSimulation);
   $("stopSimulation").addEventListener("click", stopSimulation);
   $("saveLlmKey").addEventListener("click", saveKey);
@@ -518,6 +969,309 @@ function bindControls() {
   $("llmModel").addEventListener("change", saveLocalSettings);
   $("llmThinking").addEventListener("change", saveLocalSettings);
   $("simRenderMode").addEventListener("change", saveLocalSettings);
+}
+
+async function refreshRuns() {
+  await loadRuns();
+  renderRunHistory(DATA?.run_dir);
+}
+
+async function createScenario() {
+  $("createScenarioStatus").textContent = "正在创建案例并生成预演...";
+  $("createScenario").disabled = true;
+  try {
+    const res = await fetch("/api/scenarios/create", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(collectScenarioDraft()),
+    });
+    const payload = await res.json();
+    if (!res.ok || payload.error) throw new Error(payload.error || `请求失败：${res.status}`);
+    DATA = payload.payload;
+    SCENARIOS = payload.scenarios || SCENARIOS;
+    selectedTick = DATA.scheduler[0]?.tick_index || 1;
+    $("createScenarioStatus").textContent = `已创建：${payload.scenario_path}`;
+    $("scenarioStatus").textContent = `已载入自定义案例：${DATA.render_canon?.title || "-"}`;
+    renderScenarioOptions(DATA.run_dir);
+    await loadRuns();
+    renderAll();
+    await pollSimulationStatus();
+  } catch (error) {
+    $("createScenarioStatus").textContent = `创建失败：${error.message}`;
+  } finally {
+    $("createScenario").disabled = false;
+  }
+}
+
+function collectScenarioDraft() {
+  return {
+    title: $("newTitle").value,
+    place: $("newPlace").value,
+    period: $("newPeriod").value,
+    bootstrap_steps: $("newBootstrapSteps").value,
+    seed: $("simSeed").value,
+    p1_name: $("newP1Name").value,
+    p2_name: $("newP2Name").value,
+    p1_role: $("newP1Role").value,
+    p2_role: $("newP2Role").value,
+    binding_label: $("newBindingLabel").value,
+    recognition_label: $("newRecognitionLabel").value,
+    material_urgency: $("newMaterialUrgency").value,
+    binding_strength: $("newBindingStrength").value,
+    unrecognized_contribution: $("newUnrecognizedContribution").value,
+    recognition_pressure: $("newRecognitionPressure").value,
+    conflict_pressure: $("newConflictPressure").value,
+    repair_debt: $("newRepairDebt").value,
+    style: $("newStyle").value,
+    atmosphere: $("newAtmosphere").value,
+    material_objects: lines($("newObjects").value),
+    forbidden: lines($("newForbidden").value),
+  };
+}
+
+async function openRun(outputDir) {
+  $("scenarioStatus").textContent = "正在打开历史运行...";
+  try {
+    const res = await fetch("/api/runs/open", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({output_dir: outputDir}),
+    });
+    const payload = await res.json();
+    if (!res.ok || payload.error) throw new Error(payload.error || `请求失败：${res.status}`);
+    DATA = payload.payload;
+    selectedTick = DATA.scheduler[0]?.tick_index || 1;
+    $("scenarioStatus").textContent = `已打开：${DATA.render_canon?.title || outputDir}`;
+    await loadRuns();
+    renderAll();
+    await pollSimulationStatus();
+  } catch (error) {
+    $("scenarioStatus").textContent = `打开失败：${error.message}`;
+  }
+}
+
+async function compareRun(outputDir) {
+  const target = $("runComparison");
+  target.innerHTML = "<div class=\"trace\"><small>正在对比运行...</small></div>";
+  try {
+    const res = await fetch("/api/runs/compare", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({output_dir: outputDir}),
+    });
+    const payload = await res.json();
+    if (!res.ok || payload.error) throw new Error(payload.error || `请求失败：${res.status}`);
+    renderRunComparison(payload);
+  } catch (error) {
+    target.innerHTML = `<div class="trace"><small>对比失败：${escapeHtml(error.message)}</small></div>`;
+  }
+}
+
+async function generateReport() {
+  const target = $("reportStatus");
+  target.innerHTML = "<div class=\"trace\"><small>正在生成运行报告...</small></div>";
+  $("generateReport").disabled = true;
+  try {
+    const res = await fetch("/api/report", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: "{}",
+    });
+    const payload = await res.json();
+    if (!res.ok || payload.error) throw new Error(payload.error || `请求失败：${res.status}`);
+    const preview = previewMarkdown(payload.text || "", 1800);
+    target.innerHTML = `
+      <div class="trace">
+        <strong>已生成运行报告</strong>
+        <small>${escapeHtml(payload.output || "-")}</small>
+      </div>
+      <div class="markdown-output compact-output">${markdownToHtml(preview)}</div>
+    `;
+  } catch (error) {
+    target.innerHTML = `<div class="trace"><small>报告生成失败：${escapeHtml(error.message)}</small></div>`;
+  } finally {
+    $("generateReport").disabled = false;
+  }
+}
+
+async function exportBundle() {
+  const target = $("exportStatus");
+  target.innerHTML = "<div class=\"trace\"><small>正在导出运行包...</small></div>";
+  $("exportBundle").disabled = true;
+  try {
+    const res = await fetch("/api/export", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: "{}",
+    });
+    const payload = await res.json();
+    if (!res.ok || payload.error) throw new Error(payload.error || `请求失败：${res.status}`);
+    target.innerHTML = `
+      <div class="trace">
+        <strong>已导出运行包</strong>
+        <small>${escapeHtml(payload.output || "-")}</small>
+        <div class="tags">${(payload.files || []).slice(0, 12).map((file) => `<span class="tag">${escapeHtml(file)}</span>`).join("")}</div>
+        ${(payload.files || []).length > 12 ? `<small>另有 ${(payload.files || []).length - 12} 个文件已打包。</small>` : ""}
+      </div>
+    `;
+  } catch (error) {
+    target.innerHTML = `<div class="trace"><small>导出失败：${escapeHtml(error.message)}</small></div>`;
+  } finally {
+    $("exportBundle").disabled = false;
+  }
+}
+
+function previewMarkdown(markdown, maxLength) {
+  const text = String(markdown || "");
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}\n\n- 报告较长，完整内容已写入文件。`;
+}
+
+function renderRunComparison(payload) {
+  const current = payload.current || {};
+  const other = payload.other || {};
+  const delta = payload.delta || {};
+  $("runComparison").innerHTML = `
+    <div class="comparison-grid">
+      ${comparisonCard("当前运行", current, false)}
+      ${comparisonCard("对照运行", other, false)}
+      ${comparisonDeltaCard(delta)}
+    </div>
+  `;
+}
+
+function comparisonCard(title, run) {
+  return `
+    <section class="comparison-card">
+      <h4>${escapeHtml(title)}</h4>
+      <div class="comparison-row"><span>标题</span><b>${escapeHtml(run.title || "-")}</b></div>
+      <div class="comparison-row"><span>阶段</span><b>${escapeHtml(zh(run.phase || "-"))}</b></div>
+      <div class="comparison-row"><span>Tick</span><b>${fmt(run.tick_count)}</b></div>
+      <div class="comparison-row"><span>事件</span><b>${fmt(run.event_count)}</b></div>
+      <div class="comparison-row"><span>信任</span><b>${fmt(run.trust_score)}</b></div>
+      <div class="comparison-row"><span>怨恨</span><b>${fmt(run.resentment_score)}</b></div>
+      <div class="comparison-row"><span>修复</span><b>${fmt(run.repair_score)}</b></div>
+      <div class="comparison-row"><span>关键转折</span><b>${fmt(run.turning_point_count)}</b></div>
+    </section>
+  `;
+}
+
+function comparisonDeltaCard(delta) {
+  const pressure = delta.pressure || {};
+  return `
+    <section class="comparison-card">
+      <h4>差异：当前 - 对照</h4>
+      <div class="comparison-row"><span>阶段是否不同</span><b>${delta.phase_changed ? "是" : "否"}</b></div>
+      <div class="comparison-row"><span>Tick</span><b>${signed(delta.tick_count)}</b></div>
+      <div class="comparison-row"><span>事件</span><b>${signed(delta.event_count)}</b></div>
+      <div class="comparison-row"><span>信任</span><b>${signed(delta.trust_score)}</b></div>
+      <div class="comparison-row"><span>怨恨</span><b>${signed(delta.resentment_score)}</b></div>
+      <div class="comparison-row"><span>修复</span><b>${signed(delta.repair_score)}</b></div>
+      <div class="comparison-row"><span>修复债</span><b>${signed(pressure.repair_debt)}</b></div>
+      <div class="comparison-row"><span>承认压力</span><b>${signed(pressure.recognition_pressure)}</b></div>
+      <div class="comparison-row"><span>当前独有模式</span><b>${escapeHtml((delta.current_only_top_rpps || []).map(zh).join("，") || "-")}</b></div>
+      <div class="comparison-row"><span>对照独有模式</span><b>${escapeHtml((delta.other_only_top_rpps || []).map(zh).join("，") || "-")}</b></div>
+    </section>
+  `;
+}
+
+function signed(value) {
+  if (value === null || value === undefined) return "-";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value);
+  return `${number > 0 ? "+" : ""}${Number.isInteger(number) ? number : number.toFixed(3)}`;
+}
+
+async function saveCanon() {
+  const canon = collectCanon();
+  $("canonStatus").textContent = "正在保存叙事控制...";
+  $("saveCanon").disabled = true;
+  try {
+    const res = await fetch("/api/canon", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({render_canon: canon}),
+    });
+    const payload = await res.json();
+    if (!res.ok || payload.error) throw new Error(payload.error || `请求失败：${res.status}`);
+    $("canonStatus").textContent = `已保存：${payload.output}`;
+    await loadData();
+    renderAll();
+    $("canonStatus").textContent = `已保存：${payload.output}`;
+  } catch (error) {
+    $("canonStatus").textContent = `保存失败：${error.message}`;
+  } finally {
+    $("saveCanon").disabled = false;
+  }
+}
+
+function collectCanon() {
+  const cast = {};
+  document.querySelectorAll(".cast-person").forEach((node) => {
+    const pid = node.dataset.pid;
+    cast[pid] = {};
+    node.querySelectorAll("[data-field]").forEach((input) => {
+      cast[pid][input.dataset.field] = input.value.trim();
+    });
+  });
+  return {
+    title: $("canonTitle").value.trim(),
+    setting: {
+      place: $("canonPlace").value.trim(),
+      period: $("canonPeriod").value.trim(),
+      atmosphere: $("canonAtmosphere").value.trim(),
+      material_objects: lines($("canonObjects").value),
+    },
+    cast,
+    narration: {
+      language: "中文",
+      tense: "过去时",
+      perspective: $("canonPerspective").value.trim(),
+      style: $("canonStyle").value.trim(),
+      interiority_level: $("canonInteriority").value.trim(),
+      metaphor_level: $("canonMetaphor").value.trim(),
+      sentence_rhythm: $("canonRhythm").value.trim(),
+      forbidden: lines($("canonForbidden").value),
+    },
+  };
+}
+
+function lines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+async function loadSelectedScenario() {
+  const scenarioPath = $("scenarioSelect").value;
+  const bootstrapSteps = $("bootstrapSteps").value;
+  $("scenarioStatus").textContent = "正在载入案例并生成初始运行...";
+  $("loadScenario").disabled = true;
+  try {
+    const res = await fetch("/api/scenarios/select", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        scenario_path: scenarioPath,
+        bootstrap_steps: bootstrapSteps,
+        seed: $("simSeed").value,
+      }),
+    });
+    const payload = await res.json();
+    if (!res.ok || payload.error) throw new Error(payload.error || `请求失败：${res.status}`);
+    DATA = payload.payload;
+    selectedTick = DATA.scheduler[0]?.tick_index || 1;
+    $("scenarioStatus").textContent = `已载入：${DATA.render_canon?.title || DATA.manifest?.scenario_path || "-"}`;
+    $("llmOutput").textContent = "生成后会显示在这里。";
+    await loadRuns();
+    renderAll();
+    await pollSimulationStatus();
+  } catch (error) {
+    $("scenarioStatus").textContent = `载入失败：${error.message}`;
+  } finally {
+    $("loadScenario").disabled = false;
+  }
 }
 
 function restoreLocalSettings() {
@@ -631,10 +1385,12 @@ async function pollSimulationStatus() {
     renderSimulationStatus(status);
     if (["running", "completed", "stopped"].includes(status.state)) {
       await loadData();
+      if (["completed", "stopped"].includes(status.state)) await loadRuns();
       renderAll();
     }
     if (status.last_render_text) {
       $("llmOutput").innerHTML = markdownToHtml(status.last_render_text);
+      $("liveStoryStream").innerHTML = markdownToHtml(status.last_render_text);
       $("llmStatus").textContent = status.last_render_error
         ? `自动渲染失败：${status.last_render_error}`
         : `自动渲染：${status.last_render_output || "-"}`;
@@ -765,6 +1521,10 @@ function escapeHtml(text) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function escapeAttr(text) {
+  return escapeHtml(text).replaceAll("`", "&#096;");
 }
 
 main().catch((error) => {

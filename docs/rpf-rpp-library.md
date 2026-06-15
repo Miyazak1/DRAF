@@ -135,11 +135,26 @@ activation_score =
 + prior_pattern_frequency
 + recognition_pressure
 + field_pressure
++ bounded_future_constraint_pressure
 + fatigue_modifier
 - recent_successful_repair
 - exit_availability
 - ritual_containment
 ```
+
+`bounded_future_constraint_pressure` is derived from `FutureConstraintEvent`.
+
+It lets history make a pattern easier to repeat.
+
+It must not make a pattern activate by itself.
+
+Valid future-constraint sources:
+
+- irreversibility records
+- operative classifications
+- reconstructed memories
+
+Every RPP activation that consumes future-constraint pressure must include the consumed `FutureConstraintEvent` ids in `eligibility_evidence`.
 
 ### 2.5 Contraindications
 
@@ -651,6 +666,22 @@ The newer research-kernel RPPs use a primary field gate before scoring. This pre
 - `recognition_pursuit` requires `recognition_pursuit_pressure`
 
 This is a conceptual constraint, not merely calibration. An RPP should activate only when the relation has the structural affordance for that pattern.
+
+Implemented RPPs may also read `FutureConstraintEvent` as a bounded score component. This is how prior history becomes a present pattern tendency:
+
+```text
+irreversibility / operative label / reconstructed memory
+-> FutureConstraintEvent
+-> small RPP activation pressure
+-> RPPActivationEvent with future-constraint evidence refs
+```
+
+This preserves the ontology:
+
+```text
+wrong: the person repeats the pattern because they have a trait.
+better: prior relational history has narrowed future viability, making this pattern structurally easier to re-enter.
+```
 
 ---
 

@@ -20,14 +20,15 @@ class MemoryReconstructionEngine:
 
     def update(self, state: SimulationState, local_events: list[Event]) -> list[MemoryReconstruction]:
         self._decay_existing(state)
+        future_constraints = [event for event in local_events if event.event_type == "FutureConstraintEvent"]
         candidates: list[MemoryReconstruction] = []
         for event in local_events:
             if event.event_type == "IrreversibilityEvent":
-                candidates.extend(self._irreversibility_memories(state, event))
+                candidates.extend(self._irreversibility_memories(state, event, future_constraints))
             elif event.event_type == "OperativeClassificationEvent":
-                candidates.extend(self._classification_memories(state, event))
+                candidates.extend(self._classification_memories(state, event, future_constraints))
             elif event.event_type == "RecognitionEvent":
-                candidates.extend(self._recognition_memories(state, event))
+                candidates.extend(self._recognition_memories(state, event, future_constraints))
         accepted = [candidate for candidate in candidates if candidate.memory.salience >= self.config.get("min_salience", 0.35)]
         self._apply(state, accepted)
         return accepted
@@ -42,7 +43,12 @@ class MemoryReconstructionEngine:
             if key.startswith("memory_bias."):
                 state.relation_metrics[key] = clamp(state.relation_metrics[key] - decay)
 
-    def _irreversibility_memories(self, state: SimulationState, event: Event) -> list[MemoryReconstruction]:
+    def _irreversibility_memories(
+        self,
+        state: SimulationState,
+        event: Event,
+        future_constraints: list[Event],
+    ) -> list[MemoryReconstruction]:
         weight = self._weight("irreversibility")
         category = str(event.payload.get("category", "irreversible_relation_shift"))
         description = str(event.payload.get("description", category))
@@ -61,11 +67,17 @@ class MemoryReconstructionEngine:
                         -0.72,
                         clamp(0.62 + score * 0.28),
                         ["fate_lock", category],
+                        self._future_context(str(owner), future_constraints),
                     )
                 )
         return memories
 
-    def _classification_memories(self, state: SimulationState, event: Event) -> list[MemoryReconstruction]:
+    def _classification_memories(
+        self,
+        state: SimulationState,
+        event: Event,
+        future_constraints: list[Event],
+    ) -> list[MemoryReconstruction]:
         weight = self._weight("classification")
         label = str(event.payload.get("label", "unnamed_classification"))
         target = str(event.payload.get("target_process_id") or "relation")
@@ -82,12 +94,22 @@ class MemoryReconstructionEngine:
                 -0.48 if owner == target else -0.36,
                 clamp(0.54 + score * 0.3),
                 ["operative_label", label],
+                self._future_context(
+                    owner,
+                    future_constraints,
+                    {"truth_integration", "recognition_access", "memory_integration"},
+                ),
             )
             for owner in owners
             if owner in state.processes
         ]
 
-    def _recognition_memories(self, state: SimulationState, event: Event) -> list[MemoryReconstruction]:
+    def _recognition_memories(
+        self,
+        state: SimulationState,
+        event: Event,
+        future_constraints: list[Event],
+    ) -> list[MemoryReconstruction]:
         outcome = str(event.payload.get("result", "none"))
         if outcome in {"granted", "partial"}:
             return []
@@ -114,6 +136,11 @@ class MemoryReconstructionEngine:
                     -0.58,
                     0.68,
                     ["injury_reconstruction", outcome],
+                    self._future_context(
+                        holder,
+                        future_constraints,
+                        {"recognition_access", "repair_availability", "memory_integration"},
+                    ),
                 )
             )
         if demanded_from in state.processes:
@@ -127,6 +154,11 @@ class MemoryReconstructionEngine:
                     -0.34,
                     0.56,
                     ["defensive_reconstruction", outcome],
+                    self._future_context(
+                        demanded_from,
+                        future_constraints,
+                        {"speech_access", "face_continuation", "repair_availability"},
+                    ),
                 )
             )
         return memories
@@ -141,25 +173,77 @@ class MemoryReconstructionEngine:
         valence: float,
         confidence: float,
         biases: list[str],
+        future_context: dict[str, Any] | None = None,
     ) -> MemoryReconstruction:
+        future_context = future_context or {"future_constraint_pressure": 0.0, "future_constraint_refs": []}
+        future_pressure = clamp(float(future_context.get("future_constraint_pressure", 0.0)))
         memory = MemoryTrace(
             memory_id=f"mem-{owner}-{event.event_id}",
             owner_process_id=owner,
             source_event_id=event.event_id,
             remembered_as=remembered_as,
-            salience=clamp(salience),
+            salience=clamp(salience + future_pressure * 0.06 + self._relevance_pressure(state, owner, biases) * 0.08),
             valence=max(-1.0, min(1.0, round(valence, 4))),
-            confidence=clamp(confidence),
+            confidence=clamp(confidence + future_pressure * 0.03 + self._relevance_pressure(state, owner, biases) * 0.035),
             reconstruction_biases=biases,
         )
+        relevance_pressure = self._relevance_pressure(state, owner, biases)
         evidence = {
             "tick": state.tick,
             "source_event_type": event.event_type,
             "source_event_id": event.event_id,
             "remembered_as": remembered_as,
             "biases": biases,
+            "relevance_pressure": relevance_pressure,
         }
+        if future_context.get("future_constraint_refs"):
+            evidence["future_constraint_pressure"] = future_pressure
+            evidence["future_constraint_refs"] = list(future_context["future_constraint_refs"])
         return MemoryReconstruction(memory=memory, source_event_type=event.event_type, evidence=evidence)
+
+    def _future_context(
+        self,
+        owner: str,
+        future_constraints: list[Event],
+        relevant_requirements: set[str] | None = None,
+    ) -> dict[str, Any]:
+        matches: list[Event] = []
+        for event in future_constraints:
+            payload = event.payload
+            affected = {str(item) for item in payload.get("affected_processes", [])}
+            constrained = {str(item) for item in payload.get("constrained_requirements", [])}
+            owner_match = owner in affected or "relation" in affected
+            requirement_match = not relevant_requirements or bool(constrained.intersection(relevant_requirements))
+            if owner_match and requirement_match:
+                matches.append(event)
+        if not matches:
+            return {"future_constraint_pressure": 0.0, "future_constraint_refs": []}
+        pressure = max((self._payload_float(event, "intensity") for event in matches), default=0.0)
+        return {
+            "future_constraint_pressure": clamp(pressure),
+            "future_constraint_refs": sorted({event.event_id for event in matches}),
+        }
+
+    def _payload_float(self, event: Event, key: str) -> float:
+        try:
+            return clamp(float(event.payload.get(key, 0.0)))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _relevance_pressure(self, state: SimulationState, owner: str, biases: list[str]) -> float:
+        markers = set()
+        if {"injury_reconstruction", "misunderstood", "refused"}.intersection(biases):
+            markers.add("recognition_claim")
+        if {"defensive_reconstruction", "postponed", "unspeakable"}.intersection(biases):
+            markers.add("exit_threat")
+            markers.add("delayed_reply")
+        if "fate_lock" in biases:
+            markers.add("double_bind")
+        values = [
+            state.relation_metrics.get(f"relevance_field.{owner}.{marker}", 0.0)
+            for marker in markers
+        ]
+        return clamp(max(values, default=0.0))
 
     def _apply(self, state: SimulationState, reconstructions: list[MemoryReconstruction]) -> None:
         existing = {memory.memory_id for process in state.processes.values() for memory in process.memory_traces}

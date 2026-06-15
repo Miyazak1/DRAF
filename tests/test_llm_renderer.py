@@ -23,6 +23,8 @@ def test_deterministic_renderer_writes_story_markdown(tmp_path):
     assert "# 共享公寓：未解决的牺牲" in text
     assert "## 时间线" in text
     assert "参与者：" in text
+    assert "底层依据：" in text
+    assert "可存续性压力" in text
 
 
 def test_render_payload_contains_render_canon(tmp_path):
@@ -35,6 +37,8 @@ def test_render_payload_contains_render_canon(tmp_path):
 
     assert payload["render_canon"]["cast"]["p1"]["name"] == "许知遥"
     assert payload["render_canon"]["cast"]["p2"]["name"] == "沈砚"
+    assert payload["story"][0]["viability"]
+    assert "affordance_width" in payload["story"][0]["viability"]
 
 
 def test_llm_renderer_requires_model_and_key(tmp_path, monkeypatch):
@@ -107,3 +111,5 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert text == "ok\n"
     assert '"thinking": {"type": "enabled"}' in body
     assert '"reasoning_effort": "high"' in body
+    assert "viability" in body
+    assert "causes not present in viability/action/expression/recognition evidence" in body

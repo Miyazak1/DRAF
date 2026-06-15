@@ -524,6 +524,7 @@ SchedulerDiagnostics
 - rejected_tick_types
 - time_delta_candidates
 - selected_time_delta
+- viability_rhythm
 - candidate_scenes
 - selected_scene
 - rejected_scene_reasons
@@ -532,6 +533,20 @@ SchedulerDiagnostics
 ```
 
 Diagnostics are required for debugging and validation.
+
+`viability_rhythm` is a state-only preview used before tick events exist. It may include:
+
+```text
+- viability_pressure
+- latent_instability
+- micro_readiness
+- scene_readiness
+- scene_viability_bias
+- micro_viability_bias
+- latent_relief
+```
+
+This preview may only bias timing. It must not create a scene, select an action, or authorize a narrative beat.
 
 ---
 
@@ -551,6 +566,16 @@ elif micro_interaction_score >= 0.45:
 else:
   tick_type = latent
 ```
+
+The MVP scheduler may add a bounded viability rhythm bias:
+
+```text
+scene_score += min(0.018, scene_readiness * tiny_weight)
+micro_interaction_score += min(0.014, micro_readiness * tiny_weight)
+micro_interaction_score -= min(0.012, latent_instability * tiny_weight)
+```
+
+These terms are rhythm controls, not plot controls.
 
 ### 14.2 MVP Time Delta
 

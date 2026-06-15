@@ -3,7 +3,7 @@ from __future__ import annotations
 from rpf.core.models import SimulationState, TickContext, clamp
 from rpf.core.events import Event
 from rpf.core.semantics import defensive_memory, injury_memory
-from rpf.rpps.base import Activation, BaseRPP
+from rpf.rpps.base import Activation, BaseRPP, activation_evidence, future_constraint_pressure
 
 
 class PursuitWithdrawalRPP(BaseRPP):
@@ -16,6 +16,11 @@ class PursuitWithdrawalRPP(BaseRPP):
         abandonment = p1.relevance_triggers.get("delayed_reply", 0.0)
         autonomy = p2.threat_sensitivity.get("being_controlled", 0.0)
         recognition = max((d.current_pressure for d in p1.recognition_demands), default=0.0)
+        future_pressure, future_refs = future_constraint_pressure(
+            events,
+            requirements={"recognition_access", "presence_continuation", "repair_availability"},
+            type_terms={"absence", "unreachable", "recognition", "memory"},
+        )
         weights = self.config["weights"]  # type: ignore[index]
         score = (
             (weights["delayed_signal"] if delayed else 0.0)
@@ -25,9 +30,10 @@ class PursuitWithdrawalRPP(BaseRPP):
             + state.relation_metrics.get("repair_debt", 0.0) * weights["repair_debt"]
             + injury_memory(state) * weights.get("injury_memory", 0.0)
             + defensive_memory(state) * weights.get("defensive_memory", 0.0)
+            + future_pressure * weights.get("future_constraint_pressure", 0.02)
         )
         if context.tick_type in {"micro_interaction", "scene"} and score >= self.config["threshold"]:  # type: ignore[operator]
-            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], [e.event_id for e in events[-3:]], "checking and withdrawal reinforce each other")
+            return Activation(self.rpp_id, clamp(score), ["p1", "p2"], activation_evidence(events, future_refs, window=3), "checking and withdrawal reinforce each other")
         return None
 
     def apply(self, state: SimulationState, activation: Activation) -> None:

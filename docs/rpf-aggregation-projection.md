@@ -277,12 +277,19 @@ PersonView is generated from:
 
 - stabilized RPPs
 - embodied habitus
+- disposition sedimentation traces
 - field positions
 - relation-specific profiles
 - operative classifications
 - repeated action affordances
 - recognition demand history
 - irreversibility records
+
+`DispositionSedimentationEvent` is a causal process trace.
+
+`PersonView` is only a projection over those traces.
+
+The simulator must not reverse this relationship.
 
 ### 5.1 PersonView Fields
 
@@ -327,6 +334,7 @@ RelationshipView is generated from:
 
 - active bindings
 - recurring RPPs
+- relation sedimentation traces
 - recognition conflicts
 - communication loops
 - repair patterns
@@ -334,6 +342,45 @@ RelationshipView is generated from:
 - shared irreversibles
 - public/private definitions
 - exit asymmetry
+
+`RelationSedimentationEvent` is a causal relation-process trace.
+
+`RelationshipView` is a projection over those traces.
+
+The simulator must not reverse this relationship.
+
+Allowed feedback path:
+
+```text
+RelationSedimentationEvent
+-> relation_sediment.* metrics
+-> scheduler / viability / affordance / recognition / fate evidence
+-> later events
+-> updated RelationshipView
+```
+
+Forbidden feedback path:
+
+```text
+RelationshipView phase label
+-> direct action, recognition, repair, fate, or LLM outcome
+```
+
+Relation sedimentation may contribute lower evidence such as:
+
+- recognition debt
+- repair access narrowing
+- symbolic accounting load
+- future lock load
+- shared fate load
+- public definition load
+- asymmetry load
+- memory saturation
+- mutual predictability load
+
+These are not relationship labels.
+
+They are slow constraints that make later recognition, repair, exit, avoidance, and public definition more or less available.
 
 ### 6.1 Relationship Phase Labels
 
