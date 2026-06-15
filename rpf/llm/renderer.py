@@ -21,6 +21,9 @@ LABELS = {
     "available": "可用",
     "restricted": "受限",
     "blocked": "被遮蔽",
+    "institutional_silencing": "制度静默",
+    "public_exposure_forces_movement": "公共曝光推动调查",
+    "procedural_force_opens_access": "程序力量打开权限",
     "micro_interaction": "微交互",
     "scene": "场景",
     "latent": "潜伏",
@@ -110,6 +113,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         "",
         _case_ledger_line(case_ledger),
         f"- 调查更新：{len(inquiry_trace)}。最近焦点：{_latest_inquiry_focus(inquiry_trace)}。",
+        f"- 制度压力：{_institutional_pressure_summary(inquiry_trace)}",
         f"- 地点耦合：{_location_coupling_summary(inquiry_trace)}",
         f"- 证据可达性：{_evidence_access_summary(inquiry_trace)}",
         f"- 案件记忆：{_case_memory_summary(memory_trace)}",
@@ -203,6 +207,24 @@ def _location_coupling_summary(inquiry_trace: list[dict[str, Any]]) -> str:
         f"{after.get('location_label') or after.get('location_id') or '-'}；"
         f"地点压力 {_fmt(after.get('location_pressure'))}，污染 {_fmt(after.get('contamination'))}，"
         f"地点可达 {_fmt(after.get('location_accessibility'))}；效应：{effects or '-'}"
+    )
+
+
+def _institutional_pressure_summary(inquiry_trace: list[dict[str, Any]]) -> str:
+    institutional = [
+        item
+        for item in inquiry_trace
+        if item.get("event_type") == "InstitutionalPressureEvent" or item.get("institutional_effect")
+    ]
+    if not institutional:
+        return "-"
+    latest = institutional[-1]
+    return (
+        f"{_label(latest.get('institutional_effect', '-'))}；"
+        f"静默 {_fmt(latest.get('silencing_pressure'))}，"
+        f"曝光 {_fmt(latest.get('public_exposure'))}，"
+        f"程序 {_fmt(latest.get('procedural_force'))}，"
+        f"权限 {_fmt(latest.get('permission_width'))}"
     )
 
 
@@ -323,6 +345,7 @@ def llm_markdown(
                 "changed investigation progress or contamination state",
                 "changed evidence accessibility state",
                 "changed location-evidence coupling state",
+                "changed institutional pressure state",
                 "changed case memory reconstruction",
                 "causes not present in viability/action/expression/recognition evidence",
             ],

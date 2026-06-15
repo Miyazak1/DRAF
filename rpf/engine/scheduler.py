@@ -19,6 +19,7 @@ class TemporalScheduler:
         remembered_history = memory_pressure(state)
         relevance_load = self._relevance_load(state)
         inquiry_pressure = self._inquiry_pressure(state)
+        institutional_pressure = self._institutional_pressure(state)
         fatigue = sum(p.fatigue for p in state.processes.values()) / max(1, len(state.processes))
         recognition = max(
             (d.current_pressure for p in state.processes.values() for d in p.recognition_demands),
@@ -50,6 +51,7 @@ class TemporalScheduler:
             + remembered_history * scene_weights.get("memory_pressure", 0.0)
             + relevance_load * scene_weights.get("relevance_load", 0.045)
             + inquiry_pressure * scene_weights.get("inquiry_pressure", 0.075)
+            + institutional_pressure * scene_weights.get("institutional_pressure", 0.052)
             + fatigue * scene_weights["mean_fatigue"]
             + scene_viability_bias
         )
@@ -60,6 +62,7 @@ class TemporalScheduler:
             + remembered_history * micro_weights.get("memory_pressure", 0.0)
             + relevance_load * micro_weights.get("relevance_load", 0.035)
             + inquiry_pressure * micro_weights.get("inquiry_pressure", 0.045)
+            + institutional_pressure * micro_weights.get("institutional_pressure", 0.028)
             + (state.tick % 3 == 1) * micro_weights["routine_overlap_bonus"]
             + scene_score * micro_weights["scene_score"]
             + micro_viability_bias
@@ -93,6 +96,7 @@ class TemporalScheduler:
                 "memory_pressure": round(remembered_history, 4),
                 "relevance_load": round(relevance_load, 4),
                 "inquiry_pressure": round(inquiry_pressure, 4),
+                "institutional_pressure": round(institutional_pressure, 4),
                 "mean_fatigue": round(fatigue, 4),
                 "recognition_pressure": round(recognition, 4),
                 "viability_pressure": round(viability_preview.get("viability_pressure", 0.0), 4),
@@ -142,3 +146,12 @@ class TemporalScheduler:
         )
         values = [float(state.relation_metrics.get(key, 0.0) or 0.0) for key in keys]
         return min(1.0, sum(values))
+
+    def _institutional_pressure(self, state: SimulationState) -> float:
+        keys = (
+            "institutional.silencing_pressure",
+            "institutional.public_exposure",
+        )
+        values = [float(state.relation_metrics.get(key, 0.0) or 0.0) for key in keys]
+        audience = float(state.field_state.audience_pressure.get("institutional_gatekeeping", 0.0) or 0.0)
+        return min(1.0, sum(values) + audience)

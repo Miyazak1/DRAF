@@ -87,6 +87,9 @@ class AffordanceEngine:
         inquiry_contamination = state.relation_metrics.get("inquiry.contamination_load", 0.0)
         inquiry_suppression = state.relation_metrics.get("inquiry.suppression_load", 0.0)
         inquiry_relationship_risk = state.relation_metrics.get("inquiry.relationship_risk", 0.0)
+        institutional_silencing = state.relation_metrics.get("institutional.silencing_pressure", 0.0)
+        institutional_exposure = state.relation_metrics.get("institutional.public_exposure", 0.0)
+        institutional_gatekeeping = state.field_state.audience_pressure.get("institutional_gatekeeping", 0.0)
         remembered_history = memory_pressure(state)
         injury_history = injury_memory(state)
         defensive_history = defensive_memory(state)
@@ -305,6 +308,8 @@ class AffordanceEngine:
                 "relation_public_definition": public_definition * 0.03,
                 "inquiry_progress_pressure": inquiry_progress * 0.22,
                 "inquiry_contamination_load": inquiry_contamination * 0.16,
+                "institutional_public_exposure": institutional_exposure * 0.18,
+                "institutional_gatekeeping": institutional_gatekeeping * 0.1,
             },
             0.66,
             "the file becomes less like evidence and more like a demand for testimony",
@@ -328,6 +333,8 @@ class AffordanceEngine:
                 "relevance_recognition_claim": relevance["recognition_claim"] * 0.04,
                 "inquiry_suppression_load": inquiry_suppression * 0.22,
                 "inquiry_relationship_risk": inquiry_relationship_risk * 0.16,
+                "institutional_silencing_pressure": institutional_silencing * 0.2,
+                "institutional_gatekeeping": institutional_gatekeeping * 0.12,
             },
             0.78,
             "your memory is needed, but using it may damage the shared reality",
@@ -350,6 +357,8 @@ class AffordanceEngine:
                 "relevance_double_bind": relevance["double_bind"] * 0.05,
                 "inquiry_contamination_load": inquiry_contamination * 0.24,
                 "inquiry_relationship_risk": inquiry_relationship_risk * 0.18,
+                "institutional_silencing_pressure": institutional_silencing * 0.14,
+                "institutional_public_exposure": institutional_exposure * 0.1,
             },
             0.86,
             "the symbol cannot be verified, but not naming it now changes the case",

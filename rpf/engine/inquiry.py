@@ -62,6 +62,8 @@ class InquiryEngine:
             },
         )
         before = dict(item_state)
+        institutional = self._institutional_pressure(state, focus, context)
+        self._apply_institutional_pressure(state, focus, item_state, institutional)
         accessibility_before = self._accessibility_payload(focus, item_state)
         item_state["progress"] = clamp(item_state["progress"] + movement["progress_delta"])
         item_state["contamination"] = clamp(item_state["contamination"] + movement["contamination_delta"])
@@ -114,6 +116,22 @@ class InquiryEngine:
                 "LatentTimeEvent",
             }
         ][-5:]
+        institutional_payload = {
+            "case_id": self.case_ledger.get("case_id"),
+            "focus_type": focus["type"],
+            "focus_id": focus["id"],
+            "label": focus["label"],
+            "location": location_after,
+            "tick_type": context.tick_type,
+            "silencing_pressure": institutional["silencing_pressure"],
+            "public_exposure": institutional["public_exposure"],
+            "procedural_force": institutional["procedural_force"],
+            "permission_width": institutional["permission_width"],
+            "suppression_delta": institutional["suppression_delta"],
+            "access_delta": institutional["access_delta"],
+            "pressure_sources": institutional["pressure_sources"],
+            "institutional_effect": self._institutional_effect(institutional),
+        }
         access_payload = {
             "case_id": self.case_ledger.get("case_id"),
             "focus_type": focus["type"],
@@ -143,6 +161,7 @@ class InquiryEngine:
             "coupling_reason": self._location_reason(focus, location_after),
         }
         return [
+            InquiryUpdate(event_type="InstitutionalPressureEvent", payload=institutional_payload, causal_refs=causal_refs),
             InquiryUpdate(event_type="LocationEvidenceCouplingEvent", payload=location_payload, causal_refs=causal_refs),
             InquiryUpdate(event_type="EvidenceAccessibilityEvent", payload=access_payload, causal_refs=causal_refs),
             InquiryUpdate(event_type="InvestigationUpdateEvent", payload=payload, causal_refs=causal_refs),
@@ -247,6 +266,8 @@ class InquiryEngine:
             "location_label": str(location.get("label") or location_id or "unknown location"),
             "location_effects": [str(effect) for effect in location.get("field_effects", []) or []],
             "location_scene_biases": [str(bias) for bias in location.get("scene_biases", []) or []],
+            "pressure_tags": [str(tag) for tag in item.get("pressure_tags", []) or []],
+            "pressures": [str(pressure) for pressure in item.get("pressures", []) or []],
             "ledger_refs": [item_id, *[str(ref) for ref in item.get("linked_evidence", []) or []]],
         }
 
@@ -351,6 +372,105 @@ class InquiryEngine:
             - movement["relationship_risk_delta"] * 0.12
         )
         location_state["access_status"] = self._access_status(float(location_state["location_accessibility"]))
+
+    def _institutional_pressure(self, state: SimulationState, focus: dict[str, Any], context: TickContext) -> dict[str, Any]:
+        audience = state.field_state.audience_pressure
+        tags = set(focus.get("pressure_tags", [])) | set(focus.get("pressures", [])) | set(focus.get("location_effects", []))
+        local_silence = float(audience.get("local_police_silence", 0.0) or 0.0)
+        press_attention = float(audience.get("county_press_attention", 0.0) or 0.0)
+        families_waiting = float(audience.get("victim_families_waiting", 0.0) or 0.0)
+        silencing = clamp(
+            local_silence * 0.46
+            + ("institutional_rot" in tags) * 0.16
+            + ("public_silence" in tags) * 0.12
+            + ("institutional_silence" in tags) * 0.1
+        )
+        public_exposure = clamp(
+            press_attention * 0.36
+            + families_waiting * 0.24
+            + ("public_attention" in tags) * 0.16
+            + ("victim_families_waiting" in tags) * 0.08
+        )
+        procedural_force = clamp(
+            press_attention * 0.22
+            + ("procedural_gap" in tags) * 0.18
+            + ("institutional_compromise" in tags) * 0.12
+            + (context.tick_type == "scene") * 0.05
+        )
+        permission_width = clamp(0.48 + procedural_force * 0.34 + public_exposure * 0.08 - silencing * 0.28)
+        suppression_delta = clamp(silencing * 0.04 + public_exposure * 0.012)
+        access_delta = max(-0.08, min(0.08, procedural_force * 0.035 - silencing * 0.05 - public_exposure * 0.012))
+        return {
+            "silencing_pressure": silencing,
+            "public_exposure": public_exposure,
+            "procedural_force": procedural_force,
+            "permission_width": permission_width,
+            "suppression_delta": round(suppression_delta, 4),
+            "access_delta": round(access_delta, 4),
+            "pressure_sources": {
+                "local_police_silence": round(local_silence, 4),
+                "county_press_attention": round(press_attention, 4),
+                "victim_families_waiting": round(families_waiting, 4),
+                "tags": sorted(tags),
+            },
+        }
+
+    def _apply_institutional_pressure(
+        self,
+        state: SimulationState,
+        focus: dict[str, Any],
+        item_state: dict[str, Any],
+        institutional: dict[str, Any],
+    ) -> None:
+        item_state["suppression"] = clamp(float(item_state.get("suppression", 0.0) or 0.0) + float(institutional["suppression_delta"]))
+        item_state["accessibility"] = clamp(float(item_state.get("accessibility", 1.0) or 0.0) + float(institutional["access_delta"]))
+        item_state["access_status"] = self._access_status(float(item_state["accessibility"]))
+        state.relation_metrics["institutional.silencing_pressure"] = clamp(
+            float(state.relation_metrics.get("institutional.silencing_pressure", 0.0) or 0.0)
+            + float(institutional["silencing_pressure"]) * 0.025
+        )
+        state.relation_metrics["institutional.public_exposure"] = clamp(
+            float(state.relation_metrics.get("institutional.public_exposure", 0.0) or 0.0)
+            + float(institutional["public_exposure"]) * 0.02
+        )
+        state.relation_metrics["institutional.permission_width"] = clamp(
+            float(state.relation_metrics.get("institutional.permission_width", 0.0) or 0.0) * 0.85
+            + float(institutional["permission_width"]) * 0.15
+        )
+        state.field_state.audience_pressure["institutional_gatekeeping"] = clamp(
+            float(state.field_state.audience_pressure.get("institutional_gatekeeping", 0.0) or 0.0)
+            + float(institutional["silencing_pressure"]) * 0.018
+        )
+        state.field_state.material_pressures["institutional_evidence_gatekeeping"] = clamp(
+            float(state.field_state.material_pressures.get("institutional_evidence_gatekeeping", 0.0) or 0.0)
+            + max(0.0, -float(institutional["access_delta"])) * 0.25
+        )
+        location_id = str(focus.get("location_id") or "")
+        if location_id:
+            location_state = self.location_states.setdefault(
+                location_id,
+                {"location_pressure": 0.0, "contamination": 0.0, "location_accessibility": 1.0, "visit_count": 0.0},
+            )
+            location_state["location_pressure"] = clamp(
+                float(location_state.get("location_pressure", 0.0) or 0.0)
+                + float(institutional["silencing_pressure"]) * 0.025
+                + float(institutional["public_exposure"]) * 0.012
+            )
+            location_state["location_accessibility"] = clamp(
+                float(location_state.get("location_accessibility", 1.0) or 0.0)
+                + float(institutional["access_delta"]) * 0.5
+            )
+            location_state["access_status"] = self._access_status(float(location_state["location_accessibility"]))
+
+    def _institutional_effect(self, institutional: dict[str, Any]) -> str:
+        silencing = float(institutional.get("silencing_pressure", 0.0) or 0.0)
+        public = float(institutional.get("public_exposure", 0.0) or 0.0)
+        procedural = float(institutional.get("procedural_force", 0.0) or 0.0)
+        if silencing >= max(public, procedural):
+            return "institutional_silencing"
+        if public >= max(silencing, procedural):
+            return "public_exposure_forces_movement"
+        return "procedural_force_opens_access"
 
     def _accessibility_payload(self, focus: dict[str, Any], item_state: dict[str, float]) -> dict[str, Any]:
         accessibility = float(item_state.get("accessibility", 1.0) or 0.0)

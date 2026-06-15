@@ -225,6 +225,9 @@ const ZH = {
   testimony_probe_raises_retraction_pressure: "证词追问提高撤回压力",
   symbol_becomes_speakable_but_unstable: "符号被说出但不稳定",
   case_pressure_sediments: "案件压力沉积",
+  institutional_silencing: "制度静默",
+  public_exposure_forces_movement: "公共曝光推动调查",
+  procedural_force_opens_access: "程序力量打开权限",
 };
 
 function zh(value) {
@@ -337,6 +340,15 @@ function renderCaseLedger() {
 }
 
 function inquiryText(item) {
+  if (item.event_type === "InstitutionalPressureEvent") {
+    return ledgerItem(`Tick ${item.tick} · ${item.focus_id || "institution"}`, item.institutional_effect || item.label || "-", [
+      "制度压力",
+      `静默 ${fmt(item.silencing_pressure)}`,
+      `曝光 ${fmt(item.public_exposure)}`,
+      `程序 ${fmt(item.procedural_force)}`,
+      `权限 ${fmt(item.permission_width)}`,
+    ]);
+  }
   if (item.event_type === "LocationEvidenceCouplingEvent") {
     const after = item.location_after || {};
     const delta = item.location_delta || {};
