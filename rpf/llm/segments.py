@@ -68,6 +68,7 @@ def next_render_segment(
         "render_canon": payload.get("render_canon", {}),
         "case_ledger": payload.get("case_ledger", {}),
         "inquiry_trace": payload.get("inquiry", []),
+        "memory_trace": payload.get("memory", []),
         "summary": payload.get("summary", {}),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
         "person_views": payload.get("derived_views", {}).get("person_views", {}),
@@ -212,6 +213,12 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             for item in segment.get("inquiry_trace", [])[-12:]
             if int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
         ],
+        "case_memory_trace": [
+            item
+            for item in segment.get("memory_trace", [])[-16:]
+            if "case_memory_contamination" in (item.get("reconstruction_biases") or [])
+            and int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
+        ],
         "previous_story_tail": [
             {
                 "segment_id": item.get("segment_id"),
@@ -243,6 +250,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "compress_repeated_frames": True,
             "case_ledger_is_authoritative": True,
             "inquiry_trace_is_authoritative": True,
+            "case_memory_trace_is_authoritative": True,
             "do_not_add_case_facts_evidence_witnesses_or_culprits": True,
             "if_multiple_frames_have_the_same_summary": "write them as a sustained pattern with small pressure changes; do not restage the same dialogue or objects repeatedly",
         },

@@ -432,6 +432,13 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
         if line.strip()
     ]
     investigation_events = [event for event in timeline_events if event["event_type"] == "InvestigationUpdateEvent"]
+    memory_events = [event for event in timeline_events if event["event_type"] == "MemoryReconstructionEvent"]
+    investigation_event_ids = {event["event_id"] for event in investigation_events}
+    case_memory_events = [
+        event
+        for event in memory_events
+        if "case_memory_contamination" in event["payload"].get("reconstruction_biases", [])
+    ]
 
     assert inquiry
     assert investigation_events
@@ -440,6 +447,10 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     assert any(item["relational_feedback"]["conflict_pressure"] > 0 for item in inquiry)
     assert any(event["source_layer"] == "inquiry" for event in investigation_events)
     assert any(event["causal_refs"] for event in investigation_events)
+    assert case_memory_events
+    assert any(investigation_event_ids.intersection(event["causal_refs"]) for event in case_memory_events)
+    assert any("investigative_fixation" in event["payload"]["reconstruction_biases"] for event in case_memory_events)
+    assert any("witness_memory_destabilized" in event["payload"]["reconstruction_biases"] for event in case_memory_events)
     assert all("inquiry_pressure" in item["input_factors"] for item in scheduler)
     assert any(item["input_factors"]["inquiry_pressure"] > 0 for item in scheduler[1:])
     assert any(

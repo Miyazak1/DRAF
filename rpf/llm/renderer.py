@@ -75,6 +75,7 @@ def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dic
         "render_canon": payload.get("render_canon", {}),
         "case_ledger": payload.get("case_ledger", {}),
         "inquiry_trace": payload.get("inquiry", []),
+        "memory_trace": payload.get("memory", []),
         "summary": payload.get("summary"),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
         "person_views": payload.get("derived_views", {}).get("person_views", {}),
@@ -89,6 +90,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
     canon = render_payload.get("render_canon", {})
     case_ledger = render_payload.get("case_ledger", {}) or {}
     inquiry_trace = render_payload.get("inquiry_trace", []) or []
+    memory_trace = render_payload.get("memory_trace", []) or []
     title = canon.get("title") or "RPF 故事回放"
     lines = [
         f"# {title}",
@@ -105,6 +107,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         "",
         _case_ledger_line(case_ledger),
         f"- 调查更新：{len(inquiry_trace)}。最近焦点：{_latest_inquiry_focus(inquiry_trace)}。",
+        f"- 案件记忆：{_case_memory_summary(memory_trace)}",
         "",
         "## 时间线",
         "",
@@ -161,6 +164,23 @@ def _latest_inquiry_focus(inquiry_trace: list[dict[str, Any]]) -> str:
         f"{latest.get('label') or latest.get('focus_id') or '-'}，"
         f"进展 {_fmt(state.get('progress'))}，污染 {_fmt(state.get('contamination'))}"
     )
+
+
+def _case_memory_summary(memory_trace: list[dict[str, Any]]) -> str:
+    case_memories = [
+        item
+        for item in memory_trace
+        if "case_memory_contamination" in (item.get("reconstruction_biases") or [])
+    ]
+    if not case_memories:
+        return "-"
+    focuses = []
+    for item in case_memories[-6:]:
+        remembered_as = str(item.get("remembered_as", ""))
+        parts = remembered_as.split(":")
+        if len(parts) >= 4:
+            focuses.append(parts[2])
+    return f"{len(case_memories)} 条；最近焦点：{'，'.join(sorted(set(focuses))) or '-'}。"
 
 
 def _label(value: Any) -> str:
@@ -244,6 +264,7 @@ def llm_markdown(
                 "case_ledger.contradictions",
                 "case_ledger.unverified_anomalies",
                 "inquiry_trace",
+                "memory_trace",
             ],
             "must_not_invent": [
                 "new characters",
@@ -260,6 +281,7 @@ def llm_markdown(
                 "changed recognition outcomes",
                 "changed irreversible records",
                 "changed investigation progress or contamination state",
+                "changed case memory reconstruction",
                 "causes not present in viability/action/expression/recognition evidence",
             ],
             "literary_freedom": [

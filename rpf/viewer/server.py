@@ -459,6 +459,9 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
             summary_parts.append(_fate_sentence(fates))
         if memories:
             summary_parts.append(_memory_sentence(memories))
+            case_memory = _case_memory_sentence(memories)
+            if case_memory:
+                summary_parts.append(case_memory)
         frames.append(
             {
                 "tick": tick_index,
@@ -475,6 +478,8 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "frame_definition": frame_definition,
                 "position_field": position_field,
                 "memory_count": len(memories),
+                "case_memory_count": _case_memory_count(memories),
+                "case_memory_focuses": _case_memory_focuses(memories),
                 "fate_count": len(fates),
                 "pressure": tick.get("input_factors", {}),
                 "time_reason": tick.get("time_mapping_reason", ""),
@@ -708,6 +713,29 @@ def _fate_sentence(fates: list[dict[str, Any]]) -> str:
 def _memory_sentence(memories: list[dict[str, Any]]) -> str:
     owners = sorted({str(item.get("owner_process_id", "")) for item in memories if item.get("owner_process_id")})
     return f"这一步被重构进记忆，影响到 {'、'.join(owners)}。"
+
+
+def _case_memory_count(memories: list[dict[str, Any]]) -> int:
+    return sum(1 for item in memories if "case_memory_contamination" in (item.get("reconstruction_biases") or []))
+
+
+def _case_memory_focuses(memories: list[dict[str, Any]]) -> list[str]:
+    focuses: list[str] = []
+    for item in memories:
+        if "case_memory_contamination" not in (item.get("reconstruction_biases") or []):
+            continue
+        remembered_as = str(item.get("remembered_as", ""))
+        parts = remembered_as.split(":")
+        if len(parts) >= 4:
+            focuses.append(parts[2])
+    return sorted(set(focuses))
+
+
+def _case_memory_sentence(memories: list[dict[str, Any]]) -> str:
+    focuses = _case_memory_focuses(memories)
+    if not focuses:
+        return ""
+    return f"案件线索进入人物记忆，焦点包括：{'、'.join(focuses)}。"
 
 
 def _zh(value: Any) -> str:

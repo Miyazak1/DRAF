@@ -52,10 +52,13 @@ def test_yellow_sign_render_payload_inherits_case_ledger(tmp_path):
 
     assert payload["case_ledger"]["case_title"] == "黄印镇冷案"
     assert payload["inquiry_trace"]
+    assert payload["memory_trace"]
+    assert any("case_memory_contamination" in item["reconstruction_biases"] for item in payload["memory_trace"])
     assert any(item["label"] == "黄漆符号" for item in payload["case_ledger"]["evidence_items"])
     assert "## 案件账本" in text
     assert "黄漆符号" in text
     assert "调查更新" in text
+    assert "案件记忆" in text
 
 
 def test_llm_renderer_requires_model_and_key(tmp_path, monkeypatch):
@@ -131,4 +134,5 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert "viability" in body
     assert "case_ledger" in body
     assert "inquiry_trace" in body
+    assert "memory_trace" in body
     assert "causes not present in viability/action/expression/recognition evidence" in body

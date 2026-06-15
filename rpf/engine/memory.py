@@ -29,6 +29,8 @@ class MemoryReconstructionEngine:
                 candidates.extend(self._classification_memories(state, event, future_constraints))
             elif event.event_type == "RecognitionEvent":
                 candidates.extend(self._recognition_memories(state, event, future_constraints))
+            elif event.event_type == "InvestigationUpdateEvent":
+                candidates.extend(self._inquiry_memories(state, event, future_constraints))
         accepted = [candidate for candidate in candidates if candidate.memory.salience >= self.config.get("min_salience", 0.35)]
         self._apply(state, accepted)
         return accepted
@@ -70,6 +72,64 @@ class MemoryReconstructionEngine:
                         self._future_context(str(owner), future_constraints),
                     )
                 )
+        return memories
+
+    def _inquiry_memories(
+        self,
+        state: SimulationState,
+        event: Event,
+        future_constraints: list[Event],
+    ) -> list[MemoryReconstruction]:
+        weight = max(self._weight("inquiry"), 0.72)
+        payload = event.payload
+        focus_id = str(payload.get("focus_id", "case_focus"))
+        focus_type = str(payload.get("focus_type", "case"))
+        label = str(payload.get("label", focus_id))
+        movement = str(payload.get("movement", "case_pressure_sediments"))
+        state_after = payload.get("state_after", {}) or {}
+        progress = self._dict_float(state_after, "progress")
+        contamination = self._dict_float(state_after, "contamination")
+        suppression = self._dict_float(state_after, "suppression")
+        relationship_risk = self._dict_float(state_after, "relationship_risk")
+        salience = clamp(weight * 0.28 + progress * 0.18 + contamination * 0.22 + suppression * 0.14 + relationship_risk * 0.18)
+        if salience < self.config.get("min_salience", 0.35):
+            return []
+        base_biases = ["case_memory_contamination", focus_type, movement]
+        if contamination >= 0.68:
+            base_biases.append("evidence_contamination_memory")
+        if suppression >= 0.28:
+            base_biases.append("testimony_retraction_pressure")
+        if relationship_risk >= 0.12:
+            base_biases.append("relationalized_case_memory")
+        memories = []
+        if "p1" in state.processes:
+            memories.append(
+                self._memory(
+                    state,
+                    "p1",
+                    event,
+                    f"case_memory:p1:{focus_id}:{label}",
+                    salience,
+                    -0.62 if focus_type in {"testimonies", "evidence_items"} else -0.48,
+                    clamp(0.56 + progress * 0.18 - contamination * 0.16),
+                    [*base_biases, "witness_memory_destabilized"],
+                    self._future_context("p1", future_constraints, {"memory_integration", "truth_integration", "recognition_access"}),
+                )
+            )
+        if "p2" in state.processes:
+            memories.append(
+                self._memory(
+                    state,
+                    "p2",
+                    event,
+                    f"case_memory:p2:{focus_id}:{label}",
+                    clamp(salience * 0.92 + progress * 0.06),
+                    -0.36 if focus_type != "unverified_anomalies" else -0.44,
+                    clamp(0.62 + progress * 0.16 - contamination * 0.12),
+                    [*base_biases, "investigative_fixation"],
+                    self._future_context("p2", future_constraints, {"truth_integration", "speech_access", "repair_availability"}),
+                )
+            )
         return memories
 
     def _classification_memories(
@@ -227,6 +287,12 @@ class MemoryReconstructionEngine:
     def _payload_float(self, event: Event, key: str) -> float:
         try:
             return clamp(float(event.payload.get(key, 0.0)))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _dict_float(self, data: dict[str, Any], key: str) -> float:
+        try:
+            return clamp(float(data.get(key, 0.0)))
         except (TypeError, ValueError):
             return 0.0
 
