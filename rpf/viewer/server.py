@@ -66,6 +66,12 @@ ZH = {
     "testing_the_listener": "测试倾听者",
     "denial_boundary": "拒认边界",
     "controlled_disclosure": "控制透露",
+    "night_recovery": "夜间恢复",
+    "workday_friction": "工作日摩擦",
+    "meal_or_errand_overlap": "吃饭或杂事重叠",
+    "commute_overlap": "通勤重叠",
+    "late_return": "晚归",
+    "waiting_time": "等待时间",
     "claimant": "索取承认者位置",
     "debtor": "负债者位置",
     "defender": "防御者位置",
@@ -426,6 +432,11 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
     positions_by_tick: dict[int, list[dict[str, Any]]] = {}
     for position_update in payload.get("position", []):
         positions_by_tick.setdefault(int(position_update.get("tick", 0)), []).append(position_update)
+    daily_ecology_by_tick = {
+        int(item.get("tick", 0)): item
+        for item in payload.get("environment", [])
+        if item.get("event_type") == "DailyEcologyEvent"
+    }
     memories_by_tick: dict[int, list[dict[str, Any]]] = {}
     for memory in payload.get("memory", []):
         memories_by_tick.setdefault(int(memory.get("tick", 0)), []).append(memory)
@@ -445,6 +456,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
         viability = _viability_summary(viability_by_tick.get(tick_index, {}), tick)
         frame_definition = _frame_definition_summary(frames_by_tick.get(tick_index, []))
         position_field = _position_summary(positions_by_tick.get(tick_index, []))
+        daily_ecology = daily_ecology_by_tick.get(tick_index, {})
         memories = memories_by_tick.get(tick_index, [])
         fates = fate_by_tick.get(tick_index, [])
         phase = projection.get("relationship_phase") or previous_phase or "unknown"
@@ -461,6 +473,8 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
             summary_parts.append(_frame_definition_sentence(frame_definition))
         if position_field:
             summary_parts.append(_position_sentence(position_field))
+        if daily_ecology:
+            summary_parts.append(_daily_ecology_sentence(daily_ecology))
         if recognition:
             summary_parts.append(_recognition_sentence(recognition))
         if inquiry:
@@ -487,6 +501,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "viability": viability,
                 "frame_definition": frame_definition,
                 "position_field": position_field,
+                "daily_ecology": daily_ecology,
                 "memory_count": len(memories),
                 "case_memory_count": _case_memory_count(memories),
                 "case_memory_focuses": _case_memory_focuses(memories),
@@ -679,6 +694,16 @@ def _position_sentence(position_field: dict[str, Any]) -> str:
     if strength >= 0.35:
         return f"关系把 {process_id} 明显推入{label}。"
     return f"关系开始把 {process_id} 推向{label}。"
+
+
+def _daily_ecology_sentence(daily: dict[str, Any]) -> str:
+    phase = _zh(daily.get("routine_phase", "waiting_time"))
+    body = _fmt_report(daily.get("body_load"))
+    tasks = _fmt_report(daily.get("unfinished_tasks"))
+    waiting = _fmt_report(daily.get("waiting_pressure"))
+    if daily.get("routine_phase") == "night_recovery":
+        return f"日常时间进入{phase}，身体负荷 {body}，但等待压力仍有 {waiting}。"
+    return f"日常惯性进入{phase}，未完成杂事 {tasks}，身体负荷 {body}，等待压力 {waiting}。"
 
 
 def _recognition_sentence(recognition: dict[str, Any]) -> str:

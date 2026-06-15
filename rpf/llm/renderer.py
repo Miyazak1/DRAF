@@ -60,6 +60,12 @@ LABELS = {
     "testing_the_listener": "测试倾听者",
     "denial_boundary": "拒认边界",
     "controlled_disclosure": "控制透露",
+    "night_recovery": "夜间恢复",
+    "workday_friction": "工作日摩擦",
+    "meal_or_errand_overlap": "吃饭或杂事重叠",
+    "commute_overlap": "通勤重叠",
+    "late_return": "晚归",
+    "waiting_time": "等待时间",
 }
 
 
@@ -91,6 +97,7 @@ def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dic
         "render_canon": payload.get("render_canon", {}),
         "case_ledger": payload.get("case_ledger", {}),
         "inquiry_trace": payload.get("inquiry", []),
+        "environment_trace": payload.get("environment", []),
         "memory_trace": payload.get("memory", []),
         "summary": payload.get("summary"),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
@@ -106,6 +113,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
     canon = render_payload.get("render_canon", {})
     case_ledger = render_payload.get("case_ledger", {}) or {}
     inquiry_trace = render_payload.get("inquiry_trace", []) or []
+    environment_trace = render_payload.get("environment_trace", []) or []
     memory_trace = render_payload.get("memory_trace", []) or []
     title = canon.get("title") or "RPF 故事回放"
     lines = [
@@ -125,6 +133,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         f"- 调查更新：{len(inquiry_trace)}。最近焦点：{_latest_inquiry_focus(inquiry_trace)}。",
         f"- 制度压力：{_institutional_pressure_summary(inquiry_trace)}",
         f"- 证人策略：{_witness_strategy_summary(inquiry_trace)}",
+        f"- 日常生态：{_daily_ecology_summary(environment_trace)}",
         f"- 地点耦合：{_location_coupling_summary(inquiry_trace)}",
         f"- 证据可达性：{_evidence_access_summary(inquiry_trace)}",
         f"- 案件记忆：{_case_memory_summary(memory_trace)}",
@@ -258,6 +267,19 @@ def _witness_strategy_summary(inquiry_trace: list[dict[str, Any]]) -> str:
     )
 
 
+def _daily_ecology_summary(environment_trace: list[dict[str, Any]]) -> str:
+    daily = [item for item in environment_trace if item.get("event_type") == "DailyEcologyEvent"]
+    if not daily:
+        return "-"
+    latest = daily[-1]
+    return (
+        f"{_label(latest.get('routine_phase', '-'))}；"
+        f"身体负荷 {_fmt(latest.get('body_load'))}，"
+        f"未完成杂事 {_fmt(latest.get('unfinished_tasks'))}，"
+        f"等待压力 {_fmt(latest.get('waiting_pressure'))}"
+    )
+
+
 def _case_memory_summary(memory_trace: list[dict[str, Any]]) -> str:
     case_memories = [
         item
@@ -356,6 +378,7 @@ def llm_markdown(
                 "case_ledger.contradictions",
                 "case_ledger.unverified_anomalies",
                 "inquiry_trace",
+                "environment_trace",
                 "memory_trace",
             ],
             "must_not_invent": [
@@ -377,6 +400,7 @@ def llm_markdown(
                 "changed location-evidence coupling state",
                 "changed institutional pressure state",
                 "changed witness strategy state",
+                "changed daily ecology state",
                 "changed case memory reconstruction",
                 "causes not present in viability/action/expression/recognition evidence",
             ],

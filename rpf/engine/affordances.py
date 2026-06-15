@@ -93,6 +93,17 @@ class AffordanceEngine:
         witness_protective_silence = state.relation_metrics.get("witness_strategy.protective_silence", 0.0)
         witness_disclosure_width = state.relation_metrics.get("witness_strategy.disclosure_width", 0.0)
         witness_confirmation_risk = state.relation_metrics.get("witness_strategy.confirmation_risk", 0.0)
+        daily_body_load = state.relation_metrics.get("daily_ecology.body_load", 0.0)
+        daily_unfinished_tasks = state.relation_metrics.get("daily_ecology.unfinished_tasks", 0.0)
+        daily_routine_overlap = max(
+            state.relation_metrics.get("daily_ecology.routine_overlap", 0.0),
+            spatial.get("routine_overlap", 0.0),
+        )
+        daily_object_friction = max(
+            state.relation_metrics.get("daily_ecology.object_friction", 0.0),
+            material.get("object_friction", 0.0),
+        )
+        daily_waiting_pressure = state.relation_metrics.get("daily_ecology.waiting_pressure", 0.0)
         remembered_history = memory_pressure(state)
         injury_history = injury_memory(state)
         defensive_history = defensive_memory(state)
@@ -140,6 +151,8 @@ class AffordanceEngine:
                 "contribution": contribution * 0.18,
                 "debt_lock": (0.18 if composition == "debt_lock" else 0.0),
                 "material_urgency": urgency * 0.12,
+                "daily_unfinished_tasks": daily_unfinished_tasks * 0.08,
+                "daily_object_friction": daily_object_friction * 0.08,
                 "defensive_memory": defensive_history * 0.02,
                 "sedimented_charged_objects": charged_objects * 0.04,
                 "relation_repair_access_narrowing": repair_access_narrowing * 0.05,
@@ -212,6 +225,8 @@ class AffordanceEngine:
                 "care_dependency": state.relation_metrics.get("care_dependency", 0.0) * 0.3,
                 "binding": binding * 0.18,
                 "fatigue": (p1.fatigue + p2.fatigue) / 2 * 0.14,
+                "daily_body_load": daily_body_load * 0.08,
+                "daily_routine_overlap": daily_routine_overlap * 0.06,
                 "care_bind_double_bind": (0.24 if composition == "care_bind_double_bind" else 0.0),
                 "dependency_inhibition": p2.speech_inhibition.get("dependency_admission", 0.0) * 0.12,
                 "remembered_history": remembered_history * 0.015,
@@ -257,6 +272,9 @@ class AffordanceEngine:
                 "binding": binding * 0.18,
                 "contribution": contribution * 0.18,
                 "conflict": conflict * 0.08,
+                "daily_unfinished_tasks": daily_unfinished_tasks * 0.14,
+                "daily_routine_overlap": daily_routine_overlap * 0.1,
+                "daily_object_friction": daily_object_friction * 0.1,
                 "remembered_history": remembered_history * 0.01,
                 "sedimented_charged_objects": charged_objects * 0.06,
                 "relation_symbolic_accounting": symbolic_accounting * 0.04,
@@ -278,6 +296,8 @@ class AffordanceEngine:
                 "repair_debt": repair_debt * 0.2,
                 "apology_inhibition": p2.speech_inhibition.get("apology", 0.0) * 0.2,
                 "conflict": conflict * 0.16,
+                "daily_body_load": daily_body_load * 0.08,
+                "daily_waiting_pressure": daily_waiting_pressure * 0.08,
                 "recognition_trap": (0.2 if composition == "recognition_trap" else 0.0),
                 "pursuit_withdrawal": active.get("pursuit_withdrawal", 0.0) * 0.1,
                 "defensive_memory": defensive_history * 0.025,

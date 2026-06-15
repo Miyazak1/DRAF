@@ -46,6 +46,8 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert all("relevance_load" in item["input_factors"] for item in scheduler)
     assert all("viability_pressure" in item["input_factors"] for item in scheduler)
     assert all("relation_sediment_load" in item["input_factors"] for item in scheduler)
+    assert all("daily_ecology_pressure" in item["input_factors"] for item in scheduler)
+    assert any(item["input_factors"]["daily_ecology_pressure"] > 0 for item in scheduler[1:])
     assert all("viability_rhythm" in item for item in scheduler)
     assert all("scene_readiness" in item["viability_rhythm"] for item in scheduler)
     assert any(item["viability_rhythm"]["scene_viability_bias"] > 0 for item in scheduler)
@@ -73,6 +75,12 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     )
     assert any(
         key.startswith("relevance_")
+        for item in affordance
+        for candidate in item["candidates"]
+        for key in candidate["evidence"]
+    )
+    assert any(
+        key.startswith("daily_")
         for item in affordance
         for candidate in item["candidates"]
         for key in candidate["evidence"]
@@ -235,8 +243,11 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert environment
     assert any(item["event_type"] == "FieldUpdateEvent" for item in environment)
     assert any(item["event_type"] == "EnactedMicroWorldEvent" for item in environment)
+    assert any(item["event_type"] == "DailyEcologyEvent" for item in environment)
     assert any("spatial_constraints." in item.get("changed_field_path", "") for item in environment)
     assert any(item.get("caused_by_events") for item in environment)
+    assert any(item.get("routine_phase") for item in environment if item["event_type"] == "DailyEcologyEvent")
+    assert any(item.get("deltas", {}).get("fatigue_delta") is not None for item in environment if item["event_type"] == "DailyEcologyEvent")
     assert any(
         item.get("reason") == "sedimented field pressure decays when not fully renewed"
         and item.get("new_value", 0) < item.get("previous_value", 0)
@@ -491,8 +502,10 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     assert any("witness_memory_destabilized" in event["payload"]["reconstruction_biases"] for event in case_memory_events)
     assert all("inquiry_pressure" in item["input_factors"] for item in scheduler)
     assert all("institutional_pressure" in item["input_factors"] for item in scheduler)
+    assert all("daily_ecology_pressure" in item["input_factors"] for item in scheduler)
     assert any(item["input_factors"]["inquiry_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["institutional_pressure"] > 0 for item in scheduler[1:])
+    assert any(item["input_factors"]["daily_ecology_pressure"] > 0 for item in scheduler[1:])
     assert any(
         key.startswith("inquiry_")
         for item in affordance
@@ -507,6 +520,12 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     )
     assert any(
         key.startswith("witness_strategy_")
+        for item in affordance
+        for candidate in item["candidates"]
+        for key in candidate["evidence"]
+    )
+    assert any(
+        key.startswith("daily_")
         for item in affordance
         for candidate in item["candidates"]
         for key in candidate["evidence"]

@@ -52,6 +52,7 @@ def test_yellow_sign_render_payload_inherits_case_ledger(tmp_path):
 
     assert payload["case_ledger"]["case_title"] == "黄印镇冷案"
     assert payload["inquiry_trace"]
+    assert payload["environment_trace"]
     assert payload["memory_trace"]
     assert any("case_memory_contamination" in item["reconstruction_biases"] for item in payload["memory_trace"])
     assert any(item["label"] == "黄漆符号" for item in payload["case_ledger"]["evidence_items"])
@@ -60,6 +61,7 @@ def test_yellow_sign_render_payload_inherits_case_ledger(tmp_path):
     assert "调查更新" in text
     assert "制度压力" in text
     assert "证人策略" in text
+    assert "日常生态" in text
     assert "地点耦合" in text
     assert "证据可达性" in text
     assert "案件记忆" in text
@@ -138,9 +140,11 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert "viability" in body
     assert "case_ledger" in body
     assert "inquiry_trace" in body
+    assert "environment_trace" in body
     assert "memory_trace" in body
     assert "changed evidence accessibility state" in body
     assert "changed location-evidence coupling state" in body
     assert "changed institutional pressure state" in body
     assert "changed witness strategy state" in body
+    assert "changed daily ecology state" in body
     assert "causes not present in viability/action/expression/recognition evidence" in body

@@ -68,6 +68,7 @@ def next_render_segment(
         "render_canon": payload.get("render_canon", {}),
         "case_ledger": payload.get("case_ledger", {}),
         "inquiry_trace": payload.get("inquiry", []),
+        "environment_trace": payload.get("environment", []),
         "memory_trace": payload.get("memory", []),
         "summary": payload.get("summary", {}),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
@@ -219,6 +220,12 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             if "case_memory_contamination" in (item.get("reconstruction_biases") or [])
             and int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
         ],
+        "daily_ecology_trace": [
+            item
+            for item in segment.get("environment_trace", [])[-16:]
+            if item.get("event_type") == "DailyEcologyEvent"
+            and int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
+        ],
         "previous_story_tail": [
             {
                 "segment_id": item.get("segment_id"),
@@ -251,6 +258,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "case_ledger_is_authoritative": True,
             "inquiry_trace_is_authoritative": True,
             "witness_strategy_is_authoritative": True,
+            "daily_ecology_trace_is_authoritative": True,
             "case_memory_trace_is_authoritative": True,
             "do_not_add_case_facts_evidence_witnesses_or_culprits": True,
             "if_multiple_frames_have_the_same_summary": "write them as a sustained pattern with small pressure changes; do not restage the same dialogue or objects repeatedly",

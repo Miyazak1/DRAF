@@ -114,6 +114,12 @@ const ZH = {
   testing_the_listener: "测试倾听者",
   denial_boundary: "拒认边界",
   controlled_disclosure: "控制透露",
+  night_recovery: "夜间恢复",
+  workday_friction: "工作日摩擦",
+  meal_or_errand_overlap: "吃饭或杂事重叠",
+  commute_overlap: "通勤重叠",
+  late_return: "晚归",
+  waiting_time: "等待时间",
   public_mask: "公开面具",
   spoken: "言说",
   tonal_shift: "语气变化",
@@ -515,6 +521,7 @@ function renderStory() {
           ${action.action_id ? `<span class="tag">行动：${zh(action.action_id)}</span>` : ""}
           ${expression.expression_id ? `<span class="tag">表达：${zh(expression.expression_id)}</span>` : ""}
           ${recognition.outcome ? `<span class="tag">承认：${zh(recognition.outcome)}</span>` : ""}
+          ${frame.daily_ecology?.routine_phase ? `<span class="tag">日常：${zh(frame.daily_ecology.routine_phase)}</span>` : ""}
           ${frame.memory_count ? `<span class="tag">记忆重构：${frame.memory_count}</span>` : ""}
           ${frame.fate_count ? `<span class="tag">命运转折：${frame.fate_count}</span>` : ""}
         </div>
@@ -527,6 +534,7 @@ function renderStory() {
   $("stateChange").innerHTML = `
     <div class="state-row"><span>当前阶段</span><b>${zh(last.phase)}</b></div>
     <div class="state-row"><span>物质紧迫</span><b>${fmt(pressure.material_urgency)}</b></div>
+    <div class="state-row"><span>日常压力</span><b>${fmt(pressure.daily_ecology_pressure)}</b></div>
     <div class="state-row"><span>冲突压力</span><b>${fmt(pressure.conflict_pressure)}</b></div>
     <div class="state-row"><span>修复债</span><b>${fmt(pressure.repair_debt)}</b></div>
     <div class="state-row"><span>记忆压力</span><b>${fmt(pressure.memory_pressure)}</b></div>
@@ -573,6 +581,7 @@ function buildEvolutionPoints() {
       memory_count: Number(frame.memory_count || 0),
       fate_count: Number(frame.fate_count || 0),
       material_urgency: numberOrNull(pressure.material_urgency),
+      daily_ecology_pressure: numberOrNull(pressure.daily_ecology_pressure),
       conflict_pressure: numberOrNull(pressure.conflict_pressure ?? recognition.conflict_pressure),
       repair_debt: numberOrNull(pressure.repair_debt ?? recognition.repair_debt),
       recognition_pressure: numberOrNull(pressure.recognition_pressure ?? recognition.demand_pressure),
@@ -602,6 +611,7 @@ function renderPhaseRail(points) {
 function renderPressureChart(points) {
   const series = [
     {key: "material_urgency", label: "物质紧迫", color: "#296b63"},
+    {key: "daily_ecology_pressure", label: "日常压力", color: "#6d7652"},
     {key: "conflict_pressure", label: "冲突压力", color: "#8a4c32"},
     {key: "repair_debt", label: "修复债", color: "#a45f1b"},
     {key: "recognition_pressure", label: "承认压力", color: "#315f8f"},
@@ -679,6 +689,7 @@ function renderEvolutionStats(points) {
   const previous = points[Math.max(0, points.length - 6)] || {};
   const rows = [
     ["物质紧迫", trend(last.material_urgency, previous.material_urgency)],
+    ["日常压力", trend(last.daily_ecology_pressure, previous.daily_ecology_pressure)],
     ["冲突压力", trend(last.conflict_pressure, previous.conflict_pressure)],
     ["修复债", trend(last.repair_debt, previous.repair_debt)],
     ["承认压力", trend(last.recognition_pressure, previous.recognition_pressure)],
