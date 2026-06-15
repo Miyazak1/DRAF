@@ -66,6 +66,7 @@ def next_render_segment(
         "simulated_seconds": _elapsed_seconds(frames),
         "frames": frames,
         "render_canon": payload.get("render_canon", {}),
+        "case_ledger": payload.get("case_ledger", {}),
         "summary": payload.get("summary", {}),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
         "person_views": payload.get("derived_views", {}).get("person_views", {}),
@@ -204,6 +205,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
     return {
         "render_mode": "segment",
         "render_canon": segment.get("render_canon", {}),
+        "case_ledger": segment.get("case_ledger", {}),
         "previous_story_tail": [
             {
                 "segment_id": item.get("segment_id"),
@@ -233,6 +235,8 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "must_include_source_ticks": True,
             "append_mode": True,
             "compress_repeated_frames": True,
+            "case_ledger_is_authoritative": True,
+            "do_not_add_case_facts_evidence_witnesses_or_culprits": True,
             "if_multiple_frames_have_the_same_summary": "write them as a sustained pattern with small pressure changes; do not restage the same dialogue or objects repeatedly",
         },
     }

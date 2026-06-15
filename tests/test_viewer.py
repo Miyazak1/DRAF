@@ -36,6 +36,7 @@ def test_viewer_payload_contains_core_traces(tmp_path):
     assert "participants" in payload["story"][0]
     assert "rendered_segments" in payload
     assert "rendered_story_stream" in payload
+    assert "case_ledger" in payload
     assert payload["viability"][0]["requirements"]
     assert payload["viability"][0]["affordance_widths"]
     assert "future_constraints" in payload["viability"][0]
@@ -46,9 +47,11 @@ def test_viewer_static_contains_viability_dynamics_panel():
     js = Path("rpf/viewer/static/viewer.js").read_text(encoding="utf-8")
 
     assert "底层动力学" in html
+    assert "案件账本" in html
     assert "viabilityChart" in html
     assert "renderViabilityDynamics" in js
     assert "buildViabilityPoints" in js
+    assert "renderCaseLedger" in js
 
 
 def test_scenario_catalog_exposes_example_scenarios():
@@ -74,6 +77,22 @@ def test_default_initial_viewer_output_prefers_yellow_sign(tmp_path, monkeypatch
 
     assert output_dir.name == "yellow_sign_cold_case"
     assert payload["render_canon"]["title"] == "黄印镇冷案"
+
+
+def test_yellow_sign_payload_contains_case_ledger(tmp_path):
+    scenario_path = Path("examples/yellow_sign_cold_case.yaml")
+    sim = Simulator.from_scenario(load_scenario(scenario_path), scenario_path, seed=42)
+    output_dir = tmp_path / "run"
+    sim.run(steps=5, output_dir=output_dir)
+
+    payload = build_viewer_payload(output_dir)
+    ledger = payload["case_ledger"]
+
+    assert ledger["case_title"] == "黄印镇冷案"
+    assert ledger["case_phase"] == "reopened_cold_case"
+    assert any(item["evidence_id"] == "yellow_paint_mark" for item in ledger["evidence_items"])
+    assert any(item["testimony_id"] == "lin_ya_gap" for item in ledger["testimonies"])
+    assert any(item["contradiction_id"] == "official_closed_but_new_body" for item in ledger["contradictions"])
 
 
 def test_run_catalog_reads_run_metadata(tmp_path):
@@ -169,6 +188,7 @@ def test_run_report_contains_deterministic_sections(tmp_path):
     assert "# 共享公寓：未解决的牺牲" in report
     assert "## 运行档案" in report
     assert "## 总览" in report
+    assert "## 案件账本" in report
     assert "## 关键转折" in report
     assert "不调用 LLM" in report
 
@@ -220,6 +240,7 @@ def test_export_run_bundle_writes_zip(tmp_path):
         names = set(archive.namelist())
 
     assert "run_report.md" in names
+    assert "case_ledger.json" in names
     assert "timeline.jsonl" in names
     assert "derived_views.json" in names
 

@@ -41,6 +41,21 @@ def test_render_payload_contains_render_canon(tmp_path):
     assert "affordance_width" in payload["story"][0]["viability"]
 
 
+def test_yellow_sign_render_payload_inherits_case_ledger(tmp_path):
+    scenario_path = Path("examples/yellow_sign_cold_case.yaml")
+    sim = Simulator.from_scenario(load_scenario(scenario_path), scenario_path, seed=42)
+    output_dir = tmp_path / "run"
+    sim.run(steps=4, output_dir=output_dir)
+
+    payload = build_render_payload(output_dir)
+    text = renderer.deterministic_markdown(payload)
+
+    assert payload["case_ledger"]["case_title"] == "黄印镇冷案"
+    assert any(item["label"] == "黄漆符号" for item in payload["case_ledger"]["evidence_items"])
+    assert "## 案件账本" in text
+    assert "黄漆符号" in text
+
+
 def test_llm_renderer_requires_model_and_key(tmp_path, monkeypatch):
     scenario_path = Path("examples/shared_apartment_unresolved_sacrifice.yaml")
     sim = Simulator.from_scenario(load_scenario(scenario_path), scenario_path, seed=42)
@@ -112,4 +127,5 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert '"thinking": {"type": "enabled"}' in body
     assert '"reasoning_effort": "high"' in body
     assert "viability" in body
+    assert "case_ledger" in body
     assert "causes not present in viability/action/expression/recognition evidence" in body

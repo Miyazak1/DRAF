@@ -58,6 +58,128 @@ render_canon:
       - 把幻象当作客观事实
       - 把案件真相一次性揭开
 
+case_ledger:
+  case_id: yellow_sign_cold_case
+  case_title: 黄印镇冷案
+  case_phase: reopened_cold_case
+  doctrine: >
+    案件账本只记录可继承的调查事实、证词缺口、证物状态和矛盾压力。
+    它不提供真相，不指定凶手，不证明超自然，只限制叙事渲染不能越界发明。
+  known_facts:
+    - fact_id: official_closed_case
+      text: 十七年前，黄印镇发生儿童失踪与仪式化凶案，官方记录称嫌疑人已死亡，案件已经结案。
+      source: old_case_file
+      reliability: 0.72
+      contamination_risk: 0.18
+      pressure_tags: [institutional_rot, public_silence]
+    - fact_id: reopened_after_new_body
+      text: 雨季之后，一具新尸体在废弃炼油厂排水沟附近被发现，伤口排列与旧案相似。
+      source: county_reopen_order
+      reliability: 0.66
+      contamination_risk: 0.34
+      pressure_tags: [public_attention, procedural_gap]
+    - fact_id: survivor_recalled
+      text: 林鸦是旧案幸存证人，被地方警局临时请回，协助整理旧档与辨认证物。
+      source: temporary_assistance_notice
+      reliability: 0.81
+      contamination_risk: 0.26
+      pressure_tags: [testimony_burden, recognition_dependency]
+  evidence_items:
+    - evidence_id: yellow_paint_mark
+      label: 黄漆符号
+      location_id: archive_basement
+      status: unstable
+      reliability: 0.46
+      contamination_risk: 0.88
+      accessible_to: [p1, p2]
+      pressures: [pattern_attraction, testimony_gap, reality_anchor_loss]
+      contradicts: [official_closed_case]
+    - evidence_id: water_damaged_child_drawing
+      label: 被水泡胀的儿童画
+      location_id: archive_basement
+      status: partially_legible
+      reliability: 0.38
+      contamination_risk: 0.74
+      accessible_to: [p1, p2]
+      pressures: [memory_trigger, witness_fragility]
+      contradicts: [official_closed_case]
+    - evidence_id: refinery_map_gap
+      label: 废弃炼油厂地图缺口
+      location_id: flooded_road_to_refinery
+      status: inconsistent_records
+      reliability: 0.52
+      contamination_risk: 0.63
+      accessible_to: [p2]
+      pressures: [procedural_gap, institutional_compromise]
+      contradicts: [official_closed_case]
+    - evidence_id: old_tape_yellow_bleed
+      label: 旧录像带里的黄色漏光
+      location_id: evidence_room_yellow_light
+      status: degraded
+      reliability: 0.41
+      contamination_risk: 0.79
+      accessible_to: [p1, p2]
+      pressures: [pattern_attraction, memory_contamination]
+      contradicts: [lin_ya_gap]
+  testimonies:
+    - testimony_id: lin_ya_gap
+      witness_process_id: p1
+      statement: 林鸦记得旧录像里有一段黄色光斑，但卷宗转录没有记录。
+      stability: 0.38
+      pressure_to_retract: 0.72
+      contamination_exposure: 0.81
+      memory_gaps: [third_shadow, refinery_road]
+    - testimony_id: local_police_silence
+      witness_process_id: institutional_field
+      statement: 地方警局承认旧档缺页，却坚持缺页与结案判断无关。
+      stability: 0.56
+      pressure_to_retract: 0.61
+      contamination_exposure: 0.42
+      memory_gaps: [missing_chain_of_custody]
+  locations:
+    - location_id: archive_basement
+      label: 档案室地下层
+      field_effects: [decayed_evidence, institutional_silence, mildew_pressure]
+      contamination_risk: 0.64
+      scene_biases: [contaminated_evidence_review, unstable_testimony_probe]
+    - location_id: flooded_road_to_refinery
+      label: 通往废弃炼油厂的积水路
+      field_effects: [spatial_disorientation, map_inconsistency]
+      contamination_risk: 0.71
+      scene_biases: [forbidden_symbol_confrontation, contaminated_evidence_review]
+    - location_id: evidence_room_yellow_light
+      label: 黄灯证物室
+      field_effects: [visual_distortion, procedural_fatigue]
+      contamination_risk: 0.58
+      scene_biases: [unstable_testimony_probe]
+  timeline_entries:
+    - entry_id: night_of_old_case
+      text: 旧案夜里，炼油厂到旧学校之间的路在两份地图中不一致。
+      reliability: 0.42
+      linked_evidence: [refinery_map_gap]
+    - entry_id: file_room_flood
+      text: 旧档案室曾在三年前雨季进水，证物袋和转录纸边缘均有水痕。
+      reliability: 0.68
+      linked_evidence: [water_damaged_child_drawing, old_tape_yellow_bleed]
+  contradictions:
+    - contradiction_id: official_closed_but_new_body
+      text: 官方称旧案已结，但新尸体伤口与旧案排列相似。
+      pressure_tags: [institutional_rot, public_attention]
+      linked_evidence: [refinery_map_gap]
+    - contradiction_id: tape_seen_but_not_transcribed
+      text: 林鸦记得黄色漏光，转录却没有任何对应记录。
+      pressure_tags: [memory_contamination, testimony_gap]
+      linked_evidence: [old_tape_yellow_bleed]
+  unverified_anomalies:
+    - anomaly_id: road_not_on_new_maps
+      text: 废炼油厂旁有一条新地图上不存在的路名。
+      ambiguity: 0.86
+      may_not_be_supernatural: true
+    - anomaly_id: yellow_mark_recurs_without_chain
+      text: 黄漆符号反复出现，但目前没有可靠证据证明同一人或组织留下这些符号。
+      ambiguity: 0.91
+      may_not_be_supernatural: true
+
 field_state:
   material_pressures:
     material_urgency: 0.24

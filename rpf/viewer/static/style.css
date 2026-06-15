@@ -717,6 +717,74 @@ h3 {
   gap: 9px;
 }
 
+.case-ledger {
+  display: grid;
+  gap: 12px;
+}
+
+.case-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+}
+
+.case-summary p {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.case-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.case-stats span {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfcfb;
+  padding: 8px 10px;
+  color: var(--muted);
+}
+
+.case-stats b {
+  display: block;
+  color: var(--ink);
+  margin-top: 3px;
+}
+
+.case-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.case-group {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.ledger-item {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfcfb;
+  padding: 9px;
+}
+
+.ledger-item strong {
+  display: block;
+  margin-bottom: 5px;
+  word-break: break-word;
+}
+
+.ledger-item p {
+  color: #26342f;
+  margin-bottom: 7px;
+  line-height: 1.55;
+}
+
 .person,
 .trace,
 .event,
@@ -1146,6 +1214,8 @@ h3 {
     .studio-grid,
     .canon-grid,
     .cast-grid,
+    .case-summary,
+    .case-grid,
     .paper-grid,
     .layer-list,
     .tick-detail {

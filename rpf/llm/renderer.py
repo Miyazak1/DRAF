@@ -73,6 +73,7 @@ def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dic
     return {
         "run_dir": payload.get("run_dir"),
         "render_canon": payload.get("render_canon", {}),
+        "case_ledger": payload.get("case_ledger", {}),
         "summary": payload.get("summary"),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
         "person_views": payload.get("derived_views", {}).get("person_views", {}),
@@ -85,6 +86,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
     summary = render_payload.get("summary", {})
     relationship = render_payload.get("relationship_view", {})
     canon = render_payload.get("render_canon", {})
+    case_ledger = render_payload.get("case_ledger", {}) or {}
     title = canon.get("title") or "RPF 故事回放"
     lines = [
         f"# {title}",
@@ -96,6 +98,10 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         f"- 活跃绑定：{'，'.join(_label(item) for item in (relationship.get('active_bindings', []) or ['-']))}",
         f"- 反复出现的关系模式：{'，'.join(_label(item) for item in (relationship.get('recurring_rpps', []) or ['-']))}",
         f"- 识别冲突：{'，'.join(_label(item) for item in (relationship.get('recognition_conflicts', []) or ['-']))}",
+        "",
+        "## 案件账本",
+        "",
+        _case_ledger_line(case_ledger),
         "",
         "## 时间线",
         "",
@@ -122,6 +128,25 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
             ]
         )
     return "\n".join(lines).strip() + "\n"
+
+
+def _case_ledger_line(case_ledger: dict[str, Any]) -> str:
+    if not case_ledger:
+        return "- 当前运行没有案件账本。"
+    facts = case_ledger.get("known_facts", []) or []
+    evidence = case_ledger.get("evidence_items", []) or []
+    testimonies = case_ledger.get("testimonies", []) or []
+    contradictions = case_ledger.get("contradictions", []) or []
+    anomalies = case_ledger.get("unverified_anomalies", []) or []
+    evidence_names = "，".join(str(item.get("label") or item.get("evidence_id")) for item in evidence[:4])
+    contradiction_text = "；".join(str(item.get("text", "")) for item in contradictions[:2])
+    return (
+        f"- 案件阶段：{_label(case_ledger.get('case_phase', '-'))}；"
+        f"已知事实 {len(facts)}，证物 {len(evidence)}，证词 {len(testimonies)}，"
+        f"矛盾 {len(contradictions)}，未证实异常 {len(anomalies)}。"
+        f"核心证物：{evidence_names or '-'}。"
+        f"主要矛盾：{contradiction_text or '-'}。"
+    )
 
 
 def _label(value: Any) -> str:
@@ -198,6 +223,12 @@ def llm_markdown(
                 "render_canon.cast.*.pronoun",
                 "render_canon.setting",
                 "render_canon.narration",
+                "case_ledger.case_title",
+                "case_ledger.known_facts",
+                "case_ledger.evidence_items",
+                "case_ledger.testimonies",
+                "case_ledger.contradictions",
+                "case_ledger.unverified_anomalies",
             ],
             "must_not_invent": [
                 "new characters",
@@ -205,6 +236,11 @@ def llm_markdown(
                 "new memories",
                 "new motives",
                 "new locations",
+                "new case facts",
+                "new evidence",
+                "new testimonies",
+                "new witnesses",
+                "new culprits",
                 "new future events",
                 "changed recognition outcomes",
                 "changed irreversible records",

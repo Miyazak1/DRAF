@@ -195,6 +195,30 @@ const ZH = {
   "before_speech": "话语之前",
   "absence_extends": "缺席延长",
   "on_time": "按时出现",
+  reopened_cold_case: "冷案重启",
+  partially_legible: "部分可读",
+  inconsistent_records: "记录不一致",
+  degraded: "退化",
+  institutional_rot: "制度腐蚀",
+  public_silence: "公共沉默",
+  public_attention: "公众关注",
+  procedural_gap: "程序缺口",
+  testimony_burden: "证词负担",
+  recognition_dependency: "承认依赖",
+  pattern_attraction: "模式吸引",
+  testimony_gap: "证词断裂",
+  reality_anchor_loss: "现实锚点松动",
+  memory_trigger: "记忆触发",
+  witness_fragility: "证人脆弱性",
+  institutional_compromise: "制度妥协",
+  memory_contamination: "记忆污染",
+  decayed_evidence: "腐坏证物",
+  institutional_silence: "制度沉默",
+  mildew_pressure: "霉味压力",
+  spatial_disorientation: "空间迷失",
+  map_inconsistency: "地图不一致",
+  visual_distortion: "视觉扭曲",
+  procedural_fatigue: "程序疲劳",
 };
 
 function zh(value) {
@@ -247,6 +271,7 @@ async function loadRuns() {
 
 function renderAll() {
   renderOverview();
+  renderCaseLedger();
   renderCanon();
   renderStory();
   renderLiveStory();
@@ -257,6 +282,99 @@ function renderAll() {
   renderTraces();
   renderEvents();
   renderRunHistory(DATA.run_dir);
+}
+
+function renderCaseLedger() {
+  const target = $("caseLedger");
+  if (!target) return;
+  const ledger = DATA.case_ledger || {};
+  if (!ledger.case_id && !ledger.case_title) {
+    target.innerHTML = "<div class=\"panel\"><small>当前运行没有案件账本。</small></div>";
+    return;
+  }
+  const groups = [
+    ["已知事实", ledger.known_facts || [], caseText],
+    ["证物", ledger.evidence_items || [], evidenceText],
+    ["证词", ledger.testimonies || [], testimonyText],
+    ["地点", ledger.locations || [], locationText],
+    ["矛盾", ledger.contradictions || [], contradictionText],
+    ["未证实异常", ledger.unverified_anomalies || [], anomalyText],
+  ];
+  target.innerHTML = `
+    <div class="panel case-summary">
+      <div>
+        <h3>${escapeHtml(ledger.case_title || ledger.case_id || "案件")}</h3>
+        <p>${escapeHtml(ledger.doctrine || "案件账本限制故事事实边界。")}</p>
+      </div>
+      <div class="case-stats">
+        <span>阶段 <b>${escapeHtml(zh(ledger.case_phase || "-"))}</b></span>
+        <span>事实 <b>${(ledger.known_facts || []).length}</b></span>
+        <span>证物 <b>${(ledger.evidence_items || []).length}</b></span>
+        <span>矛盾 <b>${(ledger.contradictions || []).length}</b></span>
+      </div>
+    </div>
+    <div class="case-grid">
+      ${groups.map(([title, rows, formatter]) => `
+        <div class="panel case-group">
+          <h3>${title}</h3>
+          ${rows.length ? rows.slice(0, 6).map((item) => formatter(item)).join("") : "<small>暂无记录</small>"}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function caseText(item) {
+  return ledgerItem(item.fact_id, item.text, [
+    `可靠度 ${fmt(item.reliability)}`,
+    `污染 ${fmt(item.contamination_risk)}`,
+    ...(item.pressure_tags || []).slice(0, 3).map(zh),
+  ]);
+}
+
+function evidenceText(item) {
+  return ledgerItem(item.evidence_id, item.label, [
+    zh(item.status),
+    `可靠度 ${fmt(item.reliability)}`,
+    `污染 ${fmt(item.contamination_risk)}`,
+    ...(item.pressures || []).slice(0, 3).map(zh),
+  ]);
+}
+
+function testimonyText(item) {
+  return ledgerItem(item.testimony_id, item.statement, [
+    `稳定 ${fmt(item.stability)}`,
+    `撤回压力 ${fmt(item.pressure_to_retract)}`,
+    `污染暴露 ${fmt(item.contamination_exposure)}`,
+  ]);
+}
+
+function locationText(item) {
+  return ledgerItem(item.location_id, item.label, [
+    `污染 ${fmt(item.contamination_risk)}`,
+    ...(item.field_effects || []).slice(0, 3).map(zh),
+  ]);
+}
+
+function contradictionText(item) {
+  return ledgerItem(item.contradiction_id, item.text, (item.pressure_tags || []).slice(0, 4).map(zh));
+}
+
+function anomalyText(item) {
+  return ledgerItem(item.anomaly_id, item.text, [
+    `模糊度 ${fmt(item.ambiguity)}`,
+    item.may_not_be_supernatural ? "不证明超自然" : "未定",
+  ]);
+}
+
+function ledgerItem(id, body, tags) {
+  return `
+    <article class="ledger-item">
+      <strong>${escapeHtml(id || "-")}</strong>
+      <p>${escapeHtml(body || "-")}</p>
+      <div class="tags">${(tags || []).filter(Boolean).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>
+    </article>
+  `;
 }
 
 function renderScenarioOptions(currentOutputDir) {

@@ -108,6 +108,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "run_dir": str(run_dir),
         "manifest": manifest,
         "render_canon": _read_render_canon(run_dir, manifest),
+        "case_ledger": _read_case_ledger(run_dir, manifest),
         "derived_views": _read_json(run_dir / "derived_views.json", {}),
         "metrics": metrics,
         "scheduler": _read_json(run_dir / "scheduler_diagnostics.json", []),
@@ -236,6 +237,7 @@ def build_run_report(output_dir: Path) -> str:
     payload = build_viewer_payload(output_dir)
     summary = payload.get("summary", {})
     canon = payload.get("render_canon", {})
+    case_ledger = payload.get("case_ledger", {})
     metadata = _read_json(output_dir / "run_metadata.json", {})
     comparison = _comparison_summary(output_dir)
     story = payload.get("story", [])
@@ -270,6 +272,15 @@ def build_run_report(output_dir: Path) -> str:
         f"- 怨恨压力：{_fmt_report(comparison.get('resentment_score'))}",
         f"- 修复能力：{_fmt_report(comparison.get('repair_score'))}",
         f"- 关键转折数：{comparison.get('turning_point_count', 0)}",
+        "",
+        "## 案件账本",
+        "",
+        f"- 案件阶段：{_zh(case_ledger.get('case_phase', '-'))}",
+        f"- 已知事实：{len(case_ledger.get('known_facts', []) or [])}",
+        f"- 证物：{len(case_ledger.get('evidence_items', []) or [])}",
+        f"- 证词：{len(case_ledger.get('testimonies', []) or [])}",
+        f"- 矛盾：{len(case_ledger.get('contradictions', []) or [])}",
+        f"- 未证实异常：{len(case_ledger.get('unverified_anomalies', []) or [])}",
         "",
         "## 末端压力",
         "",
@@ -327,6 +338,11 @@ def export_run_bundle(output_dir: Path) -> dict[str, Any]:
     report = build_run_report(output_dir)
     report_path = output_dir / "run_report.md"
     report_path.write_text(report, encoding="utf-8")
+    case_ledger = build_viewer_payload(output_dir).get("case_ledger", {})
+    (output_dir / "case_ledger.json").write_text(
+        json.dumps(case_ledger, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     bundle_path = output_dir / f"{output_dir.name}_bundle.zip"
     files = _exportable_files(output_dir)
     with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -347,6 +363,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "timeline_manifest.json",
         "run_report.md",
         "render_canon.json",
+        "case_ledger.json",
         "effective_config.json",
         "metrics.json",
         "derived_views.json",
@@ -716,6 +733,21 @@ def _read_render_canon(run_dir: Path, manifest: dict[str, Any]) -> dict[str, Any
         return {}
     canon = scenario.get("render_canon", {})
     return canon if isinstance(canon, dict) else {}
+
+
+def _read_case_ledger(run_dir: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+    direct = _read_json(run_dir / "case_ledger.json", None)
+    if isinstance(direct, dict):
+        return direct
+    scenario_path = manifest.get("scenario_path")
+    if not scenario_path:
+        return {}
+    try:
+        scenario = load_scenario(Path(scenario_path))
+    except Exception:
+        return {}
+    ledger = scenario.get("case_ledger", {})
+    return ledger if isinstance(ledger, dict) else {}
 
 
 def _top_counts(mapping: dict[str, Any], limit: int) -> list[dict[str, Any]]:
