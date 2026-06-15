@@ -120,6 +120,18 @@ const ZH = {
   commute_overlap: "通勤重叠",
   late_return: "晚归",
   waiting_time: "等待时间",
+  recovery_window_loss: "恢复窗口损失",
+  repair_window_loss: "修复窗口损失",
+  evidence_window_loss: "证据窗口损失",
+  social_exposure_cost: "公共暴露成本",
+  trust_window_loss: "信任窗口损失",
+  ordinary_task_spillover: "日常任务外溢",
+  sleep_or_body_recovery: "睡眠或身体恢复",
+  clean_repair_opening: "干净修复窗口",
+  usable_evidence_or_testimony_timing: "可用证据或证词时机",
+  private_resolution_before_public_reading: "被公开解读前的私人解决",
+  "low-cost_trust_update": "低成本信任更新",
+  ordinary_work_or_errand_completion: "普通工作或杂事完成",
   body_management: "身体管理",
   case_fixation: "案件固着",
   threat_monitoring: "威胁监控",
@@ -528,6 +540,7 @@ function renderStory() {
           ${expression.expression_id ? `<span class="tag">表达：${zh(expression.expression_id)}</span>` : ""}
           ${recognition.outcome ? `<span class="tag">承认：${zh(recognition.outcome)}</span>` : ""}
           ${frame.attention_drift?.dominant_focus ? `<span class="tag">注意：${zh(frame.attention_drift.dominant_focus)}</span>` : ""}
+          ${frame.opportunity_cost?.cost_type ? `<span class="tag">机会成本：${zh(frame.opportunity_cost.cost_type)}</span>` : ""}
           ${frame.daily_ecology?.routine_phase ? `<span class="tag">日常：${zh(frame.daily_ecology.routine_phase)}</span>` : ""}
           ${frame.memory_count ? `<span class="tag">记忆重构：${frame.memory_count}</span>` : ""}
           ${frame.fate_count ? `<span class="tag">命运转折：${frame.fate_count}</span>` : ""}
@@ -542,6 +555,7 @@ function renderStory() {
     <div class="state-row"><span>当前阶段</span><b>${zh(last.phase)}</b></div>
     <div class="state-row"><span>物质紧迫</span><b>${fmt(pressure.material_urgency)}</b></div>
     <div class="state-row"><span>日常压力</span><b>${fmt(pressure.daily_ecology_pressure)}</b></div>
+    <div class="state-row"><span>机会成本</span><b>${fmt(pressure.opportunity_pressure)}</b></div>
     <div class="state-row"><span>冲突压力</span><b>${fmt(pressure.conflict_pressure)}</b></div>
     <div class="state-row"><span>修复债</span><b>${fmt(pressure.repair_debt)}</b></div>
     <div class="state-row"><span>记忆压力</span><b>${fmt(pressure.memory_pressure)}</b></div>
@@ -593,6 +607,7 @@ function buildEvolutionPoints() {
       repair_debt: numberOrNull(pressure.repair_debt ?? recognition.repair_debt),
       recognition_pressure: numberOrNull(pressure.recognition_pressure ?? recognition.demand_pressure),
       memory_pressure: numberOrNull(pressure.memory_pressure),
+      opportunity_pressure: numberOrNull(pressure.opportunity_pressure),
     };
   }).filter((point) => point.tick > 0);
 }
@@ -623,6 +638,7 @@ function renderPressureChart(points) {
     {key: "repair_debt", label: "修复债", color: "#a45f1b"},
     {key: "recognition_pressure", label: "承认压力", color: "#315f8f"},
     {key: "memory_pressure", label: "记忆压力", color: "#6f5a8f"},
+    {key: "opportunity_pressure", label: "机会成本", color: "#7a6a2d"},
   ];
   const width = Math.max(620, points.length * 26);
   const height = 260;
@@ -701,6 +717,7 @@ function renderEvolutionStats(points) {
     ["修复债", trend(last.repair_debt, previous.repair_debt)],
     ["承认压力", trend(last.recognition_pressure, previous.recognition_pressure)],
     ["记忆压力", trend(last.memory_pressure, previous.memory_pressure)],
+    ["机会成本", trend(last.opportunity_pressure, previous.opportunity_pressure)],
   ];
   $("evolutionStats").innerHTML = rows.map(([label, value]) => `
     <div class="state-row"><span>${label}</span><b>${value}</b></div>

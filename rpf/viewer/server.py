@@ -72,6 +72,18 @@ ZH = {
     "commute_overlap": "通勤重叠",
     "late_return": "晚归",
     "waiting_time": "等待时间",
+    "recovery_window_loss": "恢复窗口损失",
+    "repair_window_loss": "修复窗口损失",
+    "evidence_window_loss": "证据窗口损失",
+    "social_exposure_cost": "公共暴露成本",
+    "trust_window_loss": "信任窗口损失",
+    "ordinary_task_spillover": "日常任务外溢",
+    "sleep_or_body_recovery": "睡眠或身体恢复",
+    "clean_repair_opening": "干净修复窗口",
+    "usable_evidence_or_testimony_timing": "可用证据或证词时机",
+    "private_resolution_before_public_reading": "被公开解读前的私人解决",
+    "low-cost_trust_update": "低成本信任更新",
+    "ordinary_work_or_errand_completion": "普通工作或杂事完成",
     "body_management": "身体管理",
     "case_fixation": "案件固着",
     "threat_monitoring": "威胁监控",
@@ -147,6 +159,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "normativity": _read_json(run_dir / "normativity_trace.json", []),
         "relevance": _read_json(run_dir / "relevance_trace.json", []),
         "attention": _read_json(run_dir / "attention_trace.json", []),
+        "opportunity": _read_json(run_dir / "opportunity_trace.json", []),
         "position": _read_json(run_dir / "position_trace.json", []),
         "expectation": _read_json(run_dir / "expectation_trace.json", []),
         "memory": _read_json(run_dir / "memory_trace.json", []),
@@ -410,6 +423,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "normativity_trace.json",
         "relevance_trace.json",
         "attention_trace.json",
+        "opportunity_trace.json",
         "position_trace.json",
         "expectation_trace.json",
         "memory_trace.json",
@@ -443,6 +457,9 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
     attention_by_tick: dict[int, list[dict[str, Any]]] = {}
     for attention_update in payload.get("attention", []):
         attention_by_tick.setdefault(int(attention_update.get("tick", 0)), []).append(attention_update)
+    opportunity_by_tick: dict[int, list[dict[str, Any]]] = {}
+    for opportunity_update in payload.get("opportunity", []):
+        opportunity_by_tick.setdefault(int(opportunity_update.get("tick", 0)), []).append(opportunity_update)
     daily_ecology_by_tick = {
         int(item.get("tick", 0)): item
         for item in payload.get("environment", [])
@@ -468,6 +485,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
         frame_definition = _frame_definition_summary(frames_by_tick.get(tick_index, []))
         position_field = _position_summary(positions_by_tick.get(tick_index, []))
         attention_drift = _attention_summary(attention_by_tick.get(tick_index, []))
+        opportunity_cost = _opportunity_summary(opportunity_by_tick.get(tick_index, []))
         daily_ecology = daily_ecology_by_tick.get(tick_index, {})
         memories = memories_by_tick.get(tick_index, [])
         fates = fate_by_tick.get(tick_index, [])
@@ -487,6 +505,8 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
             summary_parts.append(_position_sentence(position_field))
         if attention_drift:
             summary_parts.append(_attention_sentence(attention_drift))
+        if opportunity_cost:
+            summary_parts.append(_opportunity_sentence(opportunity_cost))
         if daily_ecology:
             summary_parts.append(_daily_ecology_sentence(daily_ecology))
         if recognition:
@@ -516,6 +536,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "frame_definition": frame_definition,
                 "position_field": position_field,
                 "attention_drift": attention_drift,
+                "opportunity_cost": opportunity_cost,
                 "daily_ecology": daily_ecology,
                 "memory_count": len(memories),
                 "case_memory_count": _case_memory_count(memories),
@@ -733,6 +754,30 @@ def _attention_sentence(attention: dict[str, Any]) -> str:
     label = attention.get("focus_label") or _zh(attention.get("dominant_focus", ""))
     intensity = _fmt_report(attention.get("drift_intensity"))
     return f"{process_id} 的注意力漂向{label}，漂移强度 {intensity}。"
+
+
+def _opportunity_summary(updates: list[dict[str, Any]]) -> dict[str, Any]:
+    if not updates:
+        return {}
+    strongest = max(updates, key=lambda item: float(item.get("intensity") or 0.0))
+    return {
+        "process_id": strongest.get("process_id"),
+        "cost_type": strongest.get("cost_type"),
+        "cost_label": _zh(strongest.get("cost_type", "")),
+        "missed_window": strongest.get("missed_window"),
+        "missed_window_label": _zh(strongest.get("missed_window", "")),
+        "intensity": strongest.get("intensity"),
+        "reversibility": strongest.get("reversibility"),
+        "reason": strongest.get("reason"),
+        "affected_fields": strongest.get("affected_fields", []),
+    }
+
+
+def _opportunity_sentence(opportunity: dict[str, Any]) -> str:
+    label = opportunity.get("cost_label") or _zh(opportunity.get("cost_type", ""))
+    window = opportunity.get("missed_window_label") or _zh(opportunity.get("missed_window", ""))
+    intensity = _fmt_report(opportunity.get("intensity"))
+    return f"这一步同时付出了{label}：错过{window}，强度 {intensity}。"
 
 
 def _daily_ecology_sentence(daily: dict[str, Any]) -> str:

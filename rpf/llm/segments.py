@@ -70,6 +70,7 @@ def next_render_segment(
         "inquiry_trace": payload.get("inquiry", []),
         "environment_trace": payload.get("environment", []),
         "attention_trace": payload.get("attention", []),
+        "opportunity_trace": payload.get("opportunity", []),
         "memory_trace": payload.get("memory", []),
         "summary": payload.get("summary", {}),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
@@ -168,6 +169,9 @@ def deterministic_segment_markdown(segment: dict[str, Any]) -> str:
         viability = _viability_brief(frame)
         if viability:
             lines.append(f"  - 底层依据：{viability}")
+        opportunity = _opportunity_brief(frame)
+        if opportunity:
+            lines.append(f"  - 机会成本：{opportunity}")
     return "\n".join(lines).strip() + "\n"
 
 
@@ -204,6 +208,19 @@ def _viability_brief(frame: dict[str, Any]) -> str:
     return "；".join(parts)
 
 
+def _opportunity_brief(frame: dict[str, Any]) -> str:
+    opportunity = frame.get("opportunity_cost", {}) or {}
+    if not opportunity:
+        return ""
+    label = opportunity.get("cost_label") or opportunity.get("cost_type")
+    window = opportunity.get("missed_window_label") or opportunity.get("missed_window")
+    try:
+        intensity = f"{float(opportunity.get('intensity') or 0.0):.2f}"
+    except (TypeError, ValueError):
+        intensity = "-"
+    return f"{label}，错过{window}，强度 {intensity}"
+
+
 def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str, Any]:
     previous = load_render_segments(output_dir)[-2:]
     return {
@@ -230,6 +247,11 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
         "attention_trace": [
             item
             for item in segment.get("attention_trace", [])[-16:]
+            if int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
+        ],
+        "opportunity_trace": [
+            item
+            for item in segment.get("opportunity_trace", [])[-16:]
             if int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
         ],
         "previous_story_tail": [
@@ -266,6 +288,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "witness_strategy_is_authoritative": True,
             "daily_ecology_trace_is_authoritative": True,
             "attention_trace_is_authoritative": True,
+            "opportunity_trace_is_authoritative": True,
             "case_memory_trace_is_authoritative": True,
             "do_not_add_case_facts_evidence_witnesses_or_culprits": True,
             "if_multiple_frames_have_the_same_summary": "write them as a sustained pattern with small pressure changes; do not restage the same dialogue or objects repeatedly",

@@ -549,6 +549,68 @@ class RelationalViabilityEngine:
                     evidence_refs=relation_event_refs,
                 )
             )
+        traces.extend(self._opportunity_future_constraints(state))
+        return traces
+
+    def _opportunity_future_constraints(self, state: SimulationState) -> list[FutureConstraintTrace]:
+        specs = {
+            "repair_window_loss": (
+                "opportunity_repair_window_loss",
+                ["repair_availability", "recognition_access"],
+                ["future repair must work through a narrower and more expensive route"],
+            ),
+            "evidence_window_loss": (
+                "opportunity_evidence_window_loss",
+                ["truth_integration", "speech_access"],
+                ["future case movement is constrained by a missed evidence or testimony window"],
+            ),
+            "trust_window_loss": (
+                "opportunity_trust_window_loss",
+                ["relation_continuation", "recognition_access"],
+                ["future trust updates carry a higher baseline cost"],
+            ),
+            "social_exposure_cost": (
+                "opportunity_social_exposure_cost",
+                ["face_continuation", "truth_integration"],
+                ["future private resolution is filtered through public readability"],
+            ),
+            "ordinary_task_spillover": (
+                "opportunity_ordinary_task_spillover",
+                ["resource_access", "relation_continuation"],
+                ["future interaction starts with ordinary task debt already active"],
+            ),
+            "recovery_window_loss": (
+                "opportunity_recovery_window_loss",
+                ["resource_access", "repair_availability"],
+                ["future repair and attention must pass through reduced bodily recovery"],
+            ),
+        }
+        traces: list[FutureConstraintTrace] = []
+        metrics = [
+            (key.removeprefix("opportunity_cost."), clamp(value))
+            for key, value in sorted(state.relation_metrics.items())
+            if key.startswith("opportunity_cost.") and key != "opportunity_cost.total"
+        ]
+        for index, (cost_type, value) in enumerate(metrics, start=1):
+            spec = specs.get(cost_type)
+            if not spec or value <= 0.035:
+                continue
+            constraint_type, requirements, downstream = spec
+            traces.append(
+                FutureConstraintTrace(
+                    constraint_id=f"fc-opp-{index:02d}-{cost_type}",
+                    constraint_type=constraint_type,
+                    source_layer="opportunity_cost",
+                    source_ref_id=f"opportunity_cost.{cost_type}",
+                    affected_processes=sorted(state.processes),
+                    constrained_requirements=requirements,
+                    intensity=clamp(value * 0.9),
+                    persistence="decaying",
+                    mechanism=f"missed {cost_type} window narrows future alternatives after the action path",
+                    downstream_effects=downstream,
+                    evidence_refs=[],
+                )
+            )
         return traces
 
     def _irreversibility_intensity(self, category: str) -> float:

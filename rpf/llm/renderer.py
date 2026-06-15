@@ -66,6 +66,18 @@ LABELS = {
     "commute_overlap": "通勤重叠",
     "late_return": "晚归",
     "waiting_time": "等待时间",
+    "recovery_window_loss": "恢复窗口损失",
+    "repair_window_loss": "修复窗口损失",
+    "evidence_window_loss": "证据窗口损失",
+    "social_exposure_cost": "公共暴露成本",
+    "trust_window_loss": "信任窗口损失",
+    "ordinary_task_spillover": "日常任务外溢",
+    "sleep_or_body_recovery": "睡眠或身体恢复",
+    "clean_repair_opening": "干净修复窗口",
+    "usable_evidence_or_testimony_timing": "可用证据或证词时机",
+    "private_resolution_before_public_reading": "被公开解读前的私人解决",
+    "low-cost_trust_update": "低成本信任更新",
+    "ordinary_work_or_errand_completion": "普通工作或杂事完成",
     "body_management": "身体管理",
     "case_fixation": "案件固着",
     "threat_monitoring": "威胁监控",
@@ -105,6 +117,7 @@ def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dic
         "inquiry_trace": payload.get("inquiry", []),
         "environment_trace": payload.get("environment", []),
         "attention_trace": payload.get("attention", []),
+        "opportunity_trace": payload.get("opportunity", []),
         "memory_trace": payload.get("memory", []),
         "summary": payload.get("summary"),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
@@ -122,6 +135,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
     inquiry_trace = render_payload.get("inquiry_trace", []) or []
     environment_trace = render_payload.get("environment_trace", []) or []
     attention_trace = render_payload.get("attention_trace", []) or []
+    opportunity_trace = render_payload.get("opportunity_trace", []) or []
     memory_trace = render_payload.get("memory_trace", []) or []
     title = canon.get("title") or "RPF 故事回放"
     lines = [
@@ -143,6 +157,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         f"- 证人策略：{_witness_strategy_summary(inquiry_trace)}",
         f"- 日常生态：{_daily_ecology_summary(environment_trace)}",
         f"- 注意力漂移：{_attention_drift_summary(attention_trace)}",
+        f"- 机会成本：{_opportunity_cost_summary(opportunity_trace)}",
         f"- 地点耦合：{_location_coupling_summary(inquiry_trace)}",
         f"- 证据可达性：{_evidence_access_summary(inquiry_trace)}",
         f"- 案件记忆：{_case_memory_summary(memory_trace)}",
@@ -299,6 +314,18 @@ def _attention_drift_summary(attention_trace: list[dict[str, Any]]) -> str:
     )
 
 
+def _opportunity_cost_summary(opportunity_trace: list[dict[str, Any]]) -> str:
+    if not opportunity_trace:
+        return "-"
+    latest = max(opportunity_trace[-10:], key=lambda item: float(item.get("intensity") or 0.0))
+    return (
+        f"{latest.get('process_id', '-')}：{_label(latest.get('cost_type', '-'))}；"
+        f"错过 {_label(latest.get('missed_window', '-'))}，"
+        f"强度 {_fmt(latest.get('intensity'))}，"
+        f"可逆性 {_fmt(latest.get('reversibility'))}"
+    )
+
+
 def _case_memory_summary(memory_trace: list[dict[str, Any]]) -> str:
     case_memories = [
         item
@@ -399,6 +426,7 @@ def llm_markdown(
                 "inquiry_trace",
                 "environment_trace",
                 "attention_trace",
+                "opportunity_trace",
                 "memory_trace",
             ],
             "must_not_invent": [
@@ -422,6 +450,7 @@ def llm_markdown(
                 "changed witness strategy state",
                 "changed daily ecology state",
                 "changed attention drift state",
+                "changed opportunity cost state",
                 "changed case memory reconstruction",
                 "causes not present in viability/action/expression/recognition evidence",
             ],

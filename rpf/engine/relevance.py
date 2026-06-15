@@ -206,6 +206,8 @@ class RelevanceLandscapeEngine:
                 updates.extend(self._relation_updates(state, event, refs))
             elif event_type == "AttentionDriftEvent":
                 updates.extend(self._attention_updates(state, event, refs))
+            elif event_type == "OpportunityCostEvent":
+                updates.extend(self._opportunity_updates(state, event, refs))
         return [update for update in updates if update.previous_value != update.new_value]
 
     def _affordance_updates(
@@ -382,6 +384,39 @@ class RelevanceLandscapeEngine:
                 marker,
                 drift * 0.16,
                 f"attention drift toward {focus} makes {marker} more relevant",
+                refs,
+                [event.event_type],
+            )
+        ]
+
+    def _opportunity_updates(
+        self,
+        state: SimulationState,
+        event: Event,
+        refs: list[str],
+    ) -> list[RelevanceShift]:
+        process_id = str(event.payload.get("process_id", ""))
+        if process_id not in state.processes:
+            return []
+        cost_type = str(event.payload.get("cost_type", ""))
+        intensity = self._payload_float(event, "intensity")
+        marker = {
+            "recovery_window_loss": "material_cost",
+            "repair_window_loss": "repair_opening",
+            "evidence_window_loss": "recognition_claim",
+            "social_exposure_cost": "public_exposure",
+            "trust_window_loss": "exit_threat",
+            "ordinary_task_spillover": "material_cost",
+        }.get(cost_type)
+        if not marker or intensity <= 0.0:
+            return []
+        return [
+            self._delta(
+                state,
+                process_id,
+                marker,
+                intensity * 0.18,
+                f"opportunity cost {cost_type} makes {marker} more salient",
                 refs,
                 [event.event_type],
             )

@@ -37,6 +37,7 @@ from rpf.engine.interaction_frame import InteractionFrameEngine
 from rpf.engine.memory import MemoryReconstructionEngine
 from rpf.engine.metrics import compute_metrics
 from rpf.engine.normativity import NormativePressureEngine
+from rpf.engine.opportunity import OpportunityCostEngine
 from rpf.engine.positioning import PositioningEngine
 from rpf.engine.recognition import RecognitionEngine
 from rpf.engine.relevance import RelevanceLandscapeEngine
@@ -90,6 +91,7 @@ class Simulator:
         self.expectation = ExpectationSedimentationEngine()
         self.memory = MemoryReconstructionEngine(config["memory"])
         self.normativity = NormativePressureEngine()
+        self.opportunity = OpportunityCostEngine()
         self.positioning = PositioningEngine()
         self.relevance = RelevanceLandscapeEngine()
         self.attention = AttentionDriftEngine()
@@ -123,6 +125,7 @@ class Simulator:
         self.expectation_trace: list[dict[str, Any]] = []
         self.memory_trace: list[dict[str, Any]] = []
         self.normativity_trace: list[dict[str, Any]] = []
+        self.opportunity_trace: list[dict[str, Any]] = []
         self.position_trace: list[dict[str, Any]] = []
         self.relevance_trace: list[dict[str, Any]] = []
         self.attention_trace: list[dict[str, Any]] = []
@@ -324,6 +327,7 @@ class Simulator:
         (output_dir / "expectation_trace.json").write_text(json.dumps(self.expectation_trace, indent=2), encoding="utf-8")
         (output_dir / "memory_trace.json").write_text(json.dumps(self.memory_trace, indent=2), encoding="utf-8")
         (output_dir / "normativity_trace.json").write_text(json.dumps(self.normativity_trace, indent=2), encoding="utf-8")
+        (output_dir / "opportunity_trace.json").write_text(json.dumps(self.opportunity_trace, indent=2), encoding="utf-8")
         (output_dir / "position_trace.json").write_text(json.dumps(self.position_trace, indent=2), encoding="utf-8")
         (output_dir / "relevance_trace.json").write_text(json.dumps(self.relevance_trace, indent=2), encoding="utf-8")
         (output_dir / "attention_trace.json").write_text(json.dumps(self.attention_trace, indent=2), encoding="utf-8")
@@ -395,6 +399,8 @@ class Simulator:
         local.extend(self._update_normativity(local))
         local.extend(self._update_frames(local))
         local.extend(self._update_attention(context, local))
+        if context.tick_type != "latent":
+            local.extend(self._update_opportunity_costs(context, local))
         local.extend(self._update_relevance(local))
         local.extend(self._update_positions(local))
         views = aggregate_views(self.state, [e.event_id for e in self.events])
@@ -577,6 +583,22 @@ class Simulator:
                 self._event(
                     "AttentionDriftEvent",
                     "attention",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
+
+    def _update_opportunity_costs(self, context: TickContext, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        updates = self.opportunity.update(self.state, context, local_events)
+        for update in updates:
+            payload = update.payload()
+            self.opportunity_trace.append({"tick": self.state.tick, "event_type": "OpportunityCostEvent", **payload})
+            emitted.append(
+                self._event(
+                    "OpportunityCostEvent",
+                    "opportunity",
                     payload,
                     update.causal_refs,
                 )
