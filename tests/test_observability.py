@@ -432,9 +432,11 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
         if line.strip()
     ]
     investigation_events = [event for event in timeline_events if event["event_type"] == "InvestigationUpdateEvent"]
+    location_events = [event for event in timeline_events if event["event_type"] == "LocationEvidenceCouplingEvent"]
     accessibility_events = [event for event in timeline_events if event["event_type"] == "EvidenceAccessibilityEvent"]
     memory_events = [event for event in timeline_events if event["event_type"] == "MemoryReconstructionEvent"]
     investigation_event_ids = {event["event_id"] for event in investigation_events}
+    location_trace = [item for item in inquiry if item.get("event_type") == "LocationEvidenceCouplingEvent"]
     investigation_trace = [item for item in inquiry if item.get("event_type") == "InvestigationUpdateEvent"]
     accessibility_trace = [item for item in inquiry if item.get("event_type") == "EvidenceAccessibilityEvent"]
     case_memory_events = [
@@ -444,17 +446,24 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     ]
 
     assert inquiry
+    assert location_events
+    assert location_trace
     assert investigation_events
     assert accessibility_events
     assert investigation_trace
     assert accessibility_trace
     assert all(item["focus_id"] for item in inquiry)
+    assert all(item["location_after"]["location_id"] for item in location_trace)
+    assert any(item["location_delta"]["contamination"] >= 0 for item in location_trace)
+    assert any(item["location_after"]["field_effects"] for item in location_trace)
     assert all(item["state_after"]["progress"] >= 0 for item in investigation_trace)
     assert any(item["relational_feedback"]["conflict_pressure"] > 0 for item in investigation_trace)
     assert all(item["accessibility_after"]["access_status"] in {"available", "restricted", "fragile", "blocked"} for item in accessibility_trace)
     assert any(item["accessibility_delta"] <= 0 for item in accessibility_trace)
     assert any(event["source_layer"] == "inquiry" for event in investigation_events)
     assert any(event["causal_refs"] for event in investigation_events)
+    assert any(event["source_layer"] == "inquiry" for event in location_events)
+    assert any(event["causal_refs"] for event in location_events)
     assert any(event["source_layer"] == "inquiry" for event in accessibility_events)
     assert any(event["causal_refs"] for event in accessibility_events)
     assert case_memory_events

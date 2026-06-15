@@ -694,15 +694,18 @@ def _inquiry_sentence(inquiry: dict[str, Any]) -> str:
     label = inquiry.get("label") or inquiry.get("focus_id") or "案件线索"
     movement = inquiry.get("movement")
     state_after = inquiry.get("state_after", {}) or {}
+    location = inquiry.get("location", {}) or {}
+    location_label = location.get("location_label")
+    location_text = f"在{location_label}" if location_label else ""
     progress = _fmt_report(state_after.get("progress"))
     contamination = _fmt_report(state_after.get("contamination"))
     if movement == "evidence_review_contaminates_relation":
-        return f"调查推进到“{label}”，但证物污染也在上升（进展 {progress}，污染 {contamination}）。"
+        return f"调查{location_text}推进到“{label}”，但证物污染也在上升（进展 {progress}，污染 {contamination}）。"
     if movement == "testimony_probe_raises_retraction_pressure":
-        return f"追问触碰到“{label}”，证词可用性提高，同时撤回压力变大。"
+        return f"追问{location_text}触碰到“{label}”，证词可用性提高，同时撤回压力变大。"
     if movement == "symbol_becomes_speakable_but_unstable":
-        return f"“{label}”被说出口，却仍不能成为稳定事实。"
-    return f"案件压力沉积到“{label}”，它开始改变两人的可行动空间。"
+        return f"“{label}”{location_text}被说出口，却仍不能成为稳定事实。"
+    return f"案件压力{location_text}沉积到“{label}”，它开始改变两人的可行动空间。"
 
 
 def _fate_sentence(fates: list[dict[str, Any]]) -> str:

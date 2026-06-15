@@ -110,6 +110,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         "",
         _case_ledger_line(case_ledger),
         f"- 调查更新：{len(inquiry_trace)}。最近焦点：{_latest_inquiry_focus(inquiry_trace)}。",
+        f"- 地点耦合：{_location_coupling_summary(inquiry_trace)}",
         f"- 证据可达性：{_evidence_access_summary(inquiry_trace)}",
         f"- 案件记忆：{_case_memory_summary(memory_trace)}",
         "",
@@ -184,6 +185,24 @@ def _evidence_access_summary(inquiry_trace: list[dict[str, Any]]) -> str:
     return (
         f"{latest.get('label') or latest.get('focus_id') or '-'}："
         f"{_label(after.get('access_status', '-'))}，可达 {_fmt(after.get('accessibility'))}"
+    )
+
+
+def _location_coupling_summary(inquiry_trace: list[dict[str, Any]]) -> str:
+    couplings = [
+        item
+        for item in inquiry_trace
+        if item.get("event_type") == "LocationEvidenceCouplingEvent" or item.get("location_after")
+    ]
+    if not couplings:
+        return "-"
+    latest = couplings[-1]
+    after = latest.get("location_after", {}) or {}
+    effects = "，".join(str(effect) for effect in (after.get("field_effects", []) or [])[:3])
+    return (
+        f"{after.get('location_label') or after.get('location_id') or '-'}；"
+        f"地点压力 {_fmt(after.get('location_pressure'))}，污染 {_fmt(after.get('contamination'))}，"
+        f"地点可达 {_fmt(after.get('location_accessibility'))}；效应：{effects or '-'}"
     )
 
 
@@ -303,6 +322,7 @@ def llm_markdown(
                 "changed irreversible records",
                 "changed investigation progress or contamination state",
                 "changed evidence accessibility state",
+                "changed location-evidence coupling state",
                 "changed case memory reconstruction",
                 "causes not present in viability/action/expression/recognition evidence",
             ],

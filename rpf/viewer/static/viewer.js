@@ -337,6 +337,17 @@ function renderCaseLedger() {
 }
 
 function inquiryText(item) {
+  if (item.event_type === "LocationEvidenceCouplingEvent") {
+    const after = item.location_after || {};
+    const delta = item.location_delta || {};
+    return ledgerItem(`Tick ${item.tick} · ${after.location_id || item.focus_id || "location"}`, item.coupling_reason || after.location_label || "-", [
+      "地点-证据耦合",
+      after.location_label || "-",
+      `地点压力 ${fmt(after.location_pressure)} (${signed(delta.pressure)})`,
+      `地点污染 ${fmt(after.contamination)} (${signed(delta.contamination)})`,
+      `${zh(after.access_status)} / 可达 ${fmt(after.location_accessibility)}`,
+    ]);
+  }
   if (item.event_type === "EvidenceAccessibilityEvent") {
     const before = item.accessibility_before || {};
     const after = item.accessibility_after || {};

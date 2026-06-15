@@ -19,7 +19,18 @@ class InquiryEngine:
 
     def __init__(self, case_ledger: dict[str, Any] | None = None) -> None:
         self.case_ledger = case_ledger if isinstance(case_ledger, dict) else {}
-        self.item_states: dict[str, dict[str, float]] = {}
+        self.item_states: dict[str, dict[str, Any]] = {}
+        self.locations = {
+            str(item.get("location_id")): item
+            for item in self.case_ledger.get("locations", []) or []
+            if item.get("location_id")
+        }
+        self.evidence_locations = {
+            str(item.get("evidence_id")): str(item.get("location_id"))
+            for item in self.case_ledger.get("evidence_items", []) or []
+            if item.get("evidence_id") and item.get("location_id")
+        }
+        self.location_states: dict[str, dict[str, Any]] = {}
         self.sequence = 0
         self._initialize_states()
 
@@ -40,6 +51,7 @@ class InquiryEngine:
         expression = self._latest(local_events, "ExpressionSelectionEvent")
         recognition = self._latest(local_events, "RecognitionEvent")
         movement = self._movement(context, affordance, action, expression, recognition)
+        location_before = self._location_payload(focus)
         item_state = self.item_states.setdefault(
             focus["id"],
             {
@@ -56,7 +68,9 @@ class InquiryEngine:
         item_state["suppression"] = clamp(item_state["suppression"] + movement["suppression_delta"])
         item_state["relationship_risk"] = clamp(item_state["relationship_risk"] + movement["relationship_risk_delta"])
         self._update_focus_accessibility(focus, item_state, movement)
+        self._update_location_state(focus, movement, context)
         accessibility_after = self._accessibility_payload(focus, item_state)
+        location_after = self._location_payload(focus)
         self._apply_feedback(state, focus, movement, item_state)
         payload = {
             "inquiry_id": f"inquiry-{state.tick:03d}-{self.sequence:03d}",
@@ -64,6 +78,7 @@ class InquiryEngine:
             "focus_type": focus["type"],
             "focus_id": focus["id"],
             "label": focus["label"],
+            "location": location_after,
             "movement": movement["movement"],
             "tick_type": context.tick_type,
             "linked_affordance": affordance.get("affordance_id"),
@@ -80,6 +95,8 @@ class InquiryEngine:
             "state_after": self._numeric_state(item_state),
             "accessibility_before": accessibility_before,
             "accessibility_after": accessibility_after,
+            "location_before": location_before,
+            "location_after": location_after,
             "relational_feedback": movement["relational_feedback"],
             "narrative_boundary": self._boundary_note(focus, item_state),
         }
@@ -102,6 +119,7 @@ class InquiryEngine:
             "focus_type": focus["type"],
             "focus_id": focus["id"],
             "label": focus["label"],
+            "location": location_after,
             "tick_type": context.tick_type,
             "accessibility_before": accessibility_before,
             "accessibility_after": accessibility_after,
@@ -109,7 +127,23 @@ class InquiryEngine:
             "access_status_changed": accessibility_before["access_status"] != accessibility_after["access_status"],
             "access_reason": self._access_reason(accessibility_after),
         }
+        location_payload = {
+            "case_id": self.case_ledger.get("case_id"),
+            "focus_type": focus["type"],
+            "focus_id": focus["id"],
+            "label": focus["label"],
+            "tick_type": context.tick_type,
+            "location_before": location_before,
+            "location_after": location_after,
+            "location_delta": {
+                "pressure": round(location_after["location_pressure"] - location_before["location_pressure"], 4),
+                "contamination": round(location_after["contamination"] - location_before["contamination"], 4),
+                "accessibility": round(location_after["location_accessibility"] - location_before["location_accessibility"], 4),
+            },
+            "coupling_reason": self._location_reason(focus, location_after),
+        }
         return [
+            InquiryUpdate(event_type="LocationEvidenceCouplingEvent", payload=location_payload, causal_refs=causal_refs),
             InquiryUpdate(event_type="EvidenceAccessibilityEvent", payload=access_payload, causal_refs=causal_refs),
             InquiryUpdate(event_type="InvestigationUpdateEvent", payload=payload, causal_refs=causal_refs),
         ]
@@ -133,28 +167,49 @@ class InquiryEngine:
                     "relationship_risk": 0.0,
                     "accessibility": clamp(1.0 - float(item.get("contamination_risk", 0.0) or 0.0) * 0.35),
                     "blocked_ticks": 0.0,
+                    "location_id": self._item_location(collection, item),
                 }
+        for location_id, location in self.locations.items():
+            contamination = float(location.get("contamination_risk", 0.0) or 0.0)
+            self.location_states[location_id] = {
+                "location_pressure": contamination * 0.35,
+                "contamination": contamination,
+                "location_accessibility": clamp(1.0 - contamination * 0.25),
+                "visit_count": 0.0,
+            }
 
     def _select_focus(self, state: SimulationState, context: TickContext, local_events: list[Event]) -> dict[str, Any] | None:
         affordance_id = str(self._latest(local_events, "AffordanceSelectionEvent").get("affordance_id", ""))
+        preferred_location = self._preferred_location(affordance_id)
         if affordance_id == "contaminated_evidence_review":
-            return self._highest("evidence_items", "evidence_id", "label", ["contamination_risk", "reliability"])
+            return self._highest("evidence_items", "evidence_id", "label", ["contamination_risk", "reliability"], preferred_location)
         if affordance_id == "unstable_testimony_probe":
-            return self._highest("testimonies", "testimony_id", "statement", ["pressure_to_retract", "contamination_exposure"])
+            return self._highest("testimonies", "testimony_id", "statement", ["pressure_to_retract", "contamination_exposure"], preferred_location)
         if affordance_id == "forbidden_symbol_confrontation":
             return self._symbol_focus()
         if context.tick_type == "latent":
-            return self._highest("contradictions", "contradiction_id", "text", ["suppression"])
+            return self._highest("contradictions", "contradiction_id", "text", ["suppression"], preferred_location)
         if state.tick % 4 == 0:
-            return self._highest("unverified_anomalies", "anomaly_id", "text", ["ambiguity"])
-        return self._highest("known_facts", "fact_id", "text", ["reliability"])
+            return self._highest("unverified_anomalies", "anomaly_id", "text", ["ambiguity"], preferred_location)
+        return self._highest("known_facts", "fact_id", "text", ["reliability"], preferred_location)
 
-    def _highest(self, collection: str, id_key: str, label_key: str, score_keys: list[str]) -> dict[str, Any] | None:
+    def _highest(
+        self,
+        collection: str,
+        id_key: str,
+        label_key: str,
+        score_keys: list[str],
+        preferred_location: str | None = None,
+    ) -> dict[str, Any] | None:
         rows = self.case_ledger.get(collection, []) or []
         if not rows:
             return None
         available = [item for item in rows if self._is_accessible(str(item.get(id_key, "")))]
         candidates = available or rows
+        if preferred_location:
+            located = [item for item in candidates if self._item_location(collection, item) == preferred_location]
+            if located:
+                candidates = located
         selected = max(candidates, key=lambda item: self._focus_score(item, id_key, score_keys))
         return self._focus(collection, selected, id_key, label_key)
 
@@ -162,8 +217,11 @@ class InquiryEngine:
         item_id = str(item.get(id_key, ""))
         item_state = self.item_states.get(item_id, {})
         accessibility = float(item_state.get("accessibility", 1.0) or 0.0)
+        location_id = str(item_state.get("location_id") or self._item_location("", item))
+        location_state = self.location_states.get(location_id, {})
+        location_access = float(location_state.get("location_accessibility", 1.0) or 1.0)
         blocked_penalty = 0.35 if item_state.get("access_status") == "blocked" else 0.0
-        return sum(float(item.get(key, 0.0) or 0.0) for key in score_keys) + accessibility * 0.3 - blocked_penalty
+        return sum(float(item.get(key, 0.0) or 0.0) for key in score_keys) + accessibility * 0.25 + location_access * 0.12 - blocked_penalty
 
     def _is_accessible(self, item_id: str) -> bool:
         item_state = self.item_states.get(item_id, {})
@@ -178,13 +236,42 @@ class InquiryEngine:
 
     def _focus(self, collection: str, item: dict[str, Any], id_key: str, label_key: str) -> dict[str, Any]:
         item_id = str(item.get(id_key, collection))
+        location_id = self._item_location(collection, item)
+        location = self.locations.get(location_id, {})
         return {
             "type": collection,
             "id": item_id,
             "label": str(item.get(label_key) or item_id),
             "contamination_risk": float(item.get("contamination_risk", 0.0) or 0.0),
+            "location_id": location_id,
+            "location_label": str(location.get("label") or location_id or "unknown location"),
+            "location_effects": [str(effect) for effect in location.get("field_effects", []) or []],
+            "location_scene_biases": [str(bias) for bias in location.get("scene_biases", []) or []],
             "ledger_refs": [item_id, *[str(ref) for ref in item.get("linked_evidence", []) or []]],
         }
+
+    def _item_location(self, collection: str, item: dict[str, Any]) -> str:
+        direct = str(item.get("location_id") or "")
+        if direct:
+            return direct
+        linked = [str(ref) for ref in item.get("linked_evidence", []) or []]
+        for ref in linked:
+            if ref in self.evidence_locations:
+                return self.evidence_locations[ref]
+        if collection == "testimonies":
+            return "evidence_room_yellow_light"
+        if collection == "unverified_anomalies":
+            return "flooded_road_to_refinery"
+        return "archive_basement"
+
+    def _preferred_location(self, affordance_id: str) -> str | None:
+        if affordance_id == "contaminated_evidence_review":
+            return "archive_basement"
+        if affordance_id == "unstable_testimony_probe":
+            return "evidence_room_yellow_light"
+        if affordance_id == "forbidden_symbol_confrontation":
+            return "flooded_road_to_refinery"
+        return None
 
     def _refresh_accessibility(self, state: SimulationState, context: TickContext) -> None:
         fatigue = sum(process.fatigue for process in state.processes.values()) / max(1, len(state.processes))
@@ -210,6 +297,13 @@ class InquiryEngine:
                 item_state["blocked_ticks"] = float(item_state.get("blocked_ticks", 0.0) or 0.0) + 1.0
             else:
                 item_state["blocked_ticks"] = 0.0
+        for location_state in self.location_states.values():
+            contamination = float(location_state.get("contamination", 0.0) or 0.0)
+            pressure = float(location_state.get("location_pressure", 0.0) or 0.0)
+            access = float(location_state.get("location_accessibility", 1.0) or 0.0)
+            access = clamp(access + latent_relief * 0.5 - contamination * 0.006 - pressure * 0.01 - institutional_pressure * 0.003)
+            location_state["location_accessibility"] = access
+            location_state["access_status"] = self._access_status(access)
 
     def _update_focus_accessibility(self, focus: dict[str, Any], item_state: dict[str, float], movement: dict[str, Any]) -> None:
         accessibility = float(item_state.get("accessibility", 1.0) or 0.0)
@@ -225,6 +319,39 @@ class InquiryEngine:
         item_state["accessibility"] = accessibility
         item_state["access_status"] = self._access_status(accessibility)
 
+    def _update_location_state(self, focus: dict[str, Any], movement: dict[str, Any], context: TickContext) -> None:
+        location_id = focus.get("location_id")
+        if not location_id:
+            return
+        location_state = self.location_states.setdefault(
+            str(location_id),
+            {
+                "location_pressure": 0.0,
+                "contamination": 0.0,
+                "location_accessibility": 1.0,
+                "visit_count": 0.0,
+            },
+        )
+        scene_multiplier = 1.25 if context.tick_type == "scene" else 0.75 if context.tick_type == "latent" else 1.0
+        location_state["visit_count"] = float(location_state.get("visit_count", 0.0) or 0.0) + 1.0
+        location_state["location_pressure"] = clamp(
+            float(location_state.get("location_pressure", 0.0) or 0.0)
+            + movement["relationship_risk_delta"] * 0.4 * scene_multiplier
+            + movement["suppression_delta"] * 0.25
+        )
+        location_state["contamination"] = clamp(
+            float(location_state.get("contamination", 0.0) or 0.0)
+            + movement["contamination_delta"] * 0.32 * scene_multiplier
+        )
+        location_state["location_accessibility"] = clamp(
+            float(location_state.get("location_accessibility", 1.0) or 0.0)
+            + movement["progress_delta"] * 0.04
+            - movement["contamination_delta"] * 0.18
+            - movement["suppression_delta"] * 0.14
+            - movement["relationship_risk_delta"] * 0.12
+        )
+        location_state["access_status"] = self._access_status(float(location_state["location_accessibility"]))
+
     def _accessibility_payload(self, focus: dict[str, Any], item_state: dict[str, float]) -> dict[str, Any]:
         accessibility = float(item_state.get("accessibility", 1.0) or 0.0)
         status = str(item_state.get("access_status") or self._access_status(accessibility))
@@ -234,6 +361,22 @@ class InquiryEngine:
             "accessibility": round(accessibility, 4),
             "access_status": status,
             "blocked_ticks": int(item_state.get("blocked_ticks", 0.0) or 0.0),
+        }
+
+    def _location_payload(self, focus: dict[str, Any]) -> dict[str, Any]:
+        location_id = str(focus.get("location_id") or "")
+        state = self.location_states.get(location_id, {})
+        accessibility = float(state.get("location_accessibility", 1.0) or 0.0)
+        return {
+            "location_id": location_id,
+            "location_label": focus.get("location_label") or location_id or "unknown location",
+            "field_effects": focus.get("location_effects", []),
+            "scene_biases": focus.get("location_scene_biases", []),
+            "location_pressure": round(float(state.get("location_pressure", 0.0) or 0.0), 4),
+            "contamination": round(float(state.get("contamination", 0.0) or 0.0), 4),
+            "location_accessibility": round(accessibility, 4),
+            "access_status": str(state.get("access_status") or self._access_status(accessibility)),
+            "visit_count": int(state.get("visit_count", 0.0) or 0.0),
         }
 
     def _numeric_state(self, item_state: dict[str, Any]) -> dict[str, float]:
@@ -261,6 +404,18 @@ class InquiryEngine:
         if status == "fragile":
             return "touching this evidence may further damage its usability"
         return "evidence is temporarily blocked by contamination, suppression, or relational risk"
+
+    def _location_reason(self, focus: dict[str, Any], location: dict[str, Any]) -> str:
+        effects = "、".join(str(effect) for effect in location.get("field_effects", [])[:3])
+        label = location.get("location_label") or focus.get("location_label") or "unknown location"
+        status = location.get("access_status", "available")
+        if status == "blocked":
+            return f"{label} blocks the evidence through {effects or 'accumulated pressure'}"
+        if status == "fragile":
+            return f"{label} makes the evidence reachable only at risk of further distortion"
+        if status == "restricted":
+            return f"{label} constrains how the evidence can be approached"
+        return f"{label} makes this evidence practically reachable"
 
     def _movement(
         self,
@@ -351,6 +506,8 @@ class InquiryEngine:
         material["case_contamination"] = clamp(float(material.get("case_contamination", 0.0) or 0.0) + movement["contamination_delta"] * 0.12)
         material["case_suppression"] = clamp(float(material.get("case_suppression", 0.0) or 0.0) + movement["suppression_delta"] * 0.1)
         material["evidence_access_narrowing"] = clamp(1.0 - item_state.get("accessibility", 1.0))
+        if focus.get("location_id"):
+            material[f"location_pressure.{focus['location_id']}"] = self.location_states.get(str(focus["location_id"]), {}).get("location_pressure", 0.0)
         if focus["type"] in {"testimonies", "evidence_items"}:
             p1 = state.processes.get("p1")
             if p1:
