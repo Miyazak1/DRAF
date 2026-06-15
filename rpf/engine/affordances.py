@@ -83,6 +83,10 @@ class AffordanceEngine:
         public_definition = state.relation_metrics.get("relation_sediment.public_definition_load", 0.0)
         asymmetry_load = state.relation_metrics.get("relation_sediment.asymmetry_load", 0.0)
         memory_saturation = state.relation_metrics.get("relation_sediment.memory_saturation", 0.0)
+        inquiry_progress = state.relation_metrics.get("inquiry.progress_pressure", 0.0)
+        inquiry_contamination = state.relation_metrics.get("inquiry.contamination_load", 0.0)
+        inquiry_suppression = state.relation_metrics.get("inquiry.suppression_load", 0.0)
+        inquiry_relationship_risk = state.relation_metrics.get("inquiry.relationship_risk", 0.0)
         remembered_history = memory_pressure(state)
         injury_history = injury_memory(state)
         defensive_history = defensive_memory(state)
@@ -299,6 +303,8 @@ class AffordanceEngine:
                 "material_accounting": frame["material_accounting"] * 0.04,
                 "memory_saturation": memory_saturation * 0.04,
                 "relation_public_definition": public_definition * 0.03,
+                "inquiry_progress_pressure": inquiry_progress * 0.22,
+                "inquiry_contamination_load": inquiry_contamination * 0.16,
             },
             0.66,
             "the file becomes less like evidence and more like a demand for testimony",
@@ -320,6 +326,8 @@ class AffordanceEngine:
                 "frame_recognition_trial": frame["recognition_trial"] * 0.08,
                 "frame_double_bind": frame["double_bind"] * 0.05,
                 "relevance_recognition_claim": relevance["recognition_claim"] * 0.04,
+                "inquiry_suppression_load": inquiry_suppression * 0.22,
+                "inquiry_relationship_risk": inquiry_relationship_risk * 0.16,
             },
             0.78,
             "your memory is needed, but using it may damage the shared reality",
@@ -340,6 +348,8 @@ class AffordanceEngine:
                 "relation_memory_saturation": memory_saturation * 0.05,
                 "frame_double_bind": frame["double_bind"] * 0.07,
                 "relevance_double_bind": relevance["double_bind"] * 0.05,
+                "inquiry_contamination_load": inquiry_contamination * 0.24,
+                "inquiry_relationship_risk": inquiry_relationship_risk * 0.18,
             },
             0.86,
             "the symbol cannot be verified, but not naming it now changes the case",

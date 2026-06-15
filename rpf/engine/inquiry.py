@@ -218,6 +218,22 @@ class InquiryEngine:
         feedback = movement["relational_feedback"]
         for key, delta in feedback.items():
             state.relation_metrics[key] = clamp(float(state.relation_metrics.get(key, 0.0) or 0.0) + float(delta))
+        state.relation_metrics["inquiry.progress_pressure"] = clamp(
+            float(state.relation_metrics.get("inquiry.progress_pressure", 0.0) or 0.0)
+            + item_state["progress"] * 0.035
+        )
+        state.relation_metrics["inquiry.contamination_load"] = clamp(
+            float(state.relation_metrics.get("inquiry.contamination_load", 0.0) or 0.0)
+            + item_state["contamination"] * 0.025
+        )
+        state.relation_metrics["inquiry.suppression_load"] = clamp(
+            float(state.relation_metrics.get("inquiry.suppression_load", 0.0) or 0.0)
+            + item_state["suppression"] * 0.03
+        )
+        state.relation_metrics["inquiry.relationship_risk"] = clamp(
+            float(state.relation_metrics.get("inquiry.relationship_risk", 0.0) or 0.0)
+            + item_state["relationship_risk"] * 0.04
+        )
         material = state.field_state.material_pressures
         material["case_contamination"] = clamp(float(material.get("case_contamination", 0.0) or 0.0) + movement["contamination_delta"] * 0.12)
         material["case_suppression"] = clamp(float(material.get("case_suppression", 0.0) or 0.0) + movement["suppression_delta"] * 0.1)

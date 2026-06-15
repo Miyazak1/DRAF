@@ -424,6 +424,8 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     sim.run(steps=8, output_dir=output_dir)
 
     inquiry = json.loads((output_dir / "inquiry_trace.json").read_text())
+    scheduler = json.loads((output_dir / "scheduler_diagnostics.json").read_text())
+    affordance = json.loads((output_dir / "affordance_trace.json").read_text())
     timeline_events = [
         json.loads(line)
         for line in (output_dir / "timeline.jsonl").read_text().splitlines()
@@ -438,3 +440,11 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     assert any(item["relational_feedback"]["conflict_pressure"] > 0 for item in inquiry)
     assert any(event["source_layer"] == "inquiry" for event in investigation_events)
     assert any(event["causal_refs"] for event in investigation_events)
+    assert all("inquiry_pressure" in item["input_factors"] for item in scheduler)
+    assert any(item["input_factors"]["inquiry_pressure"] > 0 for item in scheduler[1:])
+    assert any(
+        key.startswith("inquiry_")
+        for item in affordance
+        for candidate in item["candidates"]
+        for key in candidate["evidence"]
+    )
