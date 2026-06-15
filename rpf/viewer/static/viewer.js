@@ -17,6 +17,8 @@ const ZH = {
   unstable: "不稳定",
   building: "累积中",
   available: "可用",
+  restricted: "受限",
+  blocked: "被遮蔽",
   demanding: "持续索取承认",
   withholding: "收回表达",
   careful: "谨慎防御",
@@ -335,6 +337,16 @@ function renderCaseLedger() {
 }
 
 function inquiryText(item) {
+  if (item.event_type === "EvidenceAccessibilityEvent") {
+    const before = item.accessibility_before || {};
+    const after = item.accessibility_after || {};
+    return ledgerItem(`Tick ${item.tick} · ${item.focus_id || "access"}`, item.label || item.access_reason || "-", [
+      "证据可达性",
+      `${zh(before.access_status)} → ${zh(after.access_status)}`,
+      `可达 ${fmt(after.accessibility)} (${signed(item.accessibility_delta)})`,
+      zh(item.access_reason || ""),
+    ]);
+  }
   const state = item.state_after || {};
   const deltas = item.deltas || {};
   return ledgerItem(`Tick ${item.tick} · ${item.focus_id || item.inquiry_id}`, item.label || item.narrative_boundary || "-", [

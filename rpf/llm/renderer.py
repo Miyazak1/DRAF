@@ -18,6 +18,9 @@ LABELS = {
     "cold-war": "冷战",
     "repair-avoidant": "回避修复",
     "fragile": "脆弱",
+    "available": "可用",
+    "restricted": "受限",
+    "blocked": "被遮蔽",
     "micro_interaction": "微交互",
     "scene": "场景",
     "latent": "潜伏",
@@ -107,6 +110,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         "",
         _case_ledger_line(case_ledger),
         f"- 调查更新：{len(inquiry_trace)}。最近焦点：{_latest_inquiry_focus(inquiry_trace)}。",
+        f"- 证据可达性：{_evidence_access_summary(inquiry_trace)}",
         f"- 案件记忆：{_case_memory_summary(memory_trace)}",
         "",
         "## 时间线",
@@ -156,13 +160,30 @@ def _case_ledger_line(case_ledger: dict[str, Any]) -> str:
 
 
 def _latest_inquiry_focus(inquiry_trace: list[dict[str, Any]]) -> str:
-    if not inquiry_trace:
+    investigation = [item for item in inquiry_trace if item.get("event_type") == "InvestigationUpdateEvent" or item.get("state_after")]
+    if not investigation:
         return "-"
-    latest = inquiry_trace[-1]
+    latest = investigation[-1]
     state = latest.get("state_after", {}) or {}
     return (
         f"{latest.get('label') or latest.get('focus_id') or '-'}，"
         f"进展 {_fmt(state.get('progress'))}，污染 {_fmt(state.get('contamination'))}"
+    )
+
+
+def _evidence_access_summary(inquiry_trace: list[dict[str, Any]]) -> str:
+    access = [
+        item
+        for item in inquiry_trace
+        if item.get("event_type") == "EvidenceAccessibilityEvent" or item.get("accessibility_after")
+    ]
+    if not access:
+        return "-"
+    latest = access[-1]
+    after = latest.get("accessibility_after", {}) or {}
+    return (
+        f"{latest.get('label') or latest.get('focus_id') or '-'}："
+        f"{_label(after.get('access_status', '-'))}，可达 {_fmt(after.get('accessibility'))}"
     )
 
 
@@ -281,6 +302,7 @@ def llm_markdown(
                 "changed recognition outcomes",
                 "changed irreversible records",
                 "changed investigation progress or contamination state",
+                "changed evidence accessibility state",
                 "changed case memory reconstruction",
                 "causes not present in viability/action/expression/recognition evidence",
             ],

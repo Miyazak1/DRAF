@@ -410,10 +410,10 @@ class Simulator:
         emitted: list[Event] = []
         for update in self.inquiry.update(self.state, context, local_events):
             payload = update.payload
-            self.inquiry_trace.append({"tick": self.state.tick, **payload})
+            self.inquiry_trace.append({"tick": self.state.tick, "event_type": update.event_type, **payload})
             emitted.append(
                 self._event(
-                    "InvestigationUpdateEvent",
+                    update.event_type,
                     "inquiry",
                     payload,
                     update.causal_refs,

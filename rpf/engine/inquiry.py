@@ -9,6 +9,7 @@ from rpf.core.models import SimulationState, TickContext, clamp
 
 @dataclass(frozen=True)
 class InquiryUpdate:
+    event_type: str
     payload: dict[str, Any]
     causal_refs: list[str]
 
@@ -29,6 +30,7 @@ class InquiryEngine:
     def update(self, state: SimulationState, context: TickContext, local_events: list[Event]) -> list[InquiryUpdate]:
         if not self.enabled:
             return []
+        self._refresh_accessibility(state, context)
         focus = self._select_focus(state, context, local_events)
         if not focus:
             return []
@@ -48,10 +50,13 @@ class InquiryEngine:
             },
         )
         before = dict(item_state)
+        accessibility_before = self._accessibility_payload(focus, item_state)
         item_state["progress"] = clamp(item_state["progress"] + movement["progress_delta"])
         item_state["contamination"] = clamp(item_state["contamination"] + movement["contamination_delta"])
         item_state["suppression"] = clamp(item_state["suppression"] + movement["suppression_delta"])
         item_state["relationship_risk"] = clamp(item_state["relationship_risk"] + movement["relationship_risk_delta"])
+        self._update_focus_accessibility(focus, item_state, movement)
+        accessibility_after = self._accessibility_payload(focus, item_state)
         self._apply_feedback(state, focus, movement, item_state)
         payload = {
             "inquiry_id": f"inquiry-{state.tick:03d}-{self.sequence:03d}",
@@ -72,7 +77,9 @@ class InquiryEngine:
                 "suppression": round(item_state["suppression"] - before["suppression"], 4),
                 "relationship_risk": round(item_state["relationship_risk"] - before["relationship_risk"], 4),
             },
-            "state_after": {key: round(value, 4) for key, value in item_state.items()},
+            "state_after": self._numeric_state(item_state),
+            "accessibility_before": accessibility_before,
+            "accessibility_after": accessibility_after,
             "relational_feedback": movement["relational_feedback"],
             "narrative_boundary": self._boundary_note(focus, item_state),
         }
@@ -90,7 +97,22 @@ class InquiryEngine:
                 "LatentTimeEvent",
             }
         ][-5:]
-        return [InquiryUpdate(payload=payload, causal_refs=causal_refs)]
+        access_payload = {
+            "case_id": self.case_ledger.get("case_id"),
+            "focus_type": focus["type"],
+            "focus_id": focus["id"],
+            "label": focus["label"],
+            "tick_type": context.tick_type,
+            "accessibility_before": accessibility_before,
+            "accessibility_after": accessibility_after,
+            "accessibility_delta": round(accessibility_after["accessibility"] - accessibility_before["accessibility"], 4),
+            "access_status_changed": accessibility_before["access_status"] != accessibility_after["access_status"],
+            "access_reason": self._access_reason(accessibility_after),
+        }
+        return [
+            InquiryUpdate(event_type="EvidenceAccessibilityEvent", payload=access_payload, causal_refs=causal_refs),
+            InquiryUpdate(event_type="InvestigationUpdateEvent", payload=payload, causal_refs=causal_refs),
+        ]
 
     def _initialize_states(self) -> None:
         for collection, id_key in (
@@ -109,6 +131,8 @@ class InquiryEngine:
                     "contamination": float(item.get("contamination_risk", 0.0) or 0.0),
                     "suppression": float(item.get("pressure_to_retract", 0.0) or 0.0) * 0.25,
                     "relationship_risk": 0.0,
+                    "accessibility": clamp(1.0 - float(item.get("contamination_risk", 0.0) or 0.0) * 0.35),
+                    "blocked_ticks": 0.0,
                 }
 
     def _select_focus(self, state: SimulationState, context: TickContext, local_events: list[Event]) -> dict[str, Any] | None:
@@ -129,8 +153,21 @@ class InquiryEngine:
         rows = self.case_ledger.get(collection, []) or []
         if not rows:
             return None
-        selected = max(rows, key=lambda item: sum(float(item.get(key, 0.0) or 0.0) for key in score_keys))
+        available = [item for item in rows if self._is_accessible(str(item.get(id_key, "")))]
+        candidates = available or rows
+        selected = max(candidates, key=lambda item: self._focus_score(item, id_key, score_keys))
         return self._focus(collection, selected, id_key, label_key)
+
+    def _focus_score(self, item: dict[str, Any], id_key: str, score_keys: list[str]) -> float:
+        item_id = str(item.get(id_key, ""))
+        item_state = self.item_states.get(item_id, {})
+        accessibility = float(item_state.get("accessibility", 1.0) or 0.0)
+        blocked_penalty = 0.35 if item_state.get("access_status") == "blocked" else 0.0
+        return sum(float(item.get(key, 0.0) or 0.0) for key in score_keys) + accessibility * 0.3 - blocked_penalty
+
+    def _is_accessible(self, item_id: str) -> bool:
+        item_state = self.item_states.get(item_id, {})
+        return item_state.get("access_status") != "blocked" and float(item_state.get("accessibility", 1.0) or 0.0) >= 0.18
 
     def _symbol_focus(self) -> dict[str, Any] | None:
         evidence = self.case_ledger.get("evidence_items", []) or []
@@ -148,6 +185,82 @@ class InquiryEngine:
             "contamination_risk": float(item.get("contamination_risk", 0.0) or 0.0),
             "ledger_refs": [item_id, *[str(ref) for ref in item.get("linked_evidence", []) or []]],
         }
+
+    def _refresh_accessibility(self, state: SimulationState, context: TickContext) -> None:
+        fatigue = sum(process.fatigue for process in state.processes.values()) / max(1, len(state.processes))
+        institutional_pressure = max(state.field_state.audience_pressure.values(), default=0.0)
+        latent_relief = 0.025 if context.tick_type == "latent" else 0.0
+        for item_state in self.item_states.values():
+            contamination = float(item_state.get("contamination", 0.0) or 0.0)
+            suppression = float(item_state.get("suppression", 0.0) or 0.0)
+            relationship_risk = float(item_state.get("relationship_risk", 0.0) or 0.0)
+            accessibility = float(item_state.get("accessibility", 1.0) or 0.0)
+            accessibility = clamp(
+                accessibility
+                + latent_relief
+                - contamination * 0.01
+                - suppression * 0.014
+                - relationship_risk * 0.012
+                - fatigue * 0.004
+                - institutional_pressure * 0.003
+            )
+            item_state["accessibility"] = accessibility
+            item_state["access_status"] = self._access_status(accessibility)
+            if item_state["access_status"] == "blocked":
+                item_state["blocked_ticks"] = float(item_state.get("blocked_ticks", 0.0) or 0.0) + 1.0
+            else:
+                item_state["blocked_ticks"] = 0.0
+
+    def _update_focus_accessibility(self, focus: dict[str, Any], item_state: dict[str, float], movement: dict[str, Any]) -> None:
+        accessibility = float(item_state.get("accessibility", 1.0) or 0.0)
+        accessibility = clamp(
+            accessibility
+            + movement["progress_delta"] * 0.08
+            - movement["contamination_delta"] * 0.42
+            - movement["suppression_delta"] * 0.34
+            - movement["relationship_risk_delta"] * 0.24
+        )
+        if focus["type"] in {"known_facts", "contradictions"}:
+            accessibility = clamp(accessibility + movement["progress_delta"] * 0.04)
+        item_state["accessibility"] = accessibility
+        item_state["access_status"] = self._access_status(accessibility)
+
+    def _accessibility_payload(self, focus: dict[str, Any], item_state: dict[str, float]) -> dict[str, Any]:
+        accessibility = float(item_state.get("accessibility", 1.0) or 0.0)
+        status = str(item_state.get("access_status") or self._access_status(accessibility))
+        return {
+            "focus_id": focus["id"],
+            "focus_type": focus["type"],
+            "accessibility": round(accessibility, 4),
+            "access_status": status,
+            "blocked_ticks": int(item_state.get("blocked_ticks", 0.0) or 0.0),
+        }
+
+    def _numeric_state(self, item_state: dict[str, Any]) -> dict[str, float]:
+        result: dict[str, float] = {}
+        for key, value in item_state.items():
+            if isinstance(value, (int, float)):
+                result[key] = round(float(value), 4)
+        return result
+
+    def _access_status(self, accessibility: float) -> str:
+        if accessibility >= 0.66:
+            return "available"
+        if accessibility >= 0.38:
+            return "restricted"
+        if accessibility >= 0.18:
+            return "fragile"
+        return "blocked"
+
+    def _access_reason(self, access: dict[str, Any]) -> str:
+        status = access.get("access_status")
+        if status == "available":
+            return "evidence can be approached without immediate deformation"
+        if status == "restricted":
+            return "evidence remains reachable, but only through constraint"
+        if status == "fragile":
+            return "touching this evidence may further damage its usability"
+        return "evidence is temporarily blocked by contamination, suppression, or relational risk"
 
     def _movement(
         self,
@@ -237,6 +350,7 @@ class InquiryEngine:
         material = state.field_state.material_pressures
         material["case_contamination"] = clamp(float(material.get("case_contamination", 0.0) or 0.0) + movement["contamination_delta"] * 0.12)
         material["case_suppression"] = clamp(float(material.get("case_suppression", 0.0) or 0.0) + movement["suppression_delta"] * 0.1)
+        material["evidence_access_narrowing"] = clamp(1.0 - item_state.get("accessibility", 1.0))
         if focus["type"] in {"testimonies", "evidence_items"}:
             p1 = state.processes.get("p1")
             if p1:
