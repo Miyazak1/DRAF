@@ -118,6 +118,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "expression": _read_json(run_dir / "expression_trace.json", []),
         "recognition": _read_json(run_dir / "recognition_trace.json", []),
         "viability": _read_json(run_dir / "viability_trace.json", []),
+        "inquiry": _read_json(run_dir / "inquiry_trace.json", []),
         "fate": _read_json(run_dir / "fate_transition_trace.json", []),
         "frame_definition": _read_json(run_dir / "frame_trace.json", []),
         "account": _read_json(run_dir / "account_trace.json", []),
@@ -281,6 +282,7 @@ def build_run_report(output_dir: Path) -> str:
         f"- 证词：{len(case_ledger.get('testimonies', []) or [])}",
         f"- 矛盾：{len(case_ledger.get('contradictions', []) or [])}",
         f"- 未证实异常：{len(case_ledger.get('unverified_anomalies', []) or [])}",
+        f"- 调查更新：{len(payload.get('inquiry', []) or [])}",
         "",
         "## 末端压力",
         "",
@@ -373,6 +375,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "rendered_story_stream.md",
         "rendered_segments.json",
         "scheduler_diagnostics.json",
+        "inquiry_trace.json",
         "projection_trace.json",
         "affordance_trace.json",
         "action_trace.json",
@@ -405,6 +408,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
     action_by_tick = {item.get("tick"): item.get("selected_action", {}) for item in payload.get("action", [])}
     expression_by_tick = {item.get("tick"): item.get("selected_expression", {}) for item in payload.get("expression", [])}
     recognition_by_tick = {item.get("tick"): item for item in payload.get("recognition", [])}
+    inquiry_by_tick = {item.get("tick"): item for item in payload.get("inquiry", [])}
     viability_by_tick = {item.get("tick"): item for item in payload.get("viability", [])}
     frames_by_tick: dict[int, list[dict[str, Any]]] = {}
     for frame_update in payload.get("frame_definition", []):
@@ -427,6 +431,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
         action = action_by_tick.get(tick_index, {})
         expression = expression_by_tick.get(tick_index, {})
         recognition = recognition_by_tick.get(tick_index)
+        inquiry = inquiry_by_tick.get(tick_index)
         viability = _viability_summary(viability_by_tick.get(tick_index, {}), tick)
         frame_definition = _frame_definition_summary(frames_by_tick.get(tick_index, []))
         position_field = _position_summary(positions_by_tick.get(tick_index, []))
@@ -448,6 +453,8 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
             summary_parts.append(_position_sentence(position_field))
         if recognition:
             summary_parts.append(_recognition_sentence(recognition))
+        if inquiry:
+            summary_parts.append(_inquiry_sentence(inquiry))
         if fates:
             summary_parts.append(_fate_sentence(fates))
         if memories:
@@ -463,6 +470,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "action": action,
                 "expression": expression,
                 "recognition": recognition or {},
+                "inquiry": inquiry or {},
                 "viability": viability,
                 "frame_definition": frame_definition,
                 "position_field": position_field,
@@ -675,6 +683,21 @@ def _recognition_sentence(recognition: dict[str, Any]) -> str:
     if outcome == "granted":
         return "承认被给出，修复暂时变得可能。"
     return ""
+
+
+def _inquiry_sentence(inquiry: dict[str, Any]) -> str:
+    label = inquiry.get("label") or inquiry.get("focus_id") or "案件线索"
+    movement = inquiry.get("movement")
+    state_after = inquiry.get("state_after", {}) or {}
+    progress = _fmt_report(state_after.get("progress"))
+    contamination = _fmt_report(state_after.get("contamination"))
+    if movement == "evidence_review_contaminates_relation":
+        return f"调查推进到“{label}”，但证物污染也在上升（进展 {progress}，污染 {contamination}）。"
+    if movement == "testimony_probe_raises_retraction_pressure":
+        return f"追问触碰到“{label}”，证词可用性提高，同时撤回压力变大。"
+    if movement == "symbol_becomes_speakable_but_unstable":
+        return f"“{label}”被说出口，却仍不能成为稳定事实。"
+    return f"案件压力沉积到“{label}”，它开始改变两人的可行动空间。"
 
 
 def _fate_sentence(fates: list[dict[str, Any]]) -> str:

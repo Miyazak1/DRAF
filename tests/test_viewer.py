@@ -52,6 +52,7 @@ def test_viewer_static_contains_viability_dynamics_panel():
     assert "renderViabilityDynamics" in js
     assert "buildViabilityPoints" in js
     assert "renderCaseLedger" in js
+    assert "调查推进" in js
 
 
 def test_scenario_catalog_exposes_example_scenarios():
@@ -93,6 +94,9 @@ def test_yellow_sign_payload_contains_case_ledger(tmp_path):
     assert any(item["evidence_id"] == "yellow_paint_mark" for item in ledger["evidence_items"])
     assert any(item["testimony_id"] == "lin_ya_gap" for item in ledger["testimonies"])
     assert any(item["contradiction_id"] == "official_closed_but_new_body" for item in ledger["contradictions"])
+    assert payload["inquiry"]
+    assert payload["story"][-1]["inquiry"]
+    assert "调查" in payload["story"][-1]["summary"] or "案件压力" in payload["story"][-1]["summary"]
 
 
 def test_run_catalog_reads_run_metadata(tmp_path):
@@ -241,6 +245,7 @@ def test_export_run_bundle_writes_zip(tmp_path):
 
     assert "run_report.md" in names
     assert "case_ledger.json" in names
+    assert "inquiry_trace.json" in names
     assert "timeline.jsonl" in names
     assert "derived_views.json" in names
 

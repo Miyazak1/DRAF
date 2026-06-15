@@ -31,6 +31,7 @@ from rpf.engine.expression import ExpressionEngine
 from rpf.engine.environment import EnvironmentSedimentationEngine
 from rpf.engine.expectation import ExpectationSedimentationEngine
 from rpf.engine.fate import FateTransitionEngine
+from rpf.engine.inquiry import InquiryEngine
 from rpf.engine.interaction_frame import InteractionFrameEngine
 from rpf.engine.memory import MemoryReconstructionEngine
 from rpf.engine.metrics import compute_metrics
@@ -66,12 +67,14 @@ class Simulator:
         scenario_path: Path,
         config: dict[str, Any],
         render_canon: dict[str, Any] | None = None,
+        case_ledger: dict[str, Any] | None = None,
         steps: int | None = None,
     ) -> None:
         self.state = state
         self.scenario_path = scenario_path
         self.config = config
         self.render_canon = render_canon or {}
+        self.case_ledger = case_ledger or {}
         self.steps = steps
         self.rng = random.Random(state.seed)
         self.scheduler = TemporalScheduler(config["scheduler"])
@@ -93,6 +96,7 @@ class Simulator:
         self.relation = RelationSedimentationEngine()
         self.rpp_dynamics = RPPDynamics(config["rpp_dynamics"])
         self.viability = RelationalViabilityEngine()
+        self.inquiry = InquiryEngine(self.case_ledger)
         self.rpps = [
             PursuitWithdrawalRPP(config["rpps"]["pursuit_withdrawal"]),
             RepairAvoidanceRPP(config["rpps"]["repair_avoidance"]),
@@ -123,6 +127,7 @@ class Simulator:
         self.disposition_trace: list[dict[str, Any]] = []
         self.relation_trace: list[dict[str, Any]] = []
         self.viability_trace: list[dict[str, Any]] = []
+        self.inquiry_trace: list[dict[str, Any]] = []
         self.rpp_activation_trace: list[dict[str, Any]] = []
         self.rpp_dynamics_trace: list[dict[str, Any]] = []
         self.projection_trace: list[dict[str, Any]] = []
@@ -161,6 +166,7 @@ class Simulator:
             scenario_path=scenario_path,
             config=effective_config(scenario),
             render_canon=_render_canon_for_scenario(scenario),
+            case_ledger=scenario.get("case_ledger", {}),
         )
 
     def _event(self, event_type: str, source_layer: str, payload: dict[str, Any] | None = None, causal_refs: list[str] | None = None) -> Event:
@@ -321,6 +327,7 @@ class Simulator:
         (output_dir / "disposition_trace.json").write_text(json.dumps(self.disposition_trace, indent=2), encoding="utf-8")
         (output_dir / "relation_trace.json").write_text(json.dumps(self.relation_trace, indent=2), encoding="utf-8")
         (output_dir / "viability_trace.json").write_text(json.dumps(self.viability_trace, indent=2), encoding="utf-8")
+        (output_dir / "inquiry_trace.json").write_text(json.dumps(self.inquiry_trace, indent=2), encoding="utf-8")
         (output_dir / "rpp_activation_trace.json").write_text(json.dumps(self.rpp_activation_trace, indent=2), encoding="utf-8")
         (output_dir / "rpp_dynamics_trace.json").write_text(json.dumps(self.rpp_dynamics_trace, indent=2), encoding="utf-8")
         (output_dir / "projection_trace.json").write_text(json.dumps(self.projection_trace, indent=2), encoding="utf-8")
@@ -370,6 +377,7 @@ class Simulator:
         local.extend(self._update_rpp_dynamics(local))
         if context.tick_type == "scene":
             local.extend(self._recognition_and_repair(local))
+        local.extend(self._update_inquiry(context, local))
         local.extend(self._classification_and_irreversibility(local))
         local.extend(self._update_memory(local))
         prior_relation_events = self._previous_tick_relation_sedimentation_events()
@@ -397,6 +405,21 @@ class Simulator:
             }
         )
         return context
+
+    def _update_inquiry(self, context: TickContext, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        for update in self.inquiry.update(self.state, context, local_events):
+            payload = update.payload
+            self.inquiry_trace.append({"tick": self.state.tick, **payload})
+            emitted.append(
+                self._event(
+                    "InvestigationUpdateEvent",
+                    "inquiry",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
 
     def _recent_relation_sedimentation_events(self, limit: int = 8) -> list[Event]:
         events = [

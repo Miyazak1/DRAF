@@ -74,6 +74,7 @@ def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dic
         "run_dir": payload.get("run_dir"),
         "render_canon": payload.get("render_canon", {}),
         "case_ledger": payload.get("case_ledger", {}),
+        "inquiry_trace": payload.get("inquiry", []),
         "summary": payload.get("summary"),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
         "person_views": payload.get("derived_views", {}).get("person_views", {}),
@@ -87,6 +88,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
     relationship = render_payload.get("relationship_view", {})
     canon = render_payload.get("render_canon", {})
     case_ledger = render_payload.get("case_ledger", {}) or {}
+    inquiry_trace = render_payload.get("inquiry_trace", []) or []
     title = canon.get("title") or "RPF 故事回放"
     lines = [
         f"# {title}",
@@ -102,6 +104,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         "## 案件账本",
         "",
         _case_ledger_line(case_ledger),
+        f"- 调查更新：{len(inquiry_trace)}。最近焦点：{_latest_inquiry_focus(inquiry_trace)}。",
         "",
         "## 时间线",
         "",
@@ -146,6 +149,17 @@ def _case_ledger_line(case_ledger: dict[str, Any]) -> str:
         f"矛盾 {len(contradictions)}，未证实异常 {len(anomalies)}。"
         f"核心证物：{evidence_names or '-'}。"
         f"主要矛盾：{contradiction_text or '-'}。"
+    )
+
+
+def _latest_inquiry_focus(inquiry_trace: list[dict[str, Any]]) -> str:
+    if not inquiry_trace:
+        return "-"
+    latest = inquiry_trace[-1]
+    state = latest.get("state_after", {}) or {}
+    return (
+        f"{latest.get('label') or latest.get('focus_id') or '-'}，"
+        f"进展 {_fmt(state.get('progress'))}，污染 {_fmt(state.get('contamination'))}"
     )
 
 
@@ -229,6 +243,7 @@ def llm_markdown(
                 "case_ledger.testimonies",
                 "case_ledger.contradictions",
                 "case_ledger.unverified_anomalies",
+                "inquiry_trace",
             ],
             "must_not_invent": [
                 "new characters",
@@ -244,6 +259,7 @@ def llm_markdown(
                 "new future events",
                 "changed recognition outcomes",
                 "changed irreversible records",
+                "changed investigation progress or contamination state",
                 "causes not present in viability/action/expression/recognition evidence",
             ],
             "literary_freedom": [

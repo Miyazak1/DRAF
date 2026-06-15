@@ -415,3 +415,26 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert aggregation["frame_definition"]["value"]
     assert aggregation["relevance_landscape"]["value"]
     assert aggregation["position_field"]["value"]
+
+
+def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
+    scenario_path = Path("examples/yellow_sign_cold_case.yaml")
+    sim = Simulator.from_scenario(load_scenario(scenario_path), scenario_path, seed=42)
+    output_dir = tmp_path / "run"
+    sim.run(steps=8, output_dir=output_dir)
+
+    inquiry = json.loads((output_dir / "inquiry_trace.json").read_text())
+    timeline_events = [
+        json.loads(line)
+        for line in (output_dir / "timeline.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    investigation_events = [event for event in timeline_events if event["event_type"] == "InvestigationUpdateEvent"]
+
+    assert inquiry
+    assert investigation_events
+    assert all(item["focus_id"] for item in inquiry)
+    assert all(item["state_after"]["progress"] >= 0 for item in inquiry)
+    assert any(item["relational_feedback"]["conflict_pressure"] > 0 for item in inquiry)
+    assert any(event["source_layer"] == "inquiry" for event in investigation_events)
+    assert any(event["causal_refs"] for event in investigation_events)

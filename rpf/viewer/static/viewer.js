@@ -219,6 +219,10 @@ const ZH = {
   map_inconsistency: "地图不一致",
   visual_distortion: "视觉扭曲",
   procedural_fatigue: "程序疲劳",
+  evidence_review_contaminates_relation: "证物审阅污染关系",
+  testimony_probe_raises_retraction_pressure: "证词追问提高撤回压力",
+  symbol_becomes_speakable_but_unstable: "符号被说出但不稳定",
+  case_pressure_sediments: "案件压力沉积",
 };
 
 function zh(value) {
@@ -300,6 +304,7 @@ function renderCaseLedger() {
     ["矛盾", ledger.contradictions || [], contradictionText],
     ["未证实异常", ledger.unverified_anomalies || [], anomalyText],
   ];
+  const inquiry = DATA.inquiry || [];
   target.innerHTML = `
     <div class="panel case-summary">
       <div>
@@ -311,7 +316,12 @@ function renderCaseLedger() {
         <span>事实 <b>${(ledger.known_facts || []).length}</b></span>
         <span>证物 <b>${(ledger.evidence_items || []).length}</b></span>
         <span>矛盾 <b>${(ledger.contradictions || []).length}</b></span>
+        <span>推进 <b>${inquiry.length}</b></span>
       </div>
+    </div>
+    <div class="panel case-group">
+      <h3>调查推进</h3>
+      ${inquiry.length ? inquiry.slice(-6).reverse().map(inquiryText).join("") : "<small>暂无调查推进</small>"}
     </div>
     <div class="case-grid">
       ${groups.map(([title, rows, formatter]) => `
@@ -322,6 +332,17 @@ function renderCaseLedger() {
       `).join("")}
     </div>
   `;
+}
+
+function inquiryText(item) {
+  const state = item.state_after || {};
+  const deltas = item.deltas || {};
+  return ledgerItem(`Tick ${item.tick} · ${item.focus_id || item.inquiry_id}`, item.label || item.narrative_boundary || "-", [
+    zh(item.movement),
+    `进展 ${fmt(state.progress)} (${signed(deltas.progress)})`,
+    `污染 ${fmt(state.contamination)} (${signed(deltas.contamination)})`,
+    `关系风险 ${fmt(state.relationship_risk)}`,
+  ]);
 }
 
 function caseText(item) {
