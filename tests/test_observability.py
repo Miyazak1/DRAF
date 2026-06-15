@@ -433,11 +433,13 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     ]
     investigation_events = [event for event in timeline_events if event["event_type"] == "InvestigationUpdateEvent"]
     institutional_events = [event for event in timeline_events if event["event_type"] == "InstitutionalPressureEvent"]
+    witness_events = [event for event in timeline_events if event["event_type"] == "WitnessStrategyEvent"]
     location_events = [event for event in timeline_events if event["event_type"] == "LocationEvidenceCouplingEvent"]
     accessibility_events = [event for event in timeline_events if event["event_type"] == "EvidenceAccessibilityEvent"]
     memory_events = [event for event in timeline_events if event["event_type"] == "MemoryReconstructionEvent"]
     investigation_event_ids = {event["event_id"] for event in investigation_events}
     institutional_trace = [item for item in inquiry if item.get("event_type") == "InstitutionalPressureEvent"]
+    witness_trace = [item for item in inquiry if item.get("event_type") == "WitnessStrategyEvent"]
     location_trace = [item for item in inquiry if item.get("event_type") == "LocationEvidenceCouplingEvent"]
     investigation_trace = [item for item in inquiry if item.get("event_type") == "InvestigationUpdateEvent"]
     accessibility_trace = [item for item in inquiry if item.get("event_type") == "EvidenceAccessibilityEvent"]
@@ -450,6 +452,8 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     assert inquiry
     assert institutional_events
     assert institutional_trace
+    assert witness_events
+    assert witness_trace
     assert location_events
     assert location_trace
     assert investigation_events
@@ -460,6 +464,10 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     assert any(item["silencing_pressure"] > 0 for item in institutional_trace)
     assert any(item["suppression_delta"] >= 0 for item in institutional_trace)
     assert all(item["institutional_effect"] for item in institutional_trace)
+    assert all(item["strategy_id"] for item in witness_trace)
+    assert all(item["strategy_mode"] for item in witness_trace)
+    assert any(item["confirmation_risk"] >= 0 for item in witness_trace)
+    assert any("accessibility_delta" in item["effects"] for item in witness_trace)
     assert all(item["location_after"]["location_id"] for item in location_trace)
     assert any(item["location_delta"]["contamination"] >= 0 for item in location_trace)
     assert any(item["location_after"]["field_effects"] for item in location_trace)
@@ -471,6 +479,8 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     assert any(event["causal_refs"] for event in investigation_events)
     assert any(event["source_layer"] == "inquiry" for event in institutional_events)
     assert any(event["causal_refs"] for event in institutional_events)
+    assert any(event["source_layer"] == "inquiry" for event in witness_events)
+    assert any(event["causal_refs"] for event in witness_events)
     assert any(event["source_layer"] == "inquiry" for event in location_events)
     assert any(event["causal_refs"] for event in location_events)
     assert any(event["source_layer"] == "inquiry" for event in accessibility_events)
@@ -491,6 +501,12 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     )
     assert any(
         key.startswith("institutional_")
+        for item in affordance
+        for candidate in item["candidates"]
+        for key in candidate["evidence"]
+    )
+    assert any(
+        key.startswith("witness_strategy_")
         for item in affordance
         for candidate in item["candidates"]
         for key in candidate["evidence"]

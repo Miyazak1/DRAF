@@ -56,6 +56,16 @@ ZH = {
     "evidence_contamination": "证物污染",
     "testimony_gap": "证词断裂",
     "yellow_symbol": "黄漆符号",
+    "protective_silence": "保护性沉默",
+    "partial_disclosure": "部分透露",
+    "probing_counterquestion": "试探性反问",
+    "refusal_to_confirm": "拒绝确认",
+    "controlled_detail_release": "控制性透露",
+    "withholding": "保留细节",
+    "limited_disclosure": "有限透露",
+    "testing_the_listener": "测试倾听者",
+    "denial_boundary": "拒认边界",
+    "controlled_disclosure": "控制透露",
     "claimant": "索取承认者位置",
     "debtor": "负债者位置",
     "defender": "防御者位置",
@@ -695,17 +705,24 @@ def _inquiry_sentence(inquiry: dict[str, Any]) -> str:
     movement = inquiry.get("movement")
     state_after = inquiry.get("state_after", {}) or {}
     location = inquiry.get("location", {}) or {}
+    strategy = inquiry.get("witness_strategy", {}) or {}
     location_label = location.get("location_label")
     location_text = f"在{location_label}" if location_label else ""
     progress = _fmt_report(state_after.get("progress"))
     contamination = _fmt_report(state_after.get("contamination"))
+    strategy_text = ""
+    if strategy:
+        strategy_text = (
+            f" 证人策略转为{_zh(strategy.get('strategy_id', ''))}"
+            f"（保护 {_fmt_report(strategy.get('protective_value'))}，透露 {_fmt_report(strategy.get('disclosure_width'))}）。"
+        )
     if movement == "evidence_review_contaminates_relation":
-        return f"调查{location_text}推进到“{label}”，但证物污染也在上升（进展 {progress}，污染 {contamination}）。"
+        return f"调查{location_text}推进到“{label}”，但证物污染也在上升（进展 {progress}，污染 {contamination}）。{strategy_text}"
     if movement == "testimony_probe_raises_retraction_pressure":
-        return f"追问{location_text}触碰到“{label}”，证词可用性提高，同时撤回压力变大。"
+        return f"追问{location_text}触碰到“{label}”，证词可用性提高，同时撤回压力变大。{strategy_text}"
     if movement == "symbol_becomes_speakable_but_unstable":
-        return f"“{label}”{location_text}被说出口，却仍不能成为稳定事实。"
-    return f"案件压力{location_text}沉积到“{label}”，它开始改变两人的可行动空间。"
+        return f"“{label}”{location_text}被说出口，却仍不能成为稳定事实。{strategy_text}"
+    return f"案件压力{location_text}沉积到“{label}”，它开始改变两人的可行动空间。{strategy_text}"
 
 
 def _fate_sentence(fates: list[dict[str, Any]]) -> str:

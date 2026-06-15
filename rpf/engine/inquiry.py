@@ -65,6 +65,8 @@ class InquiryEngine:
         institutional = self._institutional_pressure(state, focus, context)
         self._apply_institutional_pressure(state, focus, item_state, institutional)
         accessibility_before = self._accessibility_payload(focus, item_state)
+        witness_strategy = self._witness_strategy(state, focus, item_state, institutional, context, movement)
+        strategy_effects = self._apply_witness_strategy(state, focus, item_state, witness_strategy)
         item_state["progress"] = clamp(item_state["progress"] + movement["progress_delta"])
         item_state["contamination"] = clamp(item_state["contamination"] + movement["contamination_delta"])
         item_state["suppression"] = clamp(item_state["suppression"] + movement["suppression_delta"])
@@ -88,6 +90,7 @@ class InquiryEngine:
             "linked_expression": expression.get("expression_id"),
             "linked_recognition": recognition.get("result"),
             "ledger_refs": focus.get("ledger_refs", []),
+            "witness_strategy": witness_strategy,
             "deltas": {
                 "progress": round(item_state["progress"] - before["progress"], 4),
                 "contamination": round(item_state["contamination"] - before["contamination"], 4),
@@ -132,6 +135,16 @@ class InquiryEngine:
             "pressure_sources": institutional["pressure_sources"],
             "institutional_effect": self._institutional_effect(institutional),
         }
+        witness_payload = {
+            "case_id": self.case_ledger.get("case_id"),
+            "focus_type": focus["type"],
+            "focus_id": focus["id"],
+            "label": focus["label"],
+            "location": location_after,
+            "tick_type": context.tick_type,
+            **witness_strategy,
+            "effects": strategy_effects,
+        }
         access_payload = {
             "case_id": self.case_ledger.get("case_id"),
             "focus_type": focus["type"],
@@ -162,6 +175,7 @@ class InquiryEngine:
         }
         return [
             InquiryUpdate(event_type="InstitutionalPressureEvent", payload=institutional_payload, causal_refs=causal_refs),
+            InquiryUpdate(event_type="WitnessStrategyEvent", payload=witness_payload, causal_refs=causal_refs),
             InquiryUpdate(event_type="LocationEvidenceCouplingEvent", payload=location_payload, causal_refs=causal_refs),
             InquiryUpdate(event_type="EvidenceAccessibilityEvent", payload=access_payload, causal_refs=causal_refs),
             InquiryUpdate(event_type="InvestigationUpdateEvent", payload=payload, causal_refs=causal_refs),
@@ -536,6 +550,204 @@ class InquiryEngine:
         if status == "restricted":
             return f"{label} constrains how the evidence can be approached"
         return f"{label} makes this evidence practically reachable"
+
+    def _witness_strategy(
+        self,
+        state: SimulationState,
+        focus: dict[str, Any],
+        item_state: dict[str, Any],
+        institutional: dict[str, Any],
+        context: TickContext,
+        movement: dict[str, Any],
+    ) -> dict[str, Any]:
+        p1 = state.processes.get("p1")
+        p2 = state.processes.get("p2")
+        contamination = float(item_state.get("contamination", 0.0) or 0.0)
+        suppression = float(item_state.get("suppression", 0.0) or 0.0)
+        relationship_risk = float(item_state.get("relationship_risk", 0.0) or 0.0)
+        silencing = float(institutional.get("silencing_pressure", 0.0) or 0.0)
+        public = float(institutional.get("public_exposure", 0.0) or 0.0)
+        permission = float(institutional.get("permission_width", 0.0) or 0.0)
+        procedural = float(institutional.get("procedural_force", 0.0) or 0.0)
+        witness_threat = 0.0
+        witness_inhibition = 0.0
+        investigator_pull = 0.0
+        if p1:
+            witness_threat = max(
+                p1.threat_sensitivity.get("being_disbelieved", 0.0),
+                p1.threat_sensitivity.get("reality_doubt", 0.0),
+            )
+            witness_inhibition = p1.speech_inhibition.get("testimony_detail", 0.0)
+        if p2:
+            investigator_pull = max(
+                p2.relevance_triggers.get("procedural_gap", 0.0),
+                p2.threat_sensitivity.get("pattern_attraction", 0.0),
+            )
+        testimony_focus = 1.0 if focus["type"] == "testimonies" else 0.65 if focus["type"] in {"evidence_items", "contradictions"} else 0.35
+        protective_value = clamp(
+            testimony_focus
+            * (
+                silencing * 0.32
+                + contamination * 0.18
+                + suppression * 0.18
+                + relationship_risk * 0.18
+                + witness_threat * 0.14
+                + witness_inhibition * 0.12
+                + (1.0 - permission) * 0.14
+            )
+        )
+        disclosure_width = clamp(
+            testimony_focus
+            * (
+                permission * 0.34
+                + procedural * 0.18
+                + public * 0.12
+                + investigator_pull * 0.12
+                + movement["progress_delta"] * 0.8
+                - protective_value * 0.22
+            )
+        )
+        confirmation_risk = clamp(
+            testimony_focus
+            * (
+                contamination * 0.28
+                + suppression * 0.22
+                + silencing * 0.18
+                + relationship_risk * 0.18
+                + witness_threat * 0.12
+            )
+        )
+        if confirmation_risk > 0.62 and protective_value >= disclosure_width:
+            strategy_id = "refusal_to_confirm"
+        elif protective_value > 0.58:
+            strategy_id = "protective_silence"
+        elif disclosure_width > 0.56 and confirmation_risk < 0.5:
+            strategy_id = "controlled_detail_release"
+        elif disclosure_width > protective_value:
+            strategy_id = "partial_disclosure"
+        else:
+            strategy_id = "probing_counterquestion"
+        return {
+            "strategy_id": strategy_id,
+            "strategy_mode": self._strategy_mode(strategy_id),
+            "strategy_label": self._strategy_label(strategy_id),
+            "witness_process_id": "p1",
+            "target_process_id": "p2",
+            "protective_value": round(protective_value, 4),
+            "disclosure_width": round(disclosure_width, 4),
+            "confirmation_risk": round(confirmation_risk, 4),
+            "trust_requirement": round(clamp(protective_value * 0.45 + confirmation_risk * 0.3), 4),
+            "withheld_detail_pressure": round(clamp(protective_value * 0.55 + suppression * 0.22 - disclosure_width * 0.12), 4),
+        }
+
+    def _apply_witness_strategy(
+        self,
+        state: SimulationState,
+        focus: dict[str, Any],
+        item_state: dict[str, Any],
+        strategy: dict[str, Any],
+    ) -> dict[str, float]:
+        strategy_id = str(strategy.get("strategy_id", ""))
+        protective = float(strategy.get("protective_value", 0.0) or 0.0)
+        disclosure = float(strategy.get("disclosure_width", 0.0) or 0.0)
+        confirmation_risk = float(strategy.get("confirmation_risk", 0.0) or 0.0)
+        progress_delta = 0.0
+        contamination_delta = confirmation_risk * 0.012
+        suppression_delta = protective * 0.012
+        relationship_risk_delta = confirmation_risk * 0.018
+        accessibility_delta = disclosure * 0.018 - protective * 0.026 - confirmation_risk * 0.014
+        if strategy_id == "refusal_to_confirm":
+            suppression_delta += 0.024
+            relationship_risk_delta += 0.026
+            accessibility_delta -= 0.028
+        elif strategy_id == "protective_silence":
+            suppression_delta += 0.018
+            relationship_risk_delta += 0.014
+            accessibility_delta -= 0.018
+        elif strategy_id == "controlled_detail_release":
+            progress_delta += 0.032 * disclosure
+            suppression_delta -= 0.012 * disclosure
+            contamination_delta += 0.008
+            accessibility_delta += 0.018
+        elif strategy_id == "partial_disclosure":
+            progress_delta += 0.022 * disclosure
+            contamination_delta += 0.01
+            relationship_risk_delta += 0.01
+            accessibility_delta += 0.008
+        else:
+            progress_delta += 0.006
+            suppression_delta += 0.01
+            relationship_risk_delta += 0.018
+            accessibility_delta -= 0.006
+        item_state["progress"] = clamp(float(item_state.get("progress", 0.0) or 0.0) + progress_delta)
+        item_state["contamination"] = clamp(float(item_state.get("contamination", 0.0) or 0.0) + contamination_delta)
+        item_state["suppression"] = clamp(float(item_state.get("suppression", 0.0) or 0.0) + suppression_delta)
+        item_state["relationship_risk"] = clamp(float(item_state.get("relationship_risk", 0.0) or 0.0) + relationship_risk_delta)
+        item_state["accessibility"] = clamp(float(item_state.get("accessibility", 1.0) or 0.0) + accessibility_delta)
+        item_state["access_status"] = self._access_status(float(item_state["accessibility"]))
+        state.relation_metrics["witness_strategy.protective_silence"] = clamp(
+            float(state.relation_metrics.get("witness_strategy.protective_silence", 0.0) or 0.0) * 0.82 + protective * 0.18
+        )
+        state.relation_metrics["witness_strategy.disclosure_width"] = clamp(
+            float(state.relation_metrics.get("witness_strategy.disclosure_width", 0.0) or 0.0) * 0.82 + disclosure * 0.18
+        )
+        state.relation_metrics["witness_strategy.confirmation_risk"] = clamp(
+            float(state.relation_metrics.get("witness_strategy.confirmation_risk", 0.0) or 0.0) * 0.82 + confirmation_risk * 0.18
+        )
+        state.field_state.audience_pressure["witness_visibility"] = clamp(
+            float(state.field_state.audience_pressure.get("witness_visibility", 0.0) or 0.0) + disclosure * 0.012 + confirmation_risk * 0.01
+        )
+        p1 = state.processes.get("p1")
+        if p1:
+            p1.speech_inhibition["testimony_detail"] = clamp(
+                p1.speech_inhibition.get("testimony_detail", 0.0) + protective * 0.018 - disclosure * 0.006
+            )
+            p1.threat_sensitivity["being_disbelieved"] = clamp(
+                p1.threat_sensitivity.get("being_disbelieved", 0.0) + confirmation_risk * 0.012
+            )
+        p2 = state.processes.get("p2")
+        if p2:
+            p2.threat_sensitivity["being_misled"] = clamp(p2.threat_sensitivity.get("being_misled", 0.0) + confirmation_risk * 0.01)
+            p2.relevance_triggers["procedural_gap"] = clamp(p2.relevance_triggers.get("procedural_gap", 0.0) + disclosure * 0.01)
+        location_id = str(focus.get("location_id") or "")
+        if location_id:
+            location_state = self.location_states.setdefault(
+                location_id,
+                {"location_pressure": 0.0, "contamination": 0.0, "location_accessibility": 1.0, "visit_count": 0.0},
+            )
+            location_state["location_pressure"] = clamp(
+                float(location_state.get("location_pressure", 0.0) or 0.0) + confirmation_risk * 0.012 + protective * 0.008
+            )
+            location_state["location_accessibility"] = clamp(
+                float(location_state.get("location_accessibility", 1.0) or 0.0) + accessibility_delta * 0.35
+            )
+        return {
+            "progress_delta": round(progress_delta, 4),
+            "contamination_delta": round(contamination_delta, 4),
+            "suppression_delta": round(suppression_delta, 4),
+            "relationship_risk_delta": round(relationship_risk_delta, 4),
+            "accessibility_delta": round(accessibility_delta, 4),
+        }
+
+    def _strategy_mode(self, strategy_id: str) -> str:
+        modes = {
+            "protective_silence": "withholding",
+            "partial_disclosure": "limited_disclosure",
+            "probing_counterquestion": "testing_the_listener",
+            "refusal_to_confirm": "denial_boundary",
+            "controlled_detail_release": "controlled_disclosure",
+        }
+        return modes.get(strategy_id, "unstable_testimony_management")
+
+    def _strategy_label(self, strategy_id: str) -> str:
+        labels = {
+            "protective_silence": "protective silence",
+            "partial_disclosure": "partial disclosure",
+            "probing_counterquestion": "probing counterquestion",
+            "refusal_to_confirm": "refusal to confirm",
+            "controlled_detail_release": "controlled detail release",
+        }
+        return labels.get(strategy_id, strategy_id)
 
     def _movement(
         self,

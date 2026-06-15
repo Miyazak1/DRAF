@@ -81,6 +81,7 @@ const ZH = {
   DeformationTraceEvent: "变形追踪",
   FutureConstraintEvent: "未来约束",
   DerivedDramaticTensionEvent: "派生戏剧张力",
+  WitnessStrategyEvent: "证人策略",
   material_pressure_intrusion: "物质压力闯入",
   unacknowledged_contribution_claim: "未被承认的付出索取",
   practical_repair_offer: "实际帮助式修复",
@@ -103,6 +104,16 @@ const ZH = {
   hesitation: "犹豫停顿",
   gesture_displacement: "姿态转移",
   charged_silence: "带电沉默",
+  protective_silence: "保护性沉默",
+  partial_disclosure: "部分透露",
+  probing_counterquestion: "试探性反问",
+  refusal_to_confirm: "拒绝确认",
+  controlled_detail_release: "控制性透露",
+  withholding: "保留细节",
+  limited_disclosure: "有限透露",
+  testing_the_listener: "测试倾听者",
+  denial_boundary: "拒认边界",
+  controlled_disclosure: "控制透露",
   public_mask: "公开面具",
   spoken: "言说",
   tonal_shift: "语气变化",
@@ -347,6 +358,17 @@ function inquiryText(item) {
       `曝光 ${fmt(item.public_exposure)}`,
       `程序 ${fmt(item.procedural_force)}`,
       `权限 ${fmt(item.permission_width)}`,
+    ]);
+  }
+  if (item.event_type === "WitnessStrategyEvent") {
+    const effects = item.effects || {};
+    return ledgerItem(`Tick ${item.tick} · ${item.focus_id || "witness"}`, item.label || item.strategy_label || "-", [
+      "证人策略",
+      zh(item.strategy_id),
+      `保护 ${fmt(item.protective_value)}`,
+      `透露宽度 ${fmt(item.disclosure_width)}`,
+      `确认风险 ${fmt(item.confirmation_risk)}`,
+      `可达变化 ${signed(effects.accessibility_delta)}`,
     ]);
   }
   if (item.event_type === "LocationEvidenceCouplingEvent") {

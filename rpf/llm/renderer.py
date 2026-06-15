@@ -50,6 +50,16 @@ LABELS = {
     "yellow_symbol": "黄漆符号",
     "admit_memory_is_not_just_evidence": "承认记忆不只是证据",
     "admit_what_changed_in_the_record": "承认卷宗中改变过的部分",
+    "protective_silence": "保护性沉默",
+    "partial_disclosure": "部分透露",
+    "probing_counterquestion": "试探性反问",
+    "refusal_to_confirm": "拒绝确认",
+    "controlled_detail_release": "控制性透露",
+    "withholding": "保留细节",
+    "limited_disclosure": "有限透露",
+    "testing_the_listener": "测试倾听者",
+    "denial_boundary": "拒认边界",
+    "controlled_disclosure": "控制透露",
 }
 
 
@@ -114,6 +124,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         _case_ledger_line(case_ledger),
         f"- 调查更新：{len(inquiry_trace)}。最近焦点：{_latest_inquiry_focus(inquiry_trace)}。",
         f"- 制度压力：{_institutional_pressure_summary(inquiry_trace)}",
+        f"- 证人策略：{_witness_strategy_summary(inquiry_trace)}",
         f"- 地点耦合：{_location_coupling_summary(inquiry_trace)}",
         f"- 证据可达性：{_evidence_access_summary(inquiry_trace)}",
         f"- 案件记忆：{_case_memory_summary(memory_trace)}",
@@ -225,6 +236,25 @@ def _institutional_pressure_summary(inquiry_trace: list[dict[str, Any]]) -> str:
         f"曝光 {_fmt(latest.get('public_exposure'))}，"
         f"程序 {_fmt(latest.get('procedural_force'))}，"
         f"权限 {_fmt(latest.get('permission_width'))}"
+    )
+
+
+def _witness_strategy_summary(inquiry_trace: list[dict[str, Any]]) -> str:
+    strategy_events = [
+        item
+        for item in inquiry_trace
+        if item.get("event_type") == "WitnessStrategyEvent" or item.get("witness_strategy")
+    ]
+    if not strategy_events:
+        return "-"
+    latest = strategy_events[-1]
+    if latest.get("witness_strategy"):
+        latest = latest.get("witness_strategy", {}) or latest
+    return (
+        f"{_label(latest.get('strategy_id', '-'))}；"
+        f"保护 {_fmt(latest.get('protective_value'))}，"
+        f"透露宽度 {_fmt(latest.get('disclosure_width'))}，"
+        f"确认风险 {_fmt(latest.get('confirmation_risk'))}"
     )
 
 
@@ -346,6 +376,7 @@ def llm_markdown(
                 "changed evidence accessibility state",
                 "changed location-evidence coupling state",
                 "changed institutional pressure state",
+                "changed witness strategy state",
                 "changed case memory reconstruction",
                 "causes not present in viability/action/expression/recognition evidence",
             ],

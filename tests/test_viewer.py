@@ -96,6 +96,8 @@ def test_yellow_sign_payload_contains_case_ledger(tmp_path):
     assert any(item["contradiction_id"] == "official_closed_but_new_body" for item in ledger["contradictions"])
     assert payload["inquiry"]
     assert payload["story"][-1]["inquiry"]
+    assert payload["story"][-1]["inquiry"]["witness_strategy"]
+    assert any(item.get("event_type") == "WitnessStrategyEvent" for item in payload["inquiry"])
     assert any(frame["case_memory_count"] > 0 for frame in payload["story"])
     assert any(frame["case_memory_focuses"] for frame in payload["story"])
     assert "调查" in payload["story"][-1]["summary"] or "案件压力" in payload["story"][-1]["summary"]

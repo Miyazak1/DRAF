@@ -90,6 +90,9 @@ class AffordanceEngine:
         institutional_silencing = state.relation_metrics.get("institutional.silencing_pressure", 0.0)
         institutional_exposure = state.relation_metrics.get("institutional.public_exposure", 0.0)
         institutional_gatekeeping = state.field_state.audience_pressure.get("institutional_gatekeeping", 0.0)
+        witness_protective_silence = state.relation_metrics.get("witness_strategy.protective_silence", 0.0)
+        witness_disclosure_width = state.relation_metrics.get("witness_strategy.disclosure_width", 0.0)
+        witness_confirmation_risk = state.relation_metrics.get("witness_strategy.confirmation_risk", 0.0)
         remembered_history = memory_pressure(state)
         injury_history = injury_memory(state)
         defensive_history = defensive_memory(state)
@@ -310,6 +313,8 @@ class AffordanceEngine:
                 "inquiry_contamination_load": inquiry_contamination * 0.16,
                 "institutional_public_exposure": institutional_exposure * 0.18,
                 "institutional_gatekeeping": institutional_gatekeeping * 0.1,
+                "witness_strategy_disclosure_width": witness_disclosure_width * 0.12,
+                "witness_strategy_confirmation_risk": witness_confirmation_risk * 0.08,
             },
             0.66,
             "the file becomes less like evidence and more like a demand for testimony",
@@ -335,6 +340,8 @@ class AffordanceEngine:
                 "inquiry_relationship_risk": inquiry_relationship_risk * 0.16,
                 "institutional_silencing_pressure": institutional_silencing * 0.2,
                 "institutional_gatekeeping": institutional_gatekeeping * 0.12,
+                "witness_strategy_protective_silence": witness_protective_silence * 0.2,
+                "witness_strategy_confirmation_risk": witness_confirmation_risk * 0.14,
             },
             0.78,
             "your memory is needed, but using it may damage the shared reality",
@@ -359,6 +366,8 @@ class AffordanceEngine:
                 "inquiry_relationship_risk": inquiry_relationship_risk * 0.18,
                 "institutional_silencing_pressure": institutional_silencing * 0.14,
                 "institutional_public_exposure": institutional_exposure * 0.1,
+                "witness_strategy_confirmation_risk": witness_confirmation_risk * 0.12,
+                "witness_strategy_protective_silence": witness_protective_silence * 0.08,
             },
             0.86,
             "the symbol cannot be verified, but not naming it now changes the case",
