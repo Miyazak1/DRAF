@@ -11,6 +11,7 @@ from rpf.viewer.server import build_viewer_payload
 DEFAULT_SEGMENT_POLICY = {
     "micro_count": 3,
     "latent_seconds": 6 * 60 * 60,
+    "min_ticks": 3,
     "max_ticks": 8,
     "max_seconds": 24 * 60 * 60,
 }
@@ -142,17 +143,23 @@ def deterministic_segment_markdown(segment: dict[str, Any]) -> str:
         f"- 来源 tick：{', '.join(str(tick) for tick in segment['source_ticks'])}",
         "",
     ]
-    for frame in segment.get("frames", []):
+    for frame_group in _compressed_frame_groups(segment.get("frames", [])):
+        frame = frame_group["frame"]
         participants = frame.get("participants", {})
         names = "、".join(
             item.get("name", "")
             for item in (participants.get("source", {}), participants.get("target", {}))
             if item.get("name")
         )
+        tick_label = str(frame.get("tick"))
+        if frame_group["count"] > 1:
+            tick_label = f"{frame_group['tick_start']} 至 {frame_group['tick_end']}"
         if names:
-            lines.append(f"第 {frame.get('tick')} 步，{names}：{frame.get('summary', '')}")
+            lines.append(f"第 {tick_label} 步，{names}：{frame.get('summary', '')}")
         else:
-            lines.append(f"第 {frame.get('tick')} 步：{frame.get('summary', '')}")
+            lines.append(f"第 {tick_label} 步：{frame.get('summary', '')}")
+        if frame_group["count"] > 1:
+            lines.append(f"  - 重复模式：该结构连续出现 {frame_group['count']} 次，渲染时应压缩为关系模式持续，而不是重演同一场面。")
         viability = _viability_brief(frame)
         if viability:
             lines.append(f"  - 底层依据：{viability}")
@@ -212,6 +219,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "source_ticks": segment.get("source_ticks"),
             "simulated_seconds": segment.get("simulated_seconds"),
             "frames": segment.get("frames", []),
+            "compressed_frames": _compressed_frame_groups(segment.get("frames", [])),
         },
         "ending_state": {
             "summary": segment.get("summary", {}),
@@ -224,6 +232,8 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "do_not_rewrite_previous_segments": True,
             "must_include_source_ticks": True,
             "append_mode": True,
+            "compress_repeated_frames": True,
+            "if_multiple_frames_have_the_same_summary": "write them as a sustained pattern with small pressure changes; do not restage the same dialogue or objects repeatedly",
         },
     }
 
@@ -231,6 +241,8 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
 def _boundary_reason(frames: list[dict[str, Any]], policy: dict[str, Any], *, force: bool) -> str | None:
     if force:
         return "模拟结束，收束未渲染片段"
+    if not _minimum_segment_reached(frames, policy):
+        return None
     if any(frame.get("phase_changed") for frame in frames):
         return "强闭合：关系阶段变化"
     if any(int(frame.get("fate_count", 0)) > 0 for frame in frames):
@@ -260,3 +272,50 @@ def _boundary_reason(frames: list[dict[str, Any]], policy: dict[str, Any], *, fo
 
 def _elapsed_seconds(frames: list[dict[str, Any]]) -> int:
     return sum(int(frame.get("simulated_time_delta_seconds") or 0) for frame in frames)
+
+
+def _minimum_segment_reached(frames: list[dict[str, Any]], policy: dict[str, Any]) -> bool:
+    min_ticks = max(1, int(policy.get("min_ticks") or 1))
+    if len(frames) >= min_ticks:
+        return True
+    return _elapsed_seconds(frames) >= int(policy.get("latent_seconds") or 0)
+
+
+def _compressed_frame_groups(frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    for frame in frames:
+        signature = _frame_signature(frame)
+        if groups and groups[-1]["signature"] == signature:
+            groups[-1]["count"] += 1
+            groups[-1]["tick_end"] = frame.get("tick")
+            groups[-1]["source_ticks"].append(frame.get("tick"))
+            continue
+        groups.append(
+            {
+                "signature": signature,
+                "count": 1,
+                "tick_start": frame.get("tick"),
+                "tick_end": frame.get("tick"),
+                "source_ticks": [frame.get("tick")],
+                "frame": frame,
+            }
+        )
+    return groups
+
+
+def _frame_signature(frame: dict[str, Any]) -> tuple[Any, ...]:
+    recognition = frame.get("recognition", {}) or {}
+    action = frame.get("action", {}) or {}
+    expression = frame.get("expression", {}) or {}
+    return (
+        frame.get("tick_type"),
+        frame.get("phase"),
+        frame.get("summary"),
+        action.get("action_id"),
+        action.get("action_mode"),
+        expression.get("expression_id"),
+        expression.get("expression_mode"),
+        recognition.get("outcome"),
+        int(frame.get("memory_count", 0)),
+        int(frame.get("fate_count", 0)),
+    )

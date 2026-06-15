@@ -54,6 +54,26 @@ class AffordanceEngine:
             state.field_state.audience_pressure.get("imagined_audience", 0.0),
             state.field_state.audience_pressure.get("reputational_echo", 0.0),
         )
+        evidence_decay = max(
+            material.get("decayed_evidence", 0.0),
+            material.get("contamination_trace", 0.0),
+            spatial.get("archive_basement", 0.0),
+        )
+        institutional_silence = max(
+            state.field_state.audience_pressure.get("local_police_silence", 0.0),
+            state.field_state.audience_pressure.get("victim_families_waiting", 0.0),
+        )
+        symbol_density = max(
+            p1.relevance_triggers.get("yellow_symbol", 0.0),
+            p2.relevance_triggers.get("yellow_symbol", 0.0),
+            spatial.get("abandoned_refinery_map", 0.0),
+            material.get("contamination_trace", 0.0),
+        )
+        testimony_instability = max(
+            p1.speech_inhibition.get("testimony_detail", 0.0),
+            p1.threat_sensitivity.get("being_disbelieved", 0.0),
+            p2.threat_sensitivity.get("being_misled", 0.0),
+        )
         contribution = unrecognized_contribution(state)
         repair_debt = state.relation_metrics.get("repair_debt", 0.0)
         conflict = state.relation_metrics.get("conflict_pressure", 0.0)
@@ -263,6 +283,67 @@ class AffordanceEngine:
             0.7,
             "the claim is felt before it is answerable",
         )
+        evidence_review = self._candidate(
+            "contaminated_evidence_review",
+            "evidence_contamination",
+            "cold case evidence review",
+            "p2",
+            "p1",
+            tick_bias,
+            {
+                "decayed_evidence": evidence_decay * 0.24,
+                "institutional_silence": institutional_silence * 0.16,
+                "pattern_attraction": p2.threat_sensitivity.get("pattern_attraction", 0.0) * 0.14,
+                "procedural_gap": p2.relevance_triggers.get("procedural_gap", 0.0) * 0.12,
+                "recognition_trial": frame["recognition_trial"] * 0.05,
+                "material_accounting": frame["material_accounting"] * 0.04,
+                "memory_saturation": memory_saturation * 0.04,
+                "relation_public_definition": public_definition * 0.03,
+            },
+            0.66,
+            "the file becomes less like evidence and more like a demand for testimony",
+        )
+        testimony_probe = self._candidate(
+            "unstable_testimony_probe",
+            "testimony_gap",
+            "witness memory under procedural pressure",
+            "p2",
+            "p1",
+            tick_bias,
+            {
+                "testimony_instability": testimony_instability * 0.26,
+                "recognition": recognition * 0.18,
+                "local_silence": institutional_silence * 0.12,
+                "double_bind_pressure": state.relation_metrics.get("double_bind_pressure", 0.0) * 0.12,
+                "memory_saturated_space": memory_saturated_space * 0.04,
+                "relation_recognition_debt": recognition_debt * 0.05,
+                "frame_recognition_trial": frame["recognition_trial"] * 0.08,
+                "frame_double_bind": frame["double_bind"] * 0.05,
+                "relevance_recognition_claim": relevance["recognition_claim"] * 0.04,
+            },
+            0.78,
+            "your memory is needed, but using it may damage the shared reality",
+        )
+        forbidden_symbol = self._candidate(
+            "forbidden_symbol_confrontation",
+            "yellow_symbol",
+            "contaminating symbol becomes speakable",
+            "p1",
+            "p2",
+            tick_bias,
+            {
+                "symbol_density": symbol_density * 0.28,
+                "naming_symbol_block": p1.speech_inhibition.get("naming_symbol", 0.0) * 0.12,
+                "reality_doubt": p1.threat_sensitivity.get("reality_doubt", 0.0) * 0.12,
+                "pattern_attraction": p2.threat_sensitivity.get("pattern_attraction", 0.0) * 0.08,
+                "fate_memory": fate_history * 0.03,
+                "relation_memory_saturation": memory_saturation * 0.05,
+                "frame_double_bind": frame["double_bind"] * 0.07,
+                "relevance_double_bind": relevance["double_bind"] * 0.05,
+            },
+            0.86,
+            "the symbol cannot be verified, but not naming it now changes the case",
+        )
         return [
             delayed,
             practical,
@@ -272,6 +353,9 @@ class AffordanceEngine:
             double_bind_response,
             material_pressure,
             gaze_avoidance,
+            evidence_review,
+            testimony_probe,
+            forbidden_symbol,
         ]
 
     def _candidate(

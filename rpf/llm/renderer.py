@@ -36,6 +36,14 @@ LABELS = {
     "double_bind": "双重束缚场面",
     "material_accounting": "物质核算场面",
     "recognition_trial": "承认审判场面",
+    "contaminated_evidence_review": "污染线索审阅",
+    "unstable_testimony_probe": "不稳定证词追问",
+    "forbidden_symbol_confrontation": "禁忌符号对质",
+    "evidence_contamination": "证物污染",
+    "testimony_gap": "证词断裂",
+    "yellow_symbol": "黄漆符号",
+    "admit_memory_is_not_just_evidence": "承认记忆不只是证据",
+    "admit_what_changed_in_the_record": "承认卷宗中改变过的部分",
 }
 
 
@@ -178,21 +186,10 @@ def llm_markdown(
     timeout: int = 60,
 ) -> str:
     url = base_url.rstrip("/") + "/chat/completions"
+    segment_mode = render_payload.get("render_mode") == "segment"
     user_prompt = {
-        "task": "render_rpf_story",
-        "output_format": {
-            "title": "string",
-            "overview": "short paragraph",
-            "scenes": [
-                {
-                    "tick_range": "string",
-                    "text": "rendered prose grounded only in input",
-                    "source_ticks": ["integer"],
-                }
-            ],
-            "ending_state": "short paragraph",
-            "boundary_note": "one sentence saying rendering did not alter causal state",
-        },
+        "task": "render_rpf_story_segment" if segment_mode else "render_rpf_story",
+        "output_format": _segment_output_format() if segment_mode else _story_output_format(),
         "rendering_contract": {
             "must_inherit": [
                 "render_canon.title",
@@ -226,6 +223,12 @@ def llm_markdown(
                 "may use affordance width/direct response cost to render hesitation or constraint",
                 "may use deformation evidence to render silence, gesture, tone, or delay",
                 "must not state inner motives beyond evidence",
+            ],
+            "segment_mode_rules": [
+                "when render_mode is segment, output only the new segment prose",
+                "do not repeat title, overview, ending_state, or boundary_note in segment mode",
+                "do not rewrite previous_story_tail",
+                "if current frames repeat the same action/outcome pattern, compress them as sustained repetition instead of restaging the same scene",
             ],
         },
         "input": render_payload,
@@ -264,6 +267,37 @@ def llm_markdown(
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("LLM response did not contain text content")
     return content.strip() + "\n"
+
+
+def _story_output_format() -> dict[str, Any]:
+    return {
+        "title": "string",
+        "overview": "short paragraph",
+        "scenes": [
+            {
+                "tick_range": "string",
+                "text": "rendered prose grounded only in input",
+                "source_ticks": ["integer"],
+            }
+        ],
+        "ending_state": "short paragraph",
+        "boundary_note": "one sentence saying rendering did not alter causal state",
+    }
+
+
+def _segment_output_format() -> dict[str, Any]:
+    return {
+        "segment_text_only": "2-6 paragraphs of Chinese literary prose for the current segment only",
+        "must_not_include": [
+            "story title",
+            "overview",
+            "ending state",
+            "boundary note",
+            "markdown document heading",
+            "previous segment rewrite",
+        ],
+        "source_tick_note": "one short parenthetical or final line is allowed, naming only this segment's source ticks",
+    }
 
 
 def render_output(

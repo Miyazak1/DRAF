@@ -50,6 +50,12 @@ ZH = {
     "double_bind": "双重束缚场面",
     "material_accounting": "物质核算场面",
     "recognition_trial": "承认审判场面",
+    "contaminated_evidence_review": "污染线索审阅",
+    "unstable_testimony_probe": "不稳定证词追问",
+    "forbidden_symbol_confrontation": "禁忌符号对质",
+    "evidence_contamination": "证物污染",
+    "testimony_gap": "证词断裂",
+    "yellow_symbol": "黄漆符号",
     "claimant": "索取承认者位置",
     "debtor": "负债者位置",
     "defender": "防御者位置",
@@ -1099,6 +1105,7 @@ def _run_session(server: ViewerServer, request: dict[str, Any]) -> None:
         segment_policy = {
             "micro_count": int(request.get("segment_micro_count") or 3),
             "latent_seconds": int(float(request.get("segment_latent_hours") or 6) * 60 * 60),
+            "min_ticks": int(request.get("segment_min_ticks") or 3),
             "max_ticks": int(request.get("segment_max_ticks") or request.get("render_every_ticks") or 8),
             "max_seconds": int(float(request.get("segment_max_days") or 1) * 24 * 60 * 60),
         }

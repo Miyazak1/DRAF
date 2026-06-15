@@ -185,6 +185,16 @@ rpf-temporal-scheduler-and-scene-selection.md
 
 Defines how the simulator chooses latent, micro-interaction, or scene ticks; how simulated time maps to each tick; and how scenes crystallize from field pressure, bindings, relevance, RPP dynamics, and spatial/temporal constraints.
 
+### 16. Cloud Deployment
+
+Read before putting the web workbench on a cloud server:
+
+```text
+cloud-deployment-ubuntu.md
+```
+
+Defines the recommended Ubuntu, Python venv, Nginx, systemd, HTTPS, API-key, and output-storage setup for online testing.
+
 ---
 
 ## Implementation Order
@@ -228,6 +238,7 @@ examples/artistic_collaboration_credit_conflict.yaml
 examples/medical_care_decision_conflict.yaml
 examples/secret_affair_public_performance.yaml
 examples/childhood_friends_class_divergence.yaml
+examples/yellow_sign_cold_case.yaml
 ```
 
 Run them with:
@@ -236,6 +247,7 @@ Run them with:
 python -m rpf run examples/shared_apartment_unresolved_sacrifice.yaml --steps 30 --seed 42
 python -m rpf run examples/workplace_public_private_split.yaml --steps 30 --seed 7
 python -m rpf run examples/family_double_bind.yaml --steps 30 --seed 101
+python -m rpf run examples/yellow_sign_cold_case.yaml --steps 40 --seed 42
 ```
 
 Replay outputs with:
