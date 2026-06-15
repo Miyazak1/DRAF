@@ -1640,7 +1640,7 @@ def _ensure_initial_output(output_dir: Path) -> Path:
     if not scenarios:
         raise FileNotFoundError(f"No scenario files found in {DEFAULT_EXAMPLES_DIR}")
     preferred = next(
-        (item for item in scenarios if item["id"] == "shared_apartment_unresolved_sacrifice"),
+        (item for item in scenarios if item["id"] == "yellow_sign_cold_case"),
         scenarios[0],
     )
     scenario_path = Path(preferred["path"])

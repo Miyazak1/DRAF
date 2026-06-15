@@ -28,7 +28,45 @@ Do not expose port `8765` directly to the public internet.
 
 ---
 
-## 1. Install System Packages
+## 1. Fast Path
+
+On a fresh Ubuntu server, this repository includes a bootstrap script:
+
+```bash
+curl -L https://github.com/Miyazak1/DRAF/archive/refs/heads/main.tar.gz -o draf-main.tar.gz
+tar -xzf draf-main.tar.gz
+cd DRAF-main
+bash deploy/bootstrap_ubuntu.sh
+```
+
+The script:
+
+- installs Python, Git, and Nginx
+- clones or updates `/opt/draf`
+- creates `.venv`
+- installs `requirements.txt`
+- generates an initial `yellow_sign_cold_case` run
+- installs `draf-viewer.service`
+- installs the Nginx reverse proxy config
+- starts the viewer behind Nginx
+
+After it finishes, open:
+
+```text
+http://YOUR_SERVER_IP/
+```
+
+For a custom install location:
+
+```bash
+APP_DIR=/opt/draf bash deploy/bootstrap_ubuntu.sh
+```
+
+---
+
+## 2. Manual Install
+
+### 2.1 Install System Packages
 
 ```bash
 sudo apt update
@@ -43,7 +81,7 @@ sudo apt install -y certbot python3-certbot-nginx
 
 ---
 
-## 2. Clone the Repository
+### 2.2 Clone the Repository
 
 ```bash
 sudo mkdir -p /opt/draf
@@ -54,7 +92,7 @@ cd /opt/draf
 
 ---
 
-## 3. Create Python Environment
+### 2.3 Create Python Environment
 
 ```bash
 python3 -m venv .venv
@@ -77,7 +115,7 @@ out/smoke/yellow_sign_cold_case/
 
 ---
 
-## 4. Start Viewer Manually
+### 2.4 Start Viewer Manually
 
 First create or reuse an initial run:
 
@@ -99,31 +137,18 @@ http://127.0.0.1:8765/
 
 ---
 
-## 5. systemd Service
+## 3. systemd Service
 
-Create:
+The repository includes:
 
-```bash
-sudo nano /etc/systemd/system/draf-viewer.service
+```text
+deploy/draf-viewer.service
 ```
 
-Use:
+Install it:
 
-```ini
-[Unit]
-Description=DRAF RPF Web Workbench
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/draf
-ExecStart=/opt/draf/.venv/bin/python -m rpf viewer /opt/draf/out/experience/yellow_sign_cold_case --host 127.0.0.1 --port 8765
-Restart=always
-RestartSec=5
-Environment=PYTHONUNBUFFERED=1
-
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo cp deploy/draf-viewer.service /etc/systemd/system/draf-viewer.service
 ```
 
 Enable:
@@ -143,33 +168,18 @@ journalctl -u draf-viewer -f
 
 ---
 
-## 6. Nginx Reverse Proxy
+## 4. Nginx Reverse Proxy
 
-Create:
+The repository includes:
 
-```bash
-sudo nano /etc/nginx/sites-available/draf
+```text
+deploy/nginx-draf.conf
 ```
 
-Use:
+Install it:
 
-```nginx
-server {
-    listen 80;
-    server_name your-domain.example;
-
-    client_max_body_size 20m;
-
-    location / {
-        proxy_pass http://127.0.0.1:8765;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300;
-    }
-}
+```bash
+sudo cp deploy/nginx-draf.conf /etc/nginx/sites-available/draf
 ```
 
 Enable:
@@ -183,12 +193,15 @@ sudo systemctl reload nginx
 If using a domain, enable HTTPS:
 
 ```bash
+sudo sed -i 's/server_name _;/server_name your-domain.example;/' /etc/nginx/sites-available/draf
+sudo nginx -t
+sudo systemctl reload nginx
 sudo certbot --nginx -d your-domain.example
 ```
 
 ---
 
-## 7. API Key Boundary
+## 5. API Key Boundary
 
 The web workbench currently stores LLM API keys in the user's browser local storage and sends them to the local backend only when rendering.
 
@@ -200,7 +213,7 @@ For a public deployment:
 
 ---
 
-## 8. Output Storage
+## 6. Output Storage
 
 Simulation output grows under:
 
@@ -218,7 +231,7 @@ Archive or delete old run folders when disk pressure rises.
 
 ---
 
-## 9. Updating the Server
+## 7. Updating the Server
 
 ```bash
 cd /opt/draf
@@ -233,4 +246,3 @@ Smoke test after update:
 ```bash
 python -m rpf run examples/yellow_sign_cold_case.yaml --steps 5 --seed 42 --out out/smoke_update
 ```
-

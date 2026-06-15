@@ -1,0 +1,14 @@
+[Unit]
+Description=DRAF RPF Web Workbench
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/draf
+ExecStart=/opt/draf/.venv/bin/python -m rpf viewer /opt/draf/out/experience/yellow_sign_cold_case --host 127.0.0.1 --port 8765
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

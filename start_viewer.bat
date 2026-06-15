@@ -4,7 +4,7 @@ setlocal
 cd /d "%~dp0"
 
 set "RUN_DIR=%~1"
-if "%RUN_DIR%"=="" set "RUN_DIR=out\experience\shared_apartment_unresolved_sacrifice"
+if "%RUN_DIR%"=="" set "RUN_DIR=out\experience\yellow_sign_cold_case"
 
 set "PORT=%~2"
 if "%PORT%"=="" set "PORT=8765"

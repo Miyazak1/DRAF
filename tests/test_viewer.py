@@ -8,6 +8,7 @@ from pathlib import Path
 from rpf.engine.simulator import Simulator
 from rpf.scenarios.loader import load_scenario
 from rpf.viewer.server import ViewerServer, build_run_report, build_viewer_payload, export_run_bundle, run_catalog, scenario_catalog
+from rpf.viewer.server import _ensure_initial_output
 
 
 def test_viewer_payload_contains_core_traces(tmp_path):
@@ -54,9 +55,25 @@ def test_scenario_catalog_exposes_example_scenarios():
     catalog = scenario_catalog(Path("examples"))
 
     assert any(item["id"] == "shared_apartment_unresolved_sacrifice" for item in catalog)
+    assert any(item["id"] == "yellow_sign_cold_case" for item in catalog)
     shared = next(item for item in catalog if item["id"] == "shared_apartment_unresolved_sacrifice")
+    yellow = next(item for item in catalog if item["id"] == "yellow_sign_cold_case")
     assert shared["title"] == "共享公寓：未解决的牺牲"
+    assert yellow["title"] == "黄印镇冷案"
     assert Path(shared["path"]).exists()
+    assert Path(yellow["path"]).exists()
+
+
+def test_default_initial_viewer_output_prefers_yellow_sign(tmp_path, monkeypatch):
+    import rpf.viewer.server as viewer_server
+
+    monkeypatch.setattr(viewer_server, "DEFAULT_EXPERIENCE_DIR", tmp_path / "experience")
+
+    output_dir = _ensure_initial_output(tmp_path / "experience" / "yellow_sign_cold_case")
+    payload = build_viewer_payload(output_dir)
+
+    assert output_dir.name == "yellow_sign_cold_case"
+    assert payload["render_canon"]["title"] == "黄印镇冷案"
 
 
 def test_run_catalog_reads_run_metadata(tmp_path):
