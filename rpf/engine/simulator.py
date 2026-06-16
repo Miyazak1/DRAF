@@ -28,6 +28,7 @@ from rpf.engine.affordances import AffordanceEngine
 from rpf.engine.attention import AttentionDriftEngine
 from rpf.engine.binding import BindingEvolutionEngine
 from rpf.engine.disposition import ProcessDispositionEngine
+from rpf.engine.epistemic import EpistemicBoundaryEngine
 from rpf.engine.expression import ExpressionEngine
 from rpf.engine.environment import EnvironmentSedimentationEngine
 from rpf.engine.expectation import ExpectationSedimentationEngine
@@ -89,6 +90,7 @@ class Simulator:
         self.frame_definition = InteractionFrameEngine()
         self.account = AccountPressureEngine()
         self.binding_evolution = BindingEvolutionEngine()
+        self.epistemic = EpistemicBoundaryEngine()
         self.expectation = ExpectationSedimentationEngine()
         self.memory = MemoryReconstructionEngine(config["memory"])
         self.normativity = NormativePressureEngine()
@@ -124,6 +126,7 @@ class Simulator:
         self.frame_trace: list[dict[str, Any]] = []
         self.account_trace: list[dict[str, Any]] = []
         self.binding_trace: list[dict[str, Any]] = []
+        self.epistemic_trace: list[dict[str, Any]] = []
         self.expectation_trace: list[dict[str, Any]] = []
         self.memory_trace: list[dict[str, Any]] = []
         self.normativity_trace: list[dict[str, Any]] = []
@@ -327,6 +330,7 @@ class Simulator:
         (output_dir / "frame_trace.json").write_text(json.dumps(self.frame_trace, indent=2), encoding="utf-8")
         (output_dir / "account_trace.json").write_text(json.dumps(self.account_trace, indent=2), encoding="utf-8")
         (output_dir / "binding_trace.json").write_text(json.dumps(self.binding_trace, indent=2), encoding="utf-8")
+        (output_dir / "epistemic_trace.json").write_text(json.dumps(self.epistemic_trace, indent=2), encoding="utf-8")
         (output_dir / "expectation_trace.json").write_text(json.dumps(self.expectation_trace, indent=2), encoding="utf-8")
         (output_dir / "memory_trace.json").write_text(json.dumps(self.memory_trace, indent=2), encoding="utf-8")
         (output_dir / "normativity_trace.json").write_text(json.dumps(self.normativity_trace, indent=2), encoding="utf-8")
@@ -390,6 +394,7 @@ class Simulator:
         if context.tick_type == "scene":
             local.extend(self._recognition_and_repair(local))
         local.extend(self._update_inquiry(context, local))
+        local.extend(self._update_epistemic_boundaries(context, local))
         local.extend(self._classification_and_irreversibility(local))
         local.extend(self._update_memory(local))
         prior_relation_events = self._previous_tick_relation_sedimentation_events()
@@ -431,6 +436,21 @@ class Simulator:
                 self._event(
                     update.event_type,
                     "inquiry",
+                    payload,
+                    update.causal_refs,
+                )
+            )
+        return emitted
+
+    def _update_epistemic_boundaries(self, context: TickContext, local_events: list[Event]) -> list[Event]:
+        emitted: list[Event] = []
+        for update in self.epistemic.update(self.state, context, local_events):
+            payload = update.payload()
+            self.epistemic_trace.append({"tick": self.state.tick, "event_type": "EpistemicBoundaryEvent", **payload})
+            emitted.append(
+                self._event(
+                    "EpistemicBoundaryEvent",
+                    "epistemic",
                     payload,
                     update.causal_refs,
                 )

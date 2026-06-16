@@ -93,6 +93,13 @@ ZH = {
     "repair_requires_extra_cost": "修复需要额外代价",
     "repair_requires_explicit_counter_history": "修复需要明确改写历史",
     "only_symbolic_acknowledgement_remains": "只剩象征性承认",
+    "case_knowledge_asymmetry": "案件知情不对称",
+    "testimony_disclosure_risk": "证词披露风险",
+    "public_private_knowledge_split": "公私知识分裂",
+    "unspeakable_fact_boundary": "不可说事实边界",
+    "open_but_costly": "可说但有代价",
+    "narrowed": "可说性收窄",
+    "sealed": "被封闭",
     "body_management": "身体管理",
     "case_fixation": "案件固着",
     "threat_monitoring": "威胁监控",
@@ -174,6 +181,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "expectation": _read_json(run_dir / "expectation_trace.json", []),
         "memory": _read_json(run_dir / "memory_trace.json", []),
         "binding": _read_json(run_dir / "binding_trace.json", []),
+        "epistemic": _read_json(run_dir / "epistemic_trace.json", []),
         "environment": _read_json(run_dir / "environment_trace.json", []),
         "disposition": _read_json(run_dir / "disposition_trace.json", []),
         "relation": _read_json(run_dir / "relation_trace.json", []),
@@ -439,6 +447,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "expectation_trace.json",
         "memory_trace.json",
         "binding_trace.json",
+        "epistemic_trace.json",
         "environment_trace.json",
         "disposition_trace.json",
         "relation_trace.json",
@@ -474,6 +483,9 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
     reversibility_by_tick: dict[int, list[dict[str, Any]]] = {}
     for reversibility_update in payload.get("reversibility", []):
         reversibility_by_tick.setdefault(int(reversibility_update.get("tick", 0)), []).append(reversibility_update)
+    epistemic_by_tick: dict[int, list[dict[str, Any]]] = {}
+    for epistemic_update in payload.get("epistemic", []):
+        epistemic_by_tick.setdefault(int(epistemic_update.get("tick", 0)), []).append(epistemic_update)
     daily_ecology_by_tick = {
         int(item.get("tick", 0)): item
         for item in payload.get("environment", [])
@@ -501,6 +513,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
         attention_drift = _attention_summary(attention_by_tick.get(tick_index, []))
         opportunity_cost = _opportunity_summary(opportunity_by_tick.get(tick_index, []))
         reversibility = _reversibility_summary(reversibility_by_tick.get(tick_index, []))
+        epistemic_boundary = _epistemic_summary(epistemic_by_tick.get(tick_index, []))
         daily_ecology = daily_ecology_by_tick.get(tick_index, {})
         memories = memories_by_tick.get(tick_index, [])
         fates = fate_by_tick.get(tick_index, [])
@@ -524,6 +537,8 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
             summary_parts.append(_opportunity_sentence(opportunity_cost))
         if reversibility:
             summary_parts.append(_reversibility_sentence(reversibility))
+        if epistemic_boundary:
+            summary_parts.append(_epistemic_sentence(epistemic_boundary))
         if daily_ecology:
             summary_parts.append(_daily_ecology_sentence(daily_ecology))
         if recognition:
@@ -555,6 +570,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "attention_drift": attention_drift,
                 "opportunity_cost": opportunity_cost,
                 "reversibility": reversibility,
+                "epistemic_boundary": epistemic_boundary,
                 "daily_ecology": daily_ecology,
                 "memory_count": len(memories),
                 "case_memory_count": _case_memory_count(memories),
@@ -824,6 +840,36 @@ def _reversibility_sentence(reversibility: dict[str, Any]) -> str:
     return f"行动可逆性进入{label}，剩余可逆宽度 {width}；修复路径变成{route}。"
 
 
+def _epistemic_summary(updates: list[dict[str, Any]]) -> dict[str, Any]:
+    if not updates:
+        return {}
+    strongest = max(updates, key=lambda item: float(item.get("pressure") or 0.0))
+    return {
+        "boundary_type": strongest.get("boundary_type"),
+        "boundary_label": _zh(strongest.get("boundary_type", "")),
+        "focus_id": strongest.get("focus_id"),
+        "focus_label": strongest.get("focus_label"),
+        "boundary_state": strongest.get("boundary_state"),
+        "boundary_state_label": _zh(strongest.get("boundary_state", "")),
+        "knownness_asymmetry": strongest.get("knownness_asymmetry"),
+        "speakability_width": strongest.get("speakability_width"),
+        "disclosure_risk": strongest.get("disclosure_risk"),
+        "contamination_load": strongest.get("contamination_load"),
+        "public_readability": strongest.get("public_readability"),
+        "pressure": strongest.get("pressure"),
+        "consequence": strongest.get("consequence"),
+    }
+
+
+def _epistemic_sentence(epistemic: dict[str, Any]) -> str:
+    label = epistemic.get("boundary_label") or _zh(epistemic.get("boundary_type", ""))
+    state = epistemic.get("boundary_state_label") or _zh(epistemic.get("boundary_state", ""))
+    focus = epistemic.get("focus_label") or epistemic.get("focus_id") or "某个事实"
+    speakability = _fmt_report(epistemic.get("speakability_width"))
+    risk = _fmt_report(epistemic.get("disclosure_risk"))
+    return f"信息边界形成{label}：{focus}处于{state}，可说宽度 {speakability}，披露风险 {risk}。"
+
+
 def _daily_ecology_sentence(daily: dict[str, Any]) -> str:
     phase = _zh(daily.get("routine_phase", "waiting_time"))
     body = _fmt_report(daily.get("body_load"))
@@ -872,7 +918,7 @@ def _inquiry_sentence(inquiry: dict[str, Any]) -> str:
     if movement == "evidence_review_contaminates_relation":
         return f"调查{location_text}推进到“{label}”，但证物污染也在上升（进展 {progress}，污染 {contamination}）。{strategy_text}"
     if movement == "testimony_probe_raises_retraction_pressure":
-        return f"追问{location_text}触碰到“{label}”，证词可用性提高，同时撤回压力变大。{strategy_text}"
+        return f"调查追问{location_text}触碰到“{label}”，证词可用性提高，同时撤回压力变大。{strategy_text}"
     if movement == "symbol_becomes_speakable_but_unstable":
         return f"“{label}”{location_text}被说出口，却仍不能成为稳定事实。{strategy_text}"
     return f"案件压力{location_text}沉积到“{label}”，它开始改变两人的可行动空间。{strategy_text}"

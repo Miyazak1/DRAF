@@ -20,6 +20,7 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     account = json.loads((tmp_path / "run" / "account_trace.json").read_text())
     normativity = json.loads((tmp_path / "run" / "normativity_trace.json").read_text())
     relevance = json.loads((tmp_path / "run" / "relevance_trace.json").read_text())
+    epistemic = json.loads((tmp_path / "run" / "epistemic_trace.json").read_text())
     attention = json.loads((tmp_path / "run" / "attention_trace.json").read_text())
     opportunity = json.loads((tmp_path / "run" / "opportunity_trace.json").read_text())
     reversibility = json.loads((tmp_path / "run" / "reversibility_trace.json").read_text())
@@ -49,10 +50,12 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert all("relevance_load" in item["input_factors"] for item in scheduler)
     assert all("viability_pressure" in item["input_factors"] for item in scheduler)
     assert all("relation_sediment_load" in item["input_factors"] for item in scheduler)
+    assert all("epistemic_pressure" in item["input_factors"] for item in scheduler)
     assert all("daily_ecology_pressure" in item["input_factors"] for item in scheduler)
     assert all("attention_pressure" in item["input_factors"] for item in scheduler)
     assert all("opportunity_pressure" in item["input_factors"] for item in scheduler)
     assert all("reversibility_pressure" in item["input_factors"] for item in scheduler)
+    assert any(item["input_factors"]["epistemic_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["daily_ecology_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["attention_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["opportunity_pressure"] > 0 for item in scheduler[1:])
@@ -219,6 +222,20 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert any("AttentionDriftEvent" in item["evidence_event_types"] for item in relevance)
     assert any("OpportunityCostEvent" in item["evidence_event_types"] for item in relevance)
     assert any("ActionReversibilityEvent" in item["evidence_event_types"] for item in relevance)
+    assert any("EpistemicBoundaryEvent" in item["evidence_event_types"] for item in relevance)
+
+    assert epistemic
+    assert all(item["event_type"] == "EpistemicBoundaryEvent" for item in epistemic)
+    assert any(
+        item["boundary_type"] in {
+            "case_knowledge_asymmetry",
+            "testimony_disclosure_risk",
+            "public_private_knowledge_split",
+            "unspeakable_fact_boundary",
+        }
+        for item in epistemic
+    )
+    assert all(item["caused_by_events"] for item in epistemic)
 
     assert attention
     assert all(item["event_type"] == "AttentionDriftEvent" for item in attention)
@@ -383,6 +400,11 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
         for item in viability
         for constraint in item["future_constraints"]
     )
+    assert any(
+        constraint["source_layer"] == "epistemic_boundary"
+        for item in viability
+        for constraint in item["future_constraints"]
+    )
     assert any(item["dramatic_tension"] > 0 for item in viability)
     viability_event_types = {
         "ConstraintActivationEvent",
@@ -492,6 +514,7 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     inquiry = json.loads((output_dir / "inquiry_trace.json").read_text())
     scheduler = json.loads((output_dir / "scheduler_diagnostics.json").read_text())
     affordance = json.loads((output_dir / "affordance_trace.json").read_text())
+    epistemic = json.loads((output_dir / "epistemic_trace.json").read_text())
     attention = json.loads((output_dir / "attention_trace.json").read_text())
     opportunity = json.loads((output_dir / "opportunity_trace.json").read_text())
     reversibility = json.loads((output_dir / "reversibility_trace.json").read_text())
@@ -560,18 +583,22 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     assert any("witness_memory_destabilized" in event["payload"]["reconstruction_biases"] for event in case_memory_events)
     assert all("inquiry_pressure" in item["input_factors"] for item in scheduler)
     assert all("institutional_pressure" in item["input_factors"] for item in scheduler)
+    assert all("epistemic_pressure" in item["input_factors"] for item in scheduler)
     assert all("daily_ecology_pressure" in item["input_factors"] for item in scheduler)
     assert all("attention_pressure" in item["input_factors"] for item in scheduler)
     assert all("opportunity_pressure" in item["input_factors"] for item in scheduler)
     assert all("reversibility_pressure" in item["input_factors"] for item in scheduler)
     assert any(item["input_factors"]["inquiry_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["institutional_pressure"] > 0 for item in scheduler[1:])
+    assert any(item["input_factors"]["epistemic_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["daily_ecology_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["attention_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["opportunity_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["reversibility_pressure"] > 0 for item in scheduler[1:])
     assert attention
     assert any(item["dominant_focus"] in {"case_fixation", "threat_monitoring", "memory_intrusion"} for item in attention)
+    assert epistemic
+    assert any(item["boundary_type"] in {"case_knowledge_asymmetry", "testimony_disclosure_risk", "unspeakable_fact_boundary"} for item in epistemic)
     assert opportunity
     assert any(item["cost_type"] in {"evidence_window_loss", "trust_window_loss", "repair_window_loss", "social_exposure_cost"} for item in opportunity)
     assert reversibility

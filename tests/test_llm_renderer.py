@@ -25,6 +25,7 @@ def test_deterministic_renderer_writes_story_markdown(tmp_path):
     assert "参与者：" in text
     assert "底层依据：" in text
     assert "可存续性压力" in text
+    assert "信息边界" in text
     assert "机会成本" in text
     assert "行动可逆性" in text
 
@@ -39,7 +40,9 @@ def test_render_payload_contains_render_canon(tmp_path):
 
     assert payload["render_canon"]["cast"]["p1"]["name"] == "许知遥"
     assert payload["render_canon"]["cast"]["p2"]["name"] == "沈砚"
+    assert payload["epistemic_trace"]
     assert payload["story"][0]["viability"]
+    assert any(frame["epistemic_boundary"] for frame in payload["story"])
     assert payload["opportunity_trace"]
     assert payload["reversibility_trace"]
     assert any(frame["opportunity_cost"] for frame in payload["story"])
@@ -58,6 +61,7 @@ def test_yellow_sign_render_payload_inherits_case_ledger(tmp_path):
 
     assert payload["case_ledger"]["case_title"] == "黄印镇冷案"
     assert payload["inquiry_trace"]
+    assert payload["epistemic_trace"]
     assert payload["environment_trace"]
     assert payload["attention_trace"]
     assert payload["opportunity_trace"]
@@ -70,6 +74,7 @@ def test_yellow_sign_render_payload_inherits_case_ledger(tmp_path):
     assert "调查更新" in text
     assert "制度压力" in text
     assert "证人策略" in text
+    assert "信息边界" in text
     assert "日常生态" in text
     assert "注意力漂移" in text
     assert "机会成本" in text
@@ -152,6 +157,7 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert "viability" in body
     assert "case_ledger" in body
     assert "inquiry_trace" in body
+    assert "epistemic_trace" in body
     assert "environment_trace" in body
     assert "attention_trace" in body
     assert "opportunity_trace" in body
@@ -161,6 +167,7 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert "changed location-evidence coupling state" in body
     assert "changed institutional pressure state" in body
     assert "changed witness strategy state" in body
+    assert "changed epistemic boundary state" in body
     assert "changed daily ecology state" in body
     assert "changed attention drift state" in body
     assert "changed opportunity cost state" in body

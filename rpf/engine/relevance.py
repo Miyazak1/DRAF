@@ -210,6 +210,8 @@ class RelevanceLandscapeEngine:
                 updates.extend(self._opportunity_updates(state, event, refs))
             elif event_type == "ActionReversibilityEvent":
                 updates.extend(self._reversibility_updates(state, event, refs))
+            elif event_type == "EpistemicBoundaryEvent":
+                updates.extend(self._epistemic_updates(state, event, refs))
         return [update for update in updates if update.previous_value != update.new_value]
 
     def _affordance_updates(
@@ -469,6 +471,50 @@ class RelevanceLandscapeEngine:
                         [event.event_type],
                     )
                 )
+        return updates
+
+    def _epistemic_updates(
+        self,
+        state: SimulationState,
+        event: Event,
+        refs: list[str],
+    ) -> list[RelevanceShift]:
+        boundary_type = str(event.payload.get("boundary_type", ""))
+        pressure = self._payload_float(event, "pressure")
+        if pressure <= 0.0:
+            return []
+        marker = {
+            "case_knowledge_asymmetry": "recognition_claim",
+            "testimony_disclosure_risk": "public_exposure",
+            "public_private_knowledge_split": "public_exposure",
+            "unspeakable_fact_boundary": "double_bind",
+        }.get(boundary_type)
+        if not marker:
+            return []
+        updates = [
+            self._delta(
+                state,
+                process_id,
+                marker,
+                pressure * 0.14,
+                f"epistemic boundary {boundary_type} makes {marker} salient",
+                refs,
+                [event.event_type],
+            )
+            for process_id in state.processes
+        ]
+        if boundary_type in {"case_knowledge_asymmetry", "unspeakable_fact_boundary"}:
+            updates.append(
+                self._delta(
+                    state,
+                    "p1" if "p1" in state.processes else next(iter(state.processes)),
+                    "exit_threat",
+                    pressure * 0.07,
+                    "knowledge boundary makes refusal or withdrawal more salient",
+                    refs,
+                    [event.event_type],
+                )
+            )
         return updates
 
     def _coalesce(self, updates: list[RelevanceShift]) -> list[RelevanceShift]:

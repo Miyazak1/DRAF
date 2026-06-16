@@ -87,6 +87,13 @@ LABELS = {
     "repair_requires_extra_cost": "修复需要额外代价",
     "repair_requires_explicit_counter_history": "修复需要明确改写历史",
     "only_symbolic_acknowledgement_remains": "只剩象征性承认",
+    "case_knowledge_asymmetry": "案件知情不对称",
+    "testimony_disclosure_risk": "证词披露风险",
+    "public_private_knowledge_split": "公私知识分裂",
+    "unspeakable_fact_boundary": "不可说事实边界",
+    "open_but_costly": "可说但有代价",
+    "narrowed": "可说性收窄",
+    "sealed": "被封闭",
     "body_management": "身体管理",
     "case_fixation": "案件固着",
     "threat_monitoring": "威胁监控",
@@ -124,6 +131,7 @@ def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dic
         "render_canon": payload.get("render_canon", {}),
         "case_ledger": payload.get("case_ledger", {}),
         "inquiry_trace": payload.get("inquiry", []),
+        "epistemic_trace": payload.get("epistemic", []),
         "environment_trace": payload.get("environment", []),
         "attention_trace": payload.get("attention", []),
         "opportunity_trace": payload.get("opportunity", []),
@@ -143,6 +151,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
     canon = render_payload.get("render_canon", {})
     case_ledger = render_payload.get("case_ledger", {}) or {}
     inquiry_trace = render_payload.get("inquiry_trace", []) or []
+    epistemic_trace = render_payload.get("epistemic_trace", []) or []
     environment_trace = render_payload.get("environment_trace", []) or []
     attention_trace = render_payload.get("attention_trace", []) or []
     opportunity_trace = render_payload.get("opportunity_trace", []) or []
@@ -166,6 +175,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         f"- 调查更新：{len(inquiry_trace)}。最近焦点：{_latest_inquiry_focus(inquiry_trace)}。",
         f"- 制度压力：{_institutional_pressure_summary(inquiry_trace)}",
         f"- 证人策略：{_witness_strategy_summary(inquiry_trace)}",
+        f"- 信息边界：{_epistemic_boundary_summary(epistemic_trace)}",
         f"- 日常生态：{_daily_ecology_summary(environment_trace)}",
         f"- 注意力漂移：{_attention_drift_summary(attention_trace)}",
         f"- 机会成本：{_opportunity_cost_summary(opportunity_trace)}",
@@ -300,6 +310,19 @@ def _witness_strategy_summary(inquiry_trace: list[dict[str, Any]]) -> str:
         f"保护 {_fmt(latest.get('protective_value'))}，"
         f"透露宽度 {_fmt(latest.get('disclosure_width'))}，"
         f"确认风险 {_fmt(latest.get('confirmation_risk'))}"
+    )
+
+
+def _epistemic_boundary_summary(epistemic_trace: list[dict[str, Any]]) -> str:
+    if not epistemic_trace:
+        return "-"
+    latest = max(epistemic_trace[-10:], key=lambda item: float(item.get("pressure") or 0.0))
+    return (
+        f"{_label(latest.get('boundary_type', '-'))}；"
+        f"{latest.get('focus_label') or latest.get('focus_id') or '-'}，"
+        f"{_label(latest.get('boundary_state', '-'))}，"
+        f"可说 {_fmt(latest.get('speakability_width'))}，"
+        f"披露风险 {_fmt(latest.get('disclosure_risk'))}"
     )
 
 
@@ -448,6 +471,7 @@ def llm_markdown(
                 "case_ledger.contradictions",
                 "case_ledger.unverified_anomalies",
                 "inquiry_trace",
+                "epistemic_trace",
                 "environment_trace",
                 "attention_trace",
                 "opportunity_trace",
@@ -473,6 +497,7 @@ def llm_markdown(
                 "changed location-evidence coupling state",
                 "changed institutional pressure state",
                 "changed witness strategy state",
+                "changed epistemic boundary state",
                 "changed daily ecology state",
                 "changed attention drift state",
                 "changed opportunity cost state",

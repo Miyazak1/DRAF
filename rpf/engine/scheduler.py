@@ -20,6 +20,7 @@ class TemporalScheduler:
         relevance_load = self._relevance_load(state)
         inquiry_pressure = self._inquiry_pressure(state)
         institutional_pressure = self._institutional_pressure(state)
+        epistemic_pressure = self._epistemic_pressure(state)
         daily_ecology_pressure = self._daily_ecology_pressure(state)
         attention_pressure = self._attention_pressure(state)
         opportunity_pressure = self._opportunity_pressure(state)
@@ -56,6 +57,7 @@ class TemporalScheduler:
             + relevance_load * scene_weights.get("relevance_load", 0.045)
             + inquiry_pressure * scene_weights.get("inquiry_pressure", 0.075)
             + institutional_pressure * scene_weights.get("institutional_pressure", 0.052)
+            + epistemic_pressure * scene_weights.get("epistemic_pressure", 0.046)
             + daily_ecology_pressure * scene_weights.get("daily_ecology_pressure", 0.04)
             + attention_pressure * scene_weights.get("attention_pressure", 0.035)
             + opportunity_pressure * scene_weights.get("opportunity_pressure", 0.045)
@@ -71,6 +73,7 @@ class TemporalScheduler:
             + relevance_load * micro_weights.get("relevance_load", 0.035)
             + inquiry_pressure * micro_weights.get("inquiry_pressure", 0.045)
             + institutional_pressure * micro_weights.get("institutional_pressure", 0.028)
+            + epistemic_pressure * micro_weights.get("epistemic_pressure", 0.034)
             + daily_ecology_pressure * micro_weights.get("daily_ecology_pressure", 0.06)
             + attention_pressure * micro_weights.get("attention_pressure", 0.04)
             + opportunity_pressure * micro_weights.get("opportunity_pressure", 0.032)
@@ -109,6 +112,7 @@ class TemporalScheduler:
                 "relevance_load": round(relevance_load, 4),
                 "inquiry_pressure": round(inquiry_pressure, 4),
                 "institutional_pressure": round(institutional_pressure, 4),
+                "epistemic_pressure": round(epistemic_pressure, 4),
                 "daily_ecology_pressure": round(daily_ecology_pressure, 4),
                 "attention_pressure": round(attention_pressure, 4),
                 "opportunity_pressure": round(opportunity_pressure, 4),
@@ -171,6 +175,14 @@ class TemporalScheduler:
         values = [float(state.relation_metrics.get(key, 0.0) or 0.0) for key in keys]
         audience = float(state.field_state.audience_pressure.get("institutional_gatekeeping", 0.0) or 0.0)
         return min(1.0, sum(values) + audience)
+
+    def _epistemic_pressure(self, state: SimulationState) -> float:
+        values = [
+            float(value or 0.0)
+            for key, value in state.relation_metrics.items()
+            if key.startswith("epistemic_boundary.")
+        ]
+        return min(1.0, sum(values) * 0.48)
 
     def _daily_ecology_pressure(self, state: SimulationState) -> float:
         keys = (

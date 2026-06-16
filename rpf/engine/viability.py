@@ -551,6 +551,7 @@ class RelationalViabilityEngine:
             )
         traces.extend(self._opportunity_future_constraints(state))
         traces.extend(self._action_reversibility_future_constraints(state))
+        traces.extend(self._epistemic_future_constraints(state))
         return traces
 
     def _opportunity_future_constraints(self, state: SimulationState) -> list[FutureConstraintTrace]:
@@ -656,6 +657,57 @@ class RelationalViabilityEngine:
                     intensity=clamp(value * 0.82),
                     persistence="decaying" if slug == "reversibility_pressure" else "operative",
                     mechanism=f"{slug} narrows what later action can still undo",
+                    downstream_effects=downstream,
+                    evidence_refs=[],
+                )
+            )
+        return traces
+
+    def _epistemic_future_constraints(self, state: SimulationState) -> list[FutureConstraintTrace]:
+        specs = {
+            "case_knowledge_asymmetry": (
+                "epistemic_case_knowledge_asymmetry",
+                ["truth_integration", "recognition_access", "speech_access"],
+                ["future truth claims must pass through unequal access to what can be safely known"],
+            ),
+            "testimony_disclosure_risk": (
+                "epistemic_testimony_disclosure_risk",
+                ["speech_access", "truth_integration", "face_continuation"],
+                ["future testimony is constrained by disclosure risk and witness protection"],
+            ),
+            "public_private_knowledge_split": (
+                "epistemic_public_private_split",
+                ["face_continuation", "relation_continuation", "recognition_access"],
+                ["future interaction is filtered through a gap between public account and private operating truth"],
+            ),
+            "unspeakable_fact_boundary": (
+                "epistemic_unspeakable_fact_boundary",
+                ["speech_access", "memory_integration", "repair_availability"],
+                ["future repair must circle a fact that the relation cannot name cleanly"],
+            ),
+        }
+        traces: list[FutureConstraintTrace] = []
+        metrics = [
+            (key.removeprefix("epistemic_boundary."), clamp(value))
+            for key, value in sorted(state.relation_metrics.items())
+            if key.startswith("epistemic_boundary.") and key != "epistemic_boundary.pressure"
+        ]
+        for index, (boundary_type, value) in enumerate(metrics, start=1):
+            spec = specs.get(boundary_type)
+            if not spec or value <= 0.035:
+                continue
+            constraint_type, requirements, downstream = spec
+            traces.append(
+                FutureConstraintTrace(
+                    constraint_id=f"fc-epi-{index:02d}-{boundary_type}",
+                    constraint_type=constraint_type,
+                    source_layer="epistemic_boundary",
+                    source_ref_id=f"epistemic_boundary.{boundary_type}",
+                    affected_processes=sorted(state.processes),
+                    constrained_requirements=requirements,
+                    intensity=clamp(value * 0.86),
+                    persistence="decaying",
+                    mechanism=f"{boundary_type} changes what future interaction can safely know or say",
                     downstream_effects=downstream,
                     evidence_refs=[],
                 )

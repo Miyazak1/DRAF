@@ -68,6 +68,7 @@ def next_render_segment(
         "render_canon": payload.get("render_canon", {}),
         "case_ledger": payload.get("case_ledger", {}),
         "inquiry_trace": payload.get("inquiry", []),
+        "epistemic_trace": payload.get("epistemic", []),
         "environment_trace": payload.get("environment", []),
         "attention_trace": payload.get("attention", []),
         "opportunity_trace": payload.get("opportunity", []),
@@ -176,6 +177,9 @@ def deterministic_segment_markdown(segment: dict[str, Any]) -> str:
         reversibility = _reversibility_brief(frame)
         if reversibility:
             lines.append(f"  - 行动可逆性：{reversibility}")
+        epistemic = _epistemic_brief(frame)
+        if epistemic:
+            lines.append(f"  - 信息边界：{epistemic}")
     return "\n".join(lines).strip() + "\n"
 
 
@@ -238,6 +242,20 @@ def _reversibility_brief(frame: dict[str, Any]) -> str:
     return f"{label}，剩余可逆宽度 {width}，修复路径：{route}"
 
 
+def _epistemic_brief(frame: dict[str, Any]) -> str:
+    epistemic = frame.get("epistemic_boundary", {}) or {}
+    if not epistemic:
+        return ""
+    label = epistemic.get("boundary_label") or epistemic.get("boundary_type")
+    state = epistemic.get("boundary_state_label") or epistemic.get("boundary_state")
+    focus = epistemic.get("focus_label") or epistemic.get("focus_id")
+    try:
+        speakability = f"{float(epistemic.get('speakability_width') or 0.0):.2f}"
+    except (TypeError, ValueError):
+        speakability = "-"
+    return f"{label}，{focus}处于{state}，可说宽度 {speakability}"
+
+
 def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str, Any]:
     previous = load_render_segments(output_dir)[-2:]
     return {
@@ -247,6 +265,11 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
         "inquiry_trace": [
             item
             for item in segment.get("inquiry_trace", [])[-12:]
+            if int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
+        ],
+        "epistemic_trace": [
+            item
+            for item in segment.get("epistemic_trace", [])[-16:]
             if int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
         ],
         "case_memory_trace": [
@@ -307,6 +330,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "compress_repeated_frames": True,
             "case_ledger_is_authoritative": True,
             "inquiry_trace_is_authoritative": True,
+            "epistemic_trace_is_authoritative": True,
             "witness_strategy_is_authoritative": True,
             "daily_ecology_trace_is_authoritative": True,
             "attention_trace_is_authoritative": True,

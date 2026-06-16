@@ -141,6 +141,13 @@ const ZH = {
   repair_requires_extra_cost: "修复需要额外代价",
   repair_requires_explicit_counter_history: "修复需要明确改写历史",
   only_symbolic_acknowledgement_remains: "只剩象征性承认",
+  case_knowledge_asymmetry: "案件知情不对称",
+  testimony_disclosure_risk: "证词披露风险",
+  public_private_knowledge_split: "公私知识分裂",
+  unspeakable_fact_boundary: "不可说事实边界",
+  open_but_costly: "可说但有代价",
+  narrowed: "可说性收窄",
+  sealed: "被封闭",
   body_management: "身体管理",
   case_fixation: "案件固着",
   threat_monitoring: "威胁监控",
@@ -551,6 +558,7 @@ function renderStory() {
           ${frame.attention_drift?.dominant_focus ? `<span class="tag">注意：${zh(frame.attention_drift.dominant_focus)}</span>` : ""}
           ${frame.opportunity_cost?.cost_type ? `<span class="tag">机会成本：${zh(frame.opportunity_cost.cost_type)}</span>` : ""}
           ${frame.reversibility?.threshold_state ? `<span class="tag">可逆性：${zh(frame.reversibility.threshold_state)}</span>` : ""}
+          ${frame.epistemic_boundary?.boundary_type ? `<span class="tag">信息边界：${zh(frame.epistemic_boundary.boundary_type)}</span>` : ""}
           ${frame.daily_ecology?.routine_phase ? `<span class="tag">日常：${zh(frame.daily_ecology.routine_phase)}</span>` : ""}
           ${frame.memory_count ? `<span class="tag">记忆重构：${frame.memory_count}</span>` : ""}
           ${frame.fate_count ? `<span class="tag">命运转折：${frame.fate_count}</span>` : ""}
@@ -565,6 +573,7 @@ function renderStory() {
     <div class="state-row"><span>当前阶段</span><b>${zh(last.phase)}</b></div>
     <div class="state-row"><span>物质紧迫</span><b>${fmt(pressure.material_urgency)}</b></div>
     <div class="state-row"><span>日常压力</span><b>${fmt(pressure.daily_ecology_pressure)}</b></div>
+    <div class="state-row"><span>信息边界</span><b>${fmt(pressure.epistemic_pressure)}</b></div>
     <div class="state-row"><span>机会成本</span><b>${fmt(pressure.opportunity_pressure)}</b></div>
     <div class="state-row"><span>可逆性压力</span><b>${fmt(pressure.reversibility_pressure)}</b></div>
     <div class="state-row"><span>冲突压力</span><b>${fmt(pressure.conflict_pressure)}</b></div>
@@ -618,6 +627,7 @@ function buildEvolutionPoints() {
       repair_debt: numberOrNull(pressure.repair_debt ?? recognition.repair_debt),
       recognition_pressure: numberOrNull(pressure.recognition_pressure ?? recognition.demand_pressure),
       memory_pressure: numberOrNull(pressure.memory_pressure),
+      epistemic_pressure: numberOrNull(pressure.epistemic_pressure),
       opportunity_pressure: numberOrNull(pressure.opportunity_pressure),
       reversibility_pressure: numberOrNull(pressure.reversibility_pressure),
     };
@@ -650,6 +660,7 @@ function renderPressureChart(points) {
     {key: "repair_debt", label: "修复债", color: "#a45f1b"},
     {key: "recognition_pressure", label: "承认压力", color: "#315f8f"},
     {key: "memory_pressure", label: "记忆压力", color: "#6f5a8f"},
+    {key: "epistemic_pressure", label: "信息边界", color: "#46635f"},
     {key: "opportunity_pressure", label: "机会成本", color: "#7a6a2d"},
     {key: "reversibility_pressure", label: "可逆性压力", color: "#8b3d5b"},
   ];
@@ -730,6 +741,7 @@ function renderEvolutionStats(points) {
     ["修复债", trend(last.repair_debt, previous.repair_debt)],
     ["承认压力", trend(last.recognition_pressure, previous.recognition_pressure)],
     ["记忆压力", trend(last.memory_pressure, previous.memory_pressure)],
+    ["信息边界", trend(last.epistemic_pressure, previous.epistemic_pressure)],
     ["机会成本", trend(last.opportunity_pressure, previous.opportunity_pressure)],
     ["可逆性压力", trend(last.reversibility_pressure, previous.reversibility_pressure)],
   ];
