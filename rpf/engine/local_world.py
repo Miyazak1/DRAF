@@ -24,6 +24,14 @@ class LocalWorldUpdate:
     events: list[tuple[str, dict[str, Any], list[str]]] = field(default_factory=list)
 
 
+@dataclass
+class SceneLocalitySelection:
+    scene_context: dict[str, Any] = field(default_factory=dict)
+    location_trace: dict[str, Any] = field(default_factory=dict)
+    route_trace: dict[str, Any] = field(default_factory=dict)
+    audience_trace: dict[str, Any] = field(default_factory=dict)
+
+
 class LocalWorldEngine:
     def __init__(self, spec: LocalWorldSpec | None) -> None:
         self.spec = spec
@@ -75,6 +83,85 @@ class LocalWorldEngine:
             if trace.get("event_type") != "LocalWorldUpdateEvent"
         ]
         return update
+
+    def select_scene_locality(
+        self,
+        context: TickContext,
+        *,
+        scene_type: str,
+        evidence: dict[str, Any],
+        causal_refs: list[str] | None = None,
+    ) -> SceneLocalitySelection:
+        if not self.spec or not self.state:
+            return SceneLocalitySelection()
+        causal_refs = causal_refs or []
+        candidate_scores = [self._location_candidate(context, location, scene_type, evidence) for location in self.spec.locations]
+        candidate_scores = sorted(candidate_scores, key=lambda item: item["score"], reverse=True)
+        selected = candidate_scores[0]
+        route = self._select_route_for_location(selected["location_id"], evidence)
+        audiences = self._audiences_for_location(selected["location_id"])
+        memory_sites = self._memory_sites_for_location(selected["location_id"])
+        constraints = self._constraints_for_location(selected["location_id"], route)
+        rejected = [
+            {
+                "location_id": item["location_id"],
+                "score": item["score"],
+                "reasons": item["rejected_reasons"],
+            }
+            for item in candidate_scores[1:6]
+        ]
+        scene_context = {
+            "location_id": selected["location_id"],
+            "location_label": selected["label"],
+            "route_context": route,
+            "time_window": self.state.current_time_window,
+            "active_rhythm": self.state.active_rhythms[0] if self.state.active_rhythms else None,
+            "active_rhythms": list(self.state.active_rhythms),
+            "possible_audiences": audiences,
+            "local_constraints": constraints,
+            "memory_site_refs": [item["site_id"] for item in memory_sites],
+            "why_here": selected["why_here"],
+            "why_now": self._why_now(),
+            "why_these_processes": self._why_these_processes(selected["location_id"]),
+            "why_not_elsewhere": self._why_not_elsewhere(rejected),
+            "who_might_see": [item["audience_id"] for item in audiences if item["exposure_state"] != "none"],
+            "what_this_place_remembers": [item["memory_type"] for item in memory_sites],
+            "boundary_rules": self.spec.boundary_rules.model_dump(mode="json"),
+        }
+        location_trace = {
+            "tick": context.tick_index,
+            "event_type": "LocationSelectionEvent",
+            "selected_location": selected["location_id"],
+            "selected_location_label": selected["label"],
+            "scene_type": scene_type,
+            "candidate_scores": candidate_scores,
+            "rejected_locations": rejected,
+            "why_here": scene_context["why_here"],
+            "why_not_elsewhere": scene_context["why_not_elsewhere"],
+            "active_boundary_rules": scene_context["boundary_rules"],
+            "caused_by_events": causal_refs,
+        }
+        route_trace = {
+            "tick": context.tick_index,
+            "event_type": "RouteSelectionEvent",
+            "selected_location": selected["location_id"],
+            "selected_route": route.get("route_id") if route else None,
+            "route_context": route,
+            "candidate_scores": self._route_candidates_for_location(selected["location_id"], evidence),
+            "caused_by_events": causal_refs,
+        }
+        audience_trace = {
+            "tick": context.tick_index,
+            "event_type": "SceneAudienceContextEvent",
+            "location_id": selected["location_id"],
+            "possible_audiences": audiences,
+            "public_consequence_allowed": any(
+                item["exposure_state"] in {"observed", "reported", "institutionalized"}
+                for item in audiences
+            ),
+            "caused_by_events": causal_refs,
+        }
+        return SceneLocalitySelection(scene_context, location_trace, route_trace, audience_trace)
 
     def _active_rhythms(self) -> list[RhythmSpec]:
         assert self.spec is not None
@@ -358,6 +445,231 @@ class LocalWorldEngine:
                 linked.update(location.linked_processes)
         return sorted(linked)
 
+    def _location_candidate(self, context: TickContext, location: LocationSpec, scene_type: str, evidence: dict[str, Any]) -> dict[str, Any]:
+        assert self.spec is not None and self.state is not None
+        state = self.state.location_states[location.location_id]
+        active_rhythm_relevance = 1.0 if any(location.location_id in rhythm.active_locations for rhythm in self.spec.rhythms if rhythm.rhythm_id in self.state.active_rhythms) else 0.0
+        memory_site_salience = max(
+            [
+                self.state.active_memory_sites[site.site_id].salience
+                for site in self.spec.memory_sites
+                if site.location_id == location.location_id
+            ]
+            or [0.0]
+        )
+        audience_pressure = max(
+            [
+                self.state.audience_exposure_states[audience.audience_id].exposure_level
+                for audience in self.spec.audiences
+                if location.location_id in audience.usual_locations
+            ]
+            or [0.0]
+        )
+        route_accessibility = max(
+            [
+                route_state.accessibility
+                for route_id, route_state in self.state.route_states.items()
+                for route in self.spec.routes
+                if route.route_id == route_id and location.location_id in {route.from_location, route.to_location}
+            ]
+            or [state.accessibility]
+        )
+        travel_cost = min(
+            [
+                route.travel_time_minutes / 60.0
+                for route in self.spec.routes
+                if location.location_id in {route.from_location, route.to_location}
+            ]
+            or [0.0]
+        )
+        scene_compatibility = _scene_compatibility(location, scene_type)
+        institution_pressure = _institution_pressure_for_location(self.spec, location)
+        resource_pressure = _resource_pressure_for_location(self.spec, location)
+        avoidance_capacity = max(
+            [
+                normalized_pressure(site.avoidance_pressure)
+                for site in self.spec.memory_sites
+                if site.location_id == location.location_id
+            ]
+            or [0.0]
+        )
+        binding_relevance = 0.65 if location.linked_processes else 0.32
+        capacity_demand_relevance = _capacity_match(scene_type, location)
+        field_pressure_relevance = state.pressure
+        boundary_violation_penalty = 0.55 if scene_type in location.blocked_scene_types else 0.0
+        score = clamp(
+            binding_relevance * 0.14
+            + field_pressure_relevance * 0.18
+            + capacity_demand_relevance * 0.13
+            + active_rhythm_relevance * 0.12
+            + memory_site_salience * 0.14
+            + resource_pressure * 0.08
+            + institution_pressure * 0.08
+            + audience_pressure * 0.08
+            + route_accessibility * 0.12
+            + scene_compatibility * 0.12
+            - travel_cost * 0.06
+            - avoidance_capacity * 0.04
+            - boundary_violation_penalty
+        )
+        components = {
+            "binding_relevance": round(binding_relevance, 4),
+            "field_pressure_relevance": round(field_pressure_relevance, 4),
+            "capacity_demand_relevance": round(capacity_demand_relevance, 4),
+            "active_rhythm_relevance": round(active_rhythm_relevance, 4),
+            "memory_site_salience": round(memory_site_salience, 4),
+            "resource_pressure": round(resource_pressure, 4),
+            "institution_pressure": round(institution_pressure, 4),
+            "audience_pressure": round(audience_pressure, 4),
+            "route_accessibility": round(route_accessibility, 4),
+            "travel_cost": round(travel_cost, 4),
+            "avoidance_capacity": round(avoidance_capacity, 4),
+            "boundary_violation_penalty": round(boundary_violation_penalty, 4),
+            "scene_compatibility": round(scene_compatibility, 4),
+        }
+        return {
+            "location_id": location.location_id,
+            "label": location.label,
+            "score": round(score, 4),
+            "components": components,
+            "rejected_reasons": _rejected_reasons(location, scene_type, components),
+            "why_here": _why_here(location, components),
+            "tick_type": context.tick_type,
+            "scene_type": scene_type,
+            "evidence_refs": sorted(str(key) for key, value in evidence.items() if _truthy_score(value))[:8],
+        }
+
+    def _select_route_for_location(self, location_id: str, evidence: dict[str, Any]) -> dict[str, Any]:
+        candidates = self._route_candidates_for_location(location_id, evidence)
+        if not candidates:
+            return {}
+        selected = max(candidates, key=lambda item: item["route_score"])
+        return {
+            "route_id": selected["route_id"],
+            "from_location": selected["from_location"],
+            "to_location": selected["to_location"],
+            "access_status": selected["access_status"],
+            "travel_time_minutes": selected["travel_time_minutes"],
+            "route_score": selected["route_score"],
+            "route_costs": selected["components"],
+        }
+
+    def _route_candidates_for_location(self, location_id: str, evidence: dict[str, Any]) -> list[dict[str, Any]]:
+        assert self.spec is not None and self.state is not None
+        urgency = max([float(value) for value in evidence.values() if isinstance(value, (int, float))] or [0.0])
+        candidates: list[dict[str, Any]] = []
+        for route in self.spec.routes:
+            if location_id not in {route.from_location, route.to_location}:
+                continue
+            state = self.state.route_states[route.route_id]
+            travel_time_cost = min(1.0, route.travel_time_minutes / 60.0)
+            components = {
+                "accessibility": state.accessibility,
+                "travel_time_cost": round(travel_time_cost, 4),
+                "danger_cost": state.danger,
+                "exposure_cost": state.exposure,
+                "weather_cost": round(1.0 - state.accessibility, 4),
+                "urgency": round(urgency, 4),
+                "binding_pressure": 0.35 if self._route_affected_processes(route) else 0.12,
+            }
+            route_score = clamp(
+                state.accessibility * 0.45
+                - travel_time_cost * 0.12
+                - state.danger * 0.14
+                - state.exposure * 0.08
+                - (1.0 - state.accessibility) * 0.1
+                + urgency * 0.16
+                + components["binding_pressure"] * 0.12
+            )
+            candidates.append(
+                {
+                    "route_id": route.route_id,
+                    "from_location": route.from_location,
+                    "to_location": route.to_location,
+                    "access_status": state.access_status,
+                    "travel_time_minutes": route.travel_time_minutes,
+                    "route_score": round(route_score, 4),
+                    "components": components,
+                    "blocking_conditions": list(state.blocking_conditions),
+                }
+            )
+        return sorted(candidates, key=lambda item: item["route_score"], reverse=True)
+
+    def _audiences_for_location(self, location_id: str) -> list[dict[str, Any]]:
+        assert self.spec is not None and self.state is not None
+        audiences: list[dict[str, Any]] = []
+        for audience in self.spec.audiences:
+            if location_id not in audience.usual_locations:
+                continue
+            state = self.state.audience_exposure_states[audience.audience_id]
+            audiences.append(
+                {
+                    "audience_id": audience.audience_id,
+                    "label": audience.label,
+                    "exposure_state": state.exposure_state,
+                    "exposure_level": state.exposure_level,
+                    "rumor_risk": normalized_pressure(audience.rumor_power),
+                    "sanction_risk": normalized_pressure(audience.sanction_power),
+                }
+            )
+        return sorted(audiences, key=lambda item: item["exposure_level"], reverse=True)
+
+    def _memory_sites_for_location(self, location_id: str) -> list[dict[str, Any]]:
+        assert self.spec is not None and self.state is not None
+        sites: list[dict[str, Any]] = []
+        for site in self.spec.memory_sites:
+            if site.location_id != location_id:
+                continue
+            state = self.state.active_memory_sites[site.site_id]
+            if not state.active:
+                continue
+            sites.append(
+                {
+                    "site_id": site.site_id,
+                    "memory_type": site.memory_type,
+                    "salience": state.salience,
+                    "future_scene_biases": list(site.future_scene_biases),
+                }
+            )
+        return sorted(sites, key=lambda item: item["salience"], reverse=True)
+
+    def _constraints_for_location(self, location_id: str, route: dict[str, Any]) -> list[dict[str, Any]]:
+        assert self.state is not None
+        location_state = self.state.location_states[location_id]
+        constraints = [
+            {"constraint_type": "location_pressure", "intensity": location_state.pressure},
+            {"constraint_type": "public_visibility", "intensity": location_state.crowd_density},
+            {"constraint_type": "rumor_density", "intensity": location_state.rumor_density},
+            {"constraint_type": "memory_salience", "intensity": location_state.memory_salience},
+        ]
+        if route:
+            constraints.append({"constraint_type": "route_access", "intensity": clamp(1.0 - float(route.get("route_score", 0.0)))})
+        return [item for item in constraints if item["intensity"] > 0]
+
+    def _why_now(self) -> str:
+        assert self.state is not None
+        if self.state.active_rhythms:
+            return f"active local rhythm: {', '.join(self.state.active_rhythms)}"
+        return f"local time window is {self.state.current_time_window}"
+
+    def _why_these_processes(self, location_id: str) -> str:
+        assert self.spec is not None
+        linked = [
+            location
+            for location in self.spec.locations
+            if location.location_id == location_id and location.linked_processes
+        ]
+        if linked:
+            return f"location directly links processes: {', '.join(linked[0].linked_processes)}"
+        return "co-presence is licensed by active bindings and local-world pressure"
+
+    def _why_not_elsewhere(self, rejected: list[dict[str, Any]]) -> str:
+        if not rejected:
+            return "no stronger local-world alternative was available"
+        top = rejected[0]
+        reason = ", ".join(top.get("reasons") or ["lower candidate score"])
+        return f"{top['location_id']} was weaker because {reason}"
+
 
 def _time_window(elapsed_seconds: int) -> str:
     minute_of_day = (6 * 60 + elapsed_seconds // 60) % (24 * 60)
@@ -401,3 +713,88 @@ def _exposure_state(value: float) -> str:
     if value >= 0.32:
         return "possible"
     return "none"
+
+
+def _scene_compatibility(location: LocationSpec, scene_type: str) -> float:
+    if not location.allowed_scene_types:
+        return 0.45
+    if scene_type in location.allowed_scene_types:
+        return 1.0
+    if any(scene_type in allowed or allowed in scene_type for allowed in location.allowed_scene_types):
+        return 0.62
+    return 0.25
+
+
+def _institution_pressure_for_location(spec: LocalWorldSpec, location: LocationSpec) -> float:
+    values = [
+        normalized_pressure(institution.corruption_or_decay)
+        for institution in spec.institutions
+        if location.location_id in institution.locations
+        or (location.controlling_institution and institution.institution_id == location.controlling_institution)
+    ]
+    return max(values or [0.0])
+
+
+def _resource_pressure_for_location(spec: LocalWorldSpec, location: LocationSpec) -> float:
+    if not location.controlling_institution:
+        return 0.0
+    values = [
+        normalized_pressure(resource.scarcity_level) * 0.6 + normalized_pressure(resource.conflict_potential) * 0.4
+        for resource in spec.resources
+        if resource.controller == location.controlling_institution
+    ]
+    return max(values or [0.0])
+
+
+def _capacity_match(scene_type: str, location: LocationSpec) -> float:
+    capacity_by_scene = {
+        "contaminated_evidence_review": {"evidence_access", "truth_disclosure"},
+        "unstable_testimony_probe": {"truth_disclosure", "memory_integration"},
+        "forbidden_symbol_confrontation": {"truth_disclosure", "memory_integration"},
+        "public_performance": {"face_management"},
+        "care_conflict": {"repair"},
+        "private_confession": {"repair", "truth_disclosure"},
+    }
+    required = capacity_by_scene.get(scene_type, {"repair", "truth_disclosure"})
+    available = set(_capacities_for_location(location))
+    return len(required & available) / max(1, len(required))
+
+
+def _rejected_reasons(location: LocationSpec, scene_type: str, components: dict[str, float]) -> list[str]:
+    reasons: list[str] = []
+    if scene_type in location.blocked_scene_types:
+        reasons.append("scene_type_blocked_by_location")
+    if components["route_accessibility"] < 0.25:
+        reasons.append("route_access_too_narrow")
+    if components["memory_site_salience"] < 0.25 and components["active_rhythm_relevance"] < 0.25:
+        reasons.append("weak_memory_or_rhythm_relevance")
+    if components["audience_pressure"] > 0.7 and scene_type in {"private_confession", "controlled_disclosure"}:
+        reasons.append("public_exposure_distorts_private_scene")
+    if not reasons:
+        reasons.append("lower_candidate_score")
+    return reasons
+
+
+def _why_here(location: LocationSpec, components: dict[str, float]) -> str:
+    ranked = sorted(
+        (
+            ("field pressure", components["field_pressure_relevance"]),
+            ("active rhythm", components["active_rhythm_relevance"]),
+            ("memory site", components["memory_site_salience"]),
+            ("institution", components["institution_pressure"]),
+            ("audience exposure", components["audience_pressure"]),
+            ("route access", components["route_accessibility"]),
+        ),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    top = [label for label, value in ranked[:3] if value > 0]
+    if not top:
+        return f"{location.location_id} was the least violating bounded-world candidate"
+    return f"{location.location_id} selected through {', '.join(top)}"
+
+
+def _truthy_score(value: Any) -> bool:
+    if isinstance(value, (int, float)):
+        return float(value) > 0
+    return bool(value)

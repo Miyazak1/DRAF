@@ -195,6 +195,9 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "rpp_activation": _read_json(run_dir / "rpp_activation_trace.json", []),
         "rpp_dynamics": _read_json(run_dir / "rpp_dynamics_trace.json", []),
         "local_world": _read_json(run_dir / "local_world_trace.json", []),
+        "location_selection": _read_json(run_dir / "location_selection_trace.json", []),
+        "route_selection": _read_json(run_dir / "route_selection_trace.json", []),
+        "audience_exposure": _read_json(run_dir / "audience_exposure_trace.json", []),
         "irreversibility": _read_json(run_dir / "irreversibility_report.json", {}),
         "timeline": timeline,
         "rendered_segments": _read_json(run_dir / "rendered_segments.json", []),
@@ -268,6 +271,9 @@ def build_viewer_payload_from_database_records(data: dict[str, Any]) -> dict[str
         "rpp_activation": traces.get("rpp_activation", []),
         "rpp_dynamics": traces.get("rpp_dynamics", []),
         "local_world": traces.get("local_world", []),
+        "location_selection": traces.get("location_selection", []),
+        "route_selection": traces.get("route_selection", []),
+        "audience_exposure": traces.get("audience_exposure", []),
         "irreversibility": {},
         "timeline": events,
         "rendered_segments": rendered_segments,
@@ -638,6 +644,9 @@ def _database_export_files(payload: dict[str, Any], report: str) -> dict[str, st
         "rpp_activation_trace.json": payload.get("rpp_activation", []),
         "rpp_dynamics_trace.json": payload.get("rpp_dynamics", []),
         "local_world_trace.json": payload.get("local_world", []),
+        "location_selection_trace.json": payload.get("location_selection", []),
+        "route_selection_trace.json": payload.get("route_selection", []),
+        "audience_exposure_trace.json": payload.get("audience_exposure", []),
     }
     files: dict[str, str] = {
         "run_report.md": report,
@@ -701,6 +710,9 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "rpp_activation_trace.json",
         "rpp_dynamics_trace.json",
         "local_world_trace.json",
+        "location_selection_trace.json",
+        "route_selection_trace.json",
+        "audience_exposure_trace.json",
         "irreversibility_report.json",
         "aggregation_traces.json",
     ]
@@ -743,6 +755,10 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
         for item in payload.get("environment", [])
         if item.get("event_type") == "DailyEcologyEvent"
     }
+    locality_by_tick = {
+        int(item.get("tick", 0)): item
+        for item in payload.get("location_selection", [])
+    }
     memories_by_tick: dict[int, list[dict[str, Any]]] = {}
     for memory in payload.get("memory", []):
         memories_by_tick.setdefault(int(memory.get("tick", 0)), []).append(memory)
@@ -768,6 +784,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
         epistemic_boundary = _epistemic_summary(epistemic_by_tick.get(tick_index, []))
         common_ground = _common_ground_summary(common_ground_by_tick.get(tick_index, {}))
         daily_ecology = daily_ecology_by_tick.get(tick_index, {})
+        locality = _locality_summary(locality_by_tick.get(tick_index, {}))
         memories = memories_by_tick.get(tick_index, [])
         fates = fate_by_tick.get(tick_index, [])
         phase = projection.get("relationship_phase") or previous_phase or "unknown"
@@ -796,6 +813,8 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
             summary_parts.append(_common_ground_sentence(common_ground))
         if daily_ecology:
             summary_parts.append(_daily_ecology_sentence(daily_ecology))
+        if locality:
+            summary_parts.append(_locality_sentence(locality))
         if recognition:
             summary_parts.append(_recognition_sentence(recognition))
         if inquiry:
@@ -828,6 +847,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "epistemic_boundary": epistemic_boundary,
                 "common_ground": common_ground,
                 "daily_ecology": daily_ecology,
+                "locality": locality,
                 "memory_count": len(memories),
                 "case_memory_count": _case_memory_count(memories),
                 "case_memory_focuses": _case_memory_focuses(memories),
@@ -1160,6 +1180,28 @@ def _daily_ecology_sentence(daily: dict[str, Any]) -> str:
     if daily.get("routine_phase") == "night_recovery":
         return f"日常时间进入{phase}，身体负荷 {body}，但等待压力仍有 {waiting}。"
     return f"日常惯性进入{phase}，未完成杂事 {tasks}，身体负荷 {body}，等待压力 {waiting}。"
+
+
+def _locality_summary(selection: dict[str, Any]) -> dict[str, Any]:
+    if not selection:
+        return {}
+    top_candidate = (selection.get("candidate_scores") or [{}])[0]
+    return {
+        "location_id": selection.get("selected_location"),
+        "location_label": selection.get("selected_location_label") or selection.get("selected_location"),
+        "scene_type": selection.get("scene_type"),
+        "score": top_candidate.get("score"),
+        "why_here": selection.get("why_here"),
+        "why_not_elsewhere": selection.get("why_not_elsewhere"),
+        "candidate_count": len(selection.get("candidate_scores") or []),
+        "rejected_count": len(selection.get("rejected_locations") or []),
+    }
+
+
+def _locality_sentence(locality: dict[str, Any]) -> str:
+    location = locality.get("location_label") or locality.get("location_id") or "某个地点"
+    why = locality.get("why_here") or "本地世界约束使这里成为最强候选"
+    return f"场景被本地世界限定在{location}：{why}。"
 
 
 def _recognition_sentence(recognition: dict[str, Any]) -> str:

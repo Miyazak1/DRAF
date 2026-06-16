@@ -159,6 +159,9 @@ class Simulator:
         self.rpp_dynamics_trace: list[dict[str, Any]] = []
         self.projection_trace: list[dict[str, Any]] = []
         self.local_world_trace: list[dict[str, Any]] = []
+        self.location_selection_trace: list[dict[str, Any]] = []
+        self.route_selection_trace: list[dict[str, Any]] = []
+        self.audience_exposure_trace: list[dict[str, Any]] = []
         self._order = 0
 
     @classmethod
@@ -377,6 +380,9 @@ class Simulator:
         (output_dir / "rpp_dynamics_trace.json").write_text(json.dumps(self.rpp_dynamics_trace, indent=2), encoding="utf-8")
         (output_dir / "projection_trace.json").write_text(json.dumps(self.projection_trace, indent=2), encoding="utf-8")
         (output_dir / "local_world_trace.json").write_text(json.dumps(self.local_world_trace, indent=2), encoding="utf-8")
+        (output_dir / "location_selection_trace.json").write_text(json.dumps(self.location_selection_trace, indent=2), encoding="utf-8")
+        (output_dir / "route_selection_trace.json").write_text(json.dumps(self.route_selection_trace, indent=2), encoding="utf-8")
+        (output_dir / "audience_exposure_trace.json").write_text(json.dumps(self.audience_exposure_trace, indent=2), encoding="utf-8")
         (output_dir / "irreversibility_report.json").write_text(self.state.irreversibility_register.model_dump_json(indent=2), encoding="utf-8")
         (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
         self._persist_outputs(metrics=metrics, completed=completed)
@@ -463,6 +469,9 @@ class Simulator:
             ("rpp_dynamics", self.rpp_dynamics_trace),
             ("projection", self.projection_trace),
             ("local_world", self.local_world_trace),
+            ("location_selection", self.location_selection_trace),
+            ("route_selection", self.route_selection_trace),
+            ("audience_exposure", self.audience_exposure_trace),
         ]
 
     def tick(self, max_delta_seconds: int | None = None) -> TickContext:
@@ -892,6 +901,19 @@ class Simulator:
             sorted(set([action_event.event_id] + expression_viability_refs)),
         )
         events.append(expression_event)
+        scene_evidence = {**affordance.evidence, **action.evidence, **expression.evidence}
+        locality = self.local_world.select_scene_locality(
+            context,
+            scene_type=affordance.affordance_id,
+            evidence=scene_evidence,
+            causal_refs=[affordance_event.event_id, action_event.event_id, expression_event.event_id],
+        )
+        if locality.location_trace:
+            self.location_selection_trace.append(locality.location_trace)
+        if locality.route_trace:
+            self.route_selection_trace.append(locality.route_trace)
+        if locality.audience_trace:
+            self.audience_exposure_trace.append(locality.audience_trace)
         if context.tick_type == "scene":
             events.append(
                 self._event(
@@ -901,8 +923,21 @@ class Simulator:
                         "scene_id": f"scene-{self.state.tick:03d}",
                         "frame": affordance.frame,
                         "why_now": context.time_mapping_reason,
-                        "why_unavoidable": self._why_affordance_unavoidable({**affordance.evidence, **action.evidence, **expression.evidence}),
+                        "why_here": locality.scene_context.get("why_here"),
+                        "why_unavoidable": self._why_affordance_unavoidable(scene_evidence),
+                        "why_these_processes": locality.scene_context.get("why_these_processes"),
+                        "why_not_elsewhere": locality.scene_context.get("why_not_elsewhere"),
+                        "who_might_see": locality.scene_context.get("who_might_see", []),
+                        "what_this_place_remembers": locality.scene_context.get("what_this_place_remembers", []),
                         "tick_type": "scene",
+                        "scene_context": locality.scene_context,
+                        "location_id": locality.scene_context.get("location_id"),
+                        "route_context": locality.scene_context.get("route_context", {}),
+                        "time_window": locality.scene_context.get("time_window"),
+                        "active_rhythm": locality.scene_context.get("active_rhythm"),
+                        "possible_audiences": locality.scene_context.get("possible_audiences", []),
+                        "local_constraints": locality.scene_context.get("local_constraints", []),
+                        "memory_site_refs": locality.scene_context.get("memory_site_refs", []),
                         "affordance_id": affordance.affordance_id,
                         "action_id": action.action_id,
                         "expression_id": expression.expression_id,
@@ -929,6 +964,9 @@ class Simulator:
                     "gesture": expression.gesture,
                     "timing": expression.timing,
                     "intensity": expression.intensity,
+                    "scene_context": locality.scene_context,
+                    "location_id": locality.scene_context.get("location_id"),
+                    "route_context": locality.scene_context.get("route_context", {}),
                 },
                 [expression_event.event_id],
             )

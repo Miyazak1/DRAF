@@ -119,6 +119,96 @@ def test_viewer_payload_contains_local_world(tmp_path):
     assert any(item["event_type"] == "LocalWorldUpdateEvent" for item in payload["local_world"])
 
 
+def test_scene_has_valid_location_id(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    scenario = load_scenario(SCENARIO)
+    location_ids = {item["location_id"] for item in scenario["local_world"]["locations"]}
+    events = _read_events(output_dir)
+    scene_events = [event for event in events if event["event_type"] == "SceneCrystallizationEvent"]
+
+    assert scene_events
+    for event in scene_events:
+        payload = event["payload"]
+        assert payload["location_id"] in location_ids
+        assert payload["scene_context"]["location_id"] == payload["location_id"]
+        assert payload["scene_context"]["time_window"]
+        assert payload["scene_context"]["why_here"]
+        assert payload["scene_context"]["why_not_elsewhere"]
+        assert "possible_audiences" in payload["scene_context"]
+        assert "memory_site_refs" in payload["scene_context"]
+
+
+def test_scene_location_selection_writes_candidate_scores(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    location_selection = json.loads((output_dir / "location_selection_trace.json").read_text(encoding="utf-8"))
+
+    assert location_selection
+    selected = location_selection[0]
+    assert selected["selected_location"]
+    assert selected["candidate_scores"]
+    assert selected["rejected_locations"]
+    assert selected["why_here"]
+    assert selected["why_not_elsewhere"]
+    components = selected["candidate_scores"][0]["components"]
+    assert "binding_relevance" in components
+    assert "field_pressure_relevance" in components
+    assert "active_rhythm_relevance" in components
+    assert "route_accessibility" in components
+    assert "boundary_violation_penalty" in components
+
+
+def test_nonlocal_scene_requires_route_context(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    route_selection = json.loads((output_dir / "route_selection_trace.json").read_text(encoding="utf-8"))
+    events = _read_events(output_dir)
+    scene_events = [event for event in events if event["event_type"] == "SceneCrystallizationEvent"]
+
+    assert route_selection
+    assert any(item["selected_route"] for item in route_selection)
+    for event in scene_events:
+        route_context = event["payload"]["route_context"]
+        assert route_context
+        assert route_context["route_id"]
+        assert route_context["access_status"] in {"open", "costly", "exposed", "dangerous", "blocked", "unknown"}
+
+
+def test_micro_interaction_also_carries_local_scene_context(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    events = _read_events(output_dir)
+    micro_events = [
+        event
+        for event in events
+        if event["event_type"] == "MicroSignalEvent"
+        and event["payload"].get("tick_type") == "micro_interaction"
+    ]
+
+    assert micro_events
+    assert all(event["payload"]["scene_context"]["location_id"] for event in micro_events)
+
+
+def test_public_consequence_requires_audience_exposure_context(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    audience_trace = json.loads((output_dir / "audience_exposure_trace.json").read_text(encoding="utf-8"))
+
+    assert audience_trace
+    for item in audience_trace:
+        if item["public_consequence_allowed"]:
+            assert any(
+                audience["exposure_state"] in {"observed", "reported", "institutionalized"}
+                for audience in item["possible_audiences"]
+            )
+
+
+def test_viewer_story_frames_include_locality(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    payload = build_viewer_payload(output_dir)
+    situated_frames = [frame for frame in payload["story"] if frame.get("locality")]
+
+    assert situated_frames
+    assert situated_frames[0]["locality"]["location_id"]
+    assert "场景被本地世界限定在" in situated_frames[0]["summary"]
+
+
 def _run_yellow_sign(tmp_path, *, steps: int) -> Path:
     scenario = load_scenario(SCENARIO)
     output_dir = tmp_path / "run"
@@ -129,3 +219,11 @@ def _run_yellow_sign(tmp_path, *, steps: int) -> Path:
 
 def _read_trace(output_dir: Path) -> list[dict]:
     return json.loads((output_dir / "local_world_trace.json").read_text(encoding="utf-8"))
+
+
+def _read_events(output_dir: Path) -> list[dict]:
+    return [
+        json.loads(line)
+        for line in (output_dir / "timeline.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]

@@ -47,6 +47,9 @@ def test_benchmark_scenario_runs_and_replays(scenario_path, tmp_path):
     assert (output_dir / "rpp_activation_trace.json").exists()
     assert (output_dir / "projection_trace.json").exists()
     assert (output_dir / "local_world_trace.json").exists()
+    assert (output_dir / "location_selection_trace.json").exists()
+    assert (output_dir / "route_selection_trace.json").exists()
+    assert (output_dir / "audience_exposure_trace.json").exists()
 
     views = json.loads((output_dir / "derived_views.json").read_text())
     assert views["relationship_view"]["phase_label"]
