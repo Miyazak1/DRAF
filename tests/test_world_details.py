@@ -22,6 +22,7 @@ def test_world_detail_context_requires_attention():
     assert context["causal_detail_candidates"] == []
     assert context["detail_persistence_decisions"] == []
     assert context["causal_world_details"] == []
+    assert context["causal_world_detail_activations"] == []
     assert context["rules"]["no_attention_no_elaboration"] is True
 
 
@@ -39,8 +40,18 @@ def test_viewer_payload_builds_attention_gated_world_details(tmp_path):
     assert context["causal_detail_candidates"]
     assert context["detail_persistence_decisions"]
     assert context["causal_world_details"]
-    assert all(item["activation_state"] == "inactive" for item in context["causal_world_details"])
-    assert all(item["causal_status"] == "validated_candidate" for item in context["causal_world_details"])
+    assert context["causal_world_detail_activations"]
+    assert any(item["activation_state"] == "activated" for item in context["causal_world_details"])
+    assert any(item["causal_status"] == "activated_projection" for item in context["causal_world_details"])
+    assert all(
+        item["event_type"] == "CausalWorldDetailActivatedEvent"
+        for item in context["causal_world_detail_activations"]
+    )
+    assert all(
+        item["effect_scope"] == "projection_only"
+        and item["does_not_mutate_simulation_state"] is True
+        for item in context["causal_world_detail_activations"]
+    )
     assert all(decision["activation_allowed"] is False for decision in context["detail_persistence_decisions"])
     assert all(detail["discard_after_render"] is True for detail in context["ephemeral_details"])
     profile = context["active_soft_profiles"][0]
@@ -67,11 +78,13 @@ def test_render_payload_and_segment_include_world_detail_context(tmp_path):
     assert segment["world_detail_context"]["active_soft_profiles"]
     assert segment["world_detail_context"]["soft_profile_history"]
     assert segment["world_detail_context"]["causal_world_details"]
+    assert segment["world_detail_context"]["causal_world_detail_activations"]
     assert llm_payload["world_detail_context"]["ephemeral_details"]
     assert llm_payload["world_detail_context"]["causal_world_details"]
+    assert llm_payload["world_detail_context"]["causal_world_detail_activations"]
     assert llm_payload["rules"]["world_detail_context_is_attention_gated"] is True
     assert "注意力只唤醒了当前可感知细节" in outline
-    assert "候选因果细节已被验证但尚未激活" in outline
+    assert "因果细节被后续约束触碰并形成投影激活" in outline
 
 
 def test_export_files_include_world_detail_context(tmp_path):
@@ -87,6 +100,7 @@ def test_export_files_include_world_detail_context(tmp_path):
     assert "causal_detail_candidates.json" in files
     assert "detail_persistence_decisions.json" in files
     assert "causal_world_details.json" in files
+    assert "causal_world_detail_activations.json" in files
     assert "ephemeral_details_are_render_only" in files["world_detail_context.json"]
 
 

@@ -671,6 +671,7 @@ def _database_export_files(payload: dict[str, Any], report: str) -> dict[str, st
         "causal_detail_candidates.json": payload.get("world_detail_context", {}).get("causal_detail_candidates", []),
         "detail_persistence_decisions.json": payload.get("world_detail_context", {}).get("detail_persistence_decisions", []),
         "causal_world_details.json": payload.get("world_detail_context", {}).get("causal_world_details", []),
+        "causal_world_detail_activations.json": payload.get("world_detail_context", {}).get("causal_world_detail_activations", []),
         "render_repetition_trace.json": payload.get("render_repetition", []),
     }
     files: dict[str, str] = {
@@ -750,6 +751,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "causal_detail_candidates.json",
         "detail_persistence_decisions.json",
         "causal_world_details.json",
+        "causal_world_detail_activations.json",
         "irreversibility_report.json",
         "aggregation_traces.json",
     ]

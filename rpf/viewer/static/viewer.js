@@ -99,6 +99,7 @@ const ZH = {
   MemorySiteActivationEvent: "记忆地点激活",
   ResourceStateEvent: "资源状态",
   LocalWorldConstraintIntegrationEvent: "本地约束整合",
+  CausalWorldDetailActivatedEvent: "因果细节激活",
   BlockedCapacityEvent: "能力阻断",
   CapacityDemandEvent: "能力需求",
   open: "开放",
@@ -117,9 +118,6 @@ const ZH = {
   night: "夜晚",
   exit: "退出能力",
   care: "照护能力",
-  evidence_access: "证据可达性",
-  private_speech: "私下言说",
-  memory_integration: "记忆整合",
   resource_scarcity: "资源稀缺",
   route_access: "路线可达性",
   public_visibility: "公共可见性",
@@ -382,7 +380,9 @@ const ZH = {
   audience_exposure_condition: "观众暴露状态",
   memory_site_condition: "记忆地点状态",
   validated_candidate: "已验证候选",
+  activated_projection: "已激活投影",
   inactive: "未激活",
+  activated: "已激活",
   evidence_access: "证据可达性",
   memory_integration: "记忆整合",
   private_speech: "私下言说",
@@ -869,6 +869,8 @@ function renderWorldDetails() {
   const profiles = context.active_soft_profiles || context.soft_world_profiles || [];
   const profileHistory = context.soft_profile_history || [];
   const causalDetails = context.causal_world_details || [];
+  const causalActivations = context.causal_world_detail_activations || [];
+  const activationByDetail = Object.fromEntries(causalActivations.map((item) => [item.detail_id, item]));
   if (!focuses.length && !details.length && !profiles.length && !causalDetails.length) {
     target.innerHTML = "<div class=\"trace\"><small>当前没有达到门控条件的世界细节。没有注意力，就不展开世界。</small></div>";
     return;
@@ -919,14 +921,20 @@ function renderWorldDetails() {
       </div>
       <div>
         <h4>候选因果细节</h4>
-        ${causalDetails.slice(-6).map((item) => `
+        ${causalDetails.slice(-6).map((item) => {
+          const activation = activationByDetail[item.detail_id] || {};
+          const isActive = item.activation_state === "activated";
+          return `
           <article class="world-detail-card">
             <strong>${escapeHtml(zh(item.detail_type))}</strong>
             <small>${escapeHtml(item.target_ref || "-")} / ${escapeHtml(zh(item.causal_status))}</small>
             <p>${escapeHtml(zhKey(item.structural_field || "-"))}：${escapeHtml(zhMemory(item.value || "-"))}</p>
-            <small>未激活：不会改变行动、路线、证据或承认结果</small>
+            <small>${isActive
+              ? `已激活投影：触碰 ${escapeHtml(zh(activation.affected_capacity || "-"))}，不直接改写模拟状态`
+              : "未激活：不会改变行动、路线、证据或承认结果"}</small>
+            ${activation.activation_id ? sourceLinks(activation.source_events) : ""}
           </article>
-        `).join("") || "<small>暂无候选</small>"}
+        `}).join("") || "<small>暂无候选</small>"}
       </div>
     </div>
   `;

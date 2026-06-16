@@ -594,8 +594,14 @@ def _outline_why_it_mattered(segment: dict[str, Any], frames: list[dict[str, Any
             parts.append(f"稳定的本地质地被压缩为：{'，'.join(tags[:5])}。")
     causal_details = world_details.get("causal_world_details", []) or []
     if causal_details:
-        labels = _unique_nonempty(item.get("detail_type") for item in causal_details)
-        parts.append(f"候选因果细节已被验证但尚未激活：{'，'.join(labels[:4])}。")
+        active_details = [item for item in causal_details if item.get("activation_state") == "activated"]
+        inactive_details = [item for item in causal_details if item.get("activation_state") != "activated"]
+        if active_details:
+            labels = _unique_nonempty(item.get("detail_type") for item in active_details)
+            parts.append(f"本段有因果细节被后续约束触碰并形成投影激活：{'，'.join(labels[:4])}。")
+        if inactive_details:
+            labels = _unique_nonempty(item.get("detail_type") for item in inactive_details)
+            parts.append(f"另有候选因果细节已被验证但尚未激活：{'，'.join(labels[:4])}。")
     beats = segment.get("narrative_beats", []) or []
     if beats:
         beat_types = _unique_nonempty(beat.get("beat_type") for beat in beats)
@@ -988,7 +994,12 @@ def _world_detail_context_for_ticks(
         item
         for item in context.get("causal_world_details", []) or []
         if item.get("scope_id") in scope_ids
-        and item.get("activation_state") == "inactive"
+    ]
+    detail_ids = {item.get("detail_id") for item in causal_details}
+    activations = [
+        item
+        for item in context.get("causal_world_detail_activations", []) or []
+        if item.get("detail_id") in detail_ids
     ]
     return {
         "rules": context.get("rules", {}),
@@ -1001,6 +1012,7 @@ def _world_detail_context_for_ticks(
         "causal_detail_candidates": candidates,
         "detail_persistence_decisions": decisions,
         "causal_world_details": causal_details,
+        "causal_world_detail_activations": activations,
         "rejected_details": context.get("rejected_details", []),
     }
 

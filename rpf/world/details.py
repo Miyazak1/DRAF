@@ -89,6 +89,8 @@ def build_world_detail_context(payload: dict[str, Any]) -> dict[str, Any]:
     candidates = _causal_detail_candidates(focus_records, detail_gaps, local_world, registry)
     decisions = _persistence_decisions(candidates)
     causal_details = _validated_causal_details(candidates, decisions)
+    activations = _causal_detail_activations(causal_details, local_world, story)
+    _apply_causal_detail_activations(causal_details, activations)
     current_tick = max(
         [int(frame.get("tick", 0) or 0) for frame in story]
         + [int(record.get("tick", 0) or 0) for record in focus_records]
@@ -117,6 +119,8 @@ def build_world_detail_context(payload: dict[str, Any]) -> dict[str, Any]:
             "soft_profile_decay_per_tick": SOFT_PROFILE_DECAY_PER_TICK,
             "causal_details_do_not_activate_without_activation_event": True,
             "causal_detail_candidates_require_existing_refs": True,
+            "activated_causal_details_are_projection_only": True,
+            "activation_events_do_not_mutate_simulation_state": True,
         },
         "attention_focuses": focus_records,
         "detail_gaps": detail_gaps,
@@ -127,6 +131,7 @@ def build_world_detail_context(payload: dict[str, Any]) -> dict[str, Any]:
         "causal_detail_candidates": candidates,
         "detail_persistence_decisions": decisions,
         "causal_world_details": causal_details,
+        "causal_world_detail_activations": activations,
         "rejected_details": [decision for decision in decisions if decision.get("decision") == "reject"],
     }
 
@@ -567,6 +572,250 @@ def _validated_causal_details(candidates: list[dict[str, Any]], decisions: list[
             }
         )
     return details
+
+
+def _causal_detail_activations(
+    causal_details: list[dict[str, Any]],
+    local_world: dict[str, Any],
+    story: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    activations: list[dict[str, Any]] = []
+    for index, detail in enumerate(causal_details, start=1):
+        signal = _activation_signal(detail, local_world, story)
+        if not signal:
+            continue
+        activation_id = f"act-{_safe_id(str(detail.get('detail_id') or index))}-{index:02d}"
+        source_events = _unique([
+            signal.get("source_event_id"),
+            *(signal.get("source_event_ids") or []),
+            *(detail.get("source_events") or []),
+        ])
+        activations.append(
+            {
+                "event_type": "CausalWorldDetailActivatedEvent",
+                "activation_id": activation_id,
+                "detail_id": detail.get("detail_id"),
+                "candidate_id": detail.get("candidate_id"),
+                "scope_type": detail.get("scope_type"),
+                "scope_id": detail.get("scope_id"),
+                "target_ref": detail.get("target_ref"),
+                "activated_by_event": signal.get("source_event_id") or (source_events[0] if source_events else None),
+                "affected_layer": "world_detail_projection",
+                "affected_capacity": signal.get("capacity"),
+                "previous_availability": "validated_but_inactive",
+                "new_availability": "activated_for_render_and_diagnostics",
+                "mechanism": signal.get("mechanism"),
+                "effect_scope": "projection_only",
+                "does_not_mutate_simulation_state": True,
+                "source_events": source_events,
+            }
+        )
+    return activations
+
+
+def _apply_causal_detail_activations(
+    causal_details: list[dict[str, Any]],
+    activations: list[dict[str, Any]],
+) -> None:
+    activations_by_detail: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for activation in activations:
+        detail_id = str(activation.get("detail_id") or "")
+        if detail_id:
+            activations_by_detail[detail_id].append(activation)
+    for detail in causal_details:
+        detail_activations = activations_by_detail.get(str(detail.get("detail_id") or ""), [])
+        if not detail_activations:
+            continue
+        detail["activation_state"] = "activated"
+        detail["causal_status"] = "activated_projection"
+        detail["affected_events"] = [item.get("activation_id") for item in detail_activations if item.get("activation_id")]
+        detail["last_updated_by_event"] = detail["affected_events"][-1] if detail["affected_events"] else None
+
+
+def _activation_signal(
+    detail: dict[str, Any],
+    local_world: dict[str, Any],
+    story: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    capacities = {str(item) for item in detail.get("affects_capacities", []) or []}
+    target_ref = str(detail.get("target_ref") or "")
+    scope_id = str(detail.get("scope_id") or "")
+    signal = _constraint_activation_signal(detail, local_world, capacities, target_ref, scope_id)
+    if signal:
+        return signal
+    signal = _route_activation_signal(detail, local_world, capacities, target_ref, scope_id)
+    if signal:
+        return signal
+    signal = _audience_activation_signal(detail, local_world, capacities, target_ref, scope_id)
+    if signal:
+        return signal
+    signal = _memory_site_activation_signal(detail, local_world, capacities, target_ref, scope_id)
+    if signal:
+        return signal
+    return _story_activation_signal(detail, story, capacities, target_ref, scope_id)
+
+
+def _constraint_activation_signal(
+    detail: dict[str, Any],
+    local_world: dict[str, Any],
+    capacities: set[str],
+    target_ref: str,
+    scope_id: str,
+) -> dict[str, Any] | None:
+    for constraint in local_world.get("local_constraints", []) or []:
+        constraint_capacities = _constraint_capacities(constraint)
+        if capacities and capacities.isdisjoint(constraint_capacities):
+            continue
+        if not _same_activation_scope(constraint, target_ref, scope_id):
+            continue
+        return {
+            "capacity": _first_overlap(capacities, constraint_capacities),
+            "mechanism": "validated detail touched by local world capacity constraint",
+            "source_event_id": (constraint.get("source_event_ids") or [None])[0],
+            "source_event_ids": constraint.get("source_event_ids", []),
+        }
+    return None
+
+
+def _route_activation_signal(
+    detail: dict[str, Any],
+    local_world: dict[str, Any],
+    capacities: set[str],
+    target_ref: str,
+    scope_id: str,
+) -> dict[str, Any] | None:
+    route = local_world.get("route", {}) or {}
+    route_id = str(route.get("route_id") or "")
+    if not route_id or f"route:{route_id}" != target_ref:
+        return None
+    if capacities and capacities.isdisjoint({"exit", "evidence_access"}):
+        return None
+    return {
+        "capacity": _first_overlap(capacities, {"exit", "evidence_access"}),
+        "mechanism": "validated route detail touched by selected route context",
+        "source_event_id": (route.get("source_event_ids") or [None])[0],
+        "source_event_ids": route.get("source_event_ids", []),
+    }
+
+
+def _audience_activation_signal(
+    detail: dict[str, Any],
+    local_world: dict[str, Any],
+    capacities: set[str],
+    target_ref: str,
+    scope_id: str,
+) -> dict[str, Any] | None:
+    if not target_ref.startswith("audience:"):
+        return None
+    for audience in local_world.get("audiences", []) or []:
+        audience_id = str(audience.get("audience_id") or audience.get("label") or "")
+        if target_ref != f"audience:{audience_id}":
+            continue
+        if capacities and capacities.isdisjoint({"private_speech", "repair_attempt"}):
+            continue
+        if str(audience.get("exposure_state") or "") not in {"likely", "observed", "reported", "institutionalized"}:
+            try:
+                if float(audience.get("exposure_level") or 0.0) < 0.66:
+                    continue
+            except (TypeError, ValueError):
+                continue
+        return {
+            "capacity": _first_overlap(capacities, {"private_speech", "repair_attempt"}),
+            "mechanism": "validated audience detail touched by exposure state",
+            "source_event_id": (audience.get("source_event_ids") or [None])[0],
+            "source_event_ids": audience.get("source_event_ids", []),
+        }
+    return None
+
+
+def _memory_site_activation_signal(
+    detail: dict[str, Any],
+    local_world: dict[str, Any],
+    capacities: set[str],
+    target_ref: str,
+    scope_id: str,
+) -> dict[str, Any] | None:
+    if not target_ref.startswith("memory_site:"):
+        return None
+    target_id = target_ref.split(":", 1)[1]
+    for site in local_world.get("memory_sites", []) or []:
+        if str(site.get("site_id") or "") != target_id:
+            continue
+        if capacities and capacities.isdisjoint({"memory_integration", "private_speech"}):
+            continue
+        try:
+            if float(site.get("salience") or 0.0) < 0.5:
+                continue
+        except (TypeError, ValueError):
+            continue
+        return {
+            "capacity": _first_overlap(capacities, {"memory_integration", "private_speech"}),
+            "mechanism": "validated memory-site detail touched by active memory salience",
+            "source_event_id": (site.get("source_event_ids") or [None])[0],
+            "source_event_ids": site.get("source_event_ids", []),
+        }
+    return None
+
+
+def _story_activation_signal(
+    detail: dict[str, Any],
+    story: list[dict[str, Any]],
+    capacities: set[str],
+    target_ref: str,
+    scope_id: str,
+) -> dict[str, Any] | None:
+    if not story:
+        return None
+    for frame in reversed(story):
+        locality = frame.get("locality", {}) or {}
+        if scope_id and scope_id not in {str(locality.get("location_id") or ""), str(locality.get("route_id") or "")}:
+            continue
+        refs = []
+        inquiry = frame.get("inquiry", {}) or {}
+        refs.extend(str(ref) for ref in inquiry.get("ledger_refs", []) or [] if ref)
+        if target_ref.startswith(("evidence:", "record:")) and target_ref.split(":", 1)[1] not in refs:
+            continue
+        return {
+            "capacity": sorted(capacities)[0] if capacities else None,
+            "mechanism": "validated detail touched by story locality or ledger reference",
+            "source_event_id": None,
+            "source_event_ids": [],
+        }
+    return None
+
+
+def _constraint_capacities(constraint: dict[str, Any]) -> set[str]:
+    values = set()
+    if constraint.get("capacity_id"):
+        values.add(str(constraint.get("capacity_id")))
+    for key in ("linked_capacities", "affected_capacities"):
+        values.update(str(item) for item in constraint.get(key, []) or [] if item)
+    return values
+
+
+def _same_activation_scope(constraint: dict[str, Any], target_ref: str, scope_id: str) -> bool:
+    if scope_id and str(constraint.get("location_id") or "") == scope_id:
+        return True
+    if target_ref.startswith("route:") and str(constraint.get("route_id") or "") == target_ref.split(":", 1)[1]:
+        return True
+    if target_ref.startswith("memory_site:") and str(constraint.get("site_id") or "") == target_ref.split(":", 1)[1]:
+        return True
+    if target_ref.startswith("audience:") and str(constraint.get("audience_id") or "") == target_ref.split(":", 1)[1]:
+        return True
+    if target_ref.startswith(("evidence:", "record:")) and constraint.get("capacity_id") in {"evidence_access", "memory_integration"}:
+        return True
+    return False
+
+
+def _first_overlap(left: set[str], right: set[str]) -> str | None:
+    overlap = sorted(left & right)
+    if overlap:
+        return overlap[0]
+    if left:
+        return sorted(left)[0]
+    if right:
+        return sorted(right)[0]
+    return None
 
 
 def _registry_target(record: dict[str, Any], registry: dict[str, Any]) -> tuple[str, str, dict[str, Any]] | None:

@@ -563,6 +563,7 @@ def llm_markdown(
                 "world_detail_context.causal_detail_candidates",
                 "world_detail_context.detail_persistence_decisions",
                 "world_detail_context.causal_world_details",
+                "world_detail_context.causal_world_detail_activations",
                 "world_detail_context.rules",
             ],
             "must_not_invent": [
@@ -654,6 +655,8 @@ def llm_markdown(
                 "soft_profile_history explains reinforcement and decay; it is not a sequence of plot events",
                 "causal_detail_candidates are only proposed material constraints until validated",
                 "causal_world_details with activation_state inactive may be mentioned only as possible material constraints, not as active causes",
+                "causal_world_details with activation_state activated may be rendered only through their matching CausalWorldDetailActivatedEvent",
+                "CausalWorldDetailActivatedEvent is projection-only unless the causal runtime already emitted downstream events",
                 "do not make a causal_world_detail affect action, route, evidence, audience, memory, or recognition unless a CausalWorldDetailActivatedEvent exists",
             ],
         },
