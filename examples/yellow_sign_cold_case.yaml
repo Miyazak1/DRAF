@@ -211,6 +211,40 @@ local_world:
       forbidden_topics: [unofficial_accusation, family_secret]
       linked_processes: [p1, p2]
       evidence_refs: [yellow_paint_mark, water_damaged_child_drawing, old_tape_yellow_bleed]
+    - location_id: archive_basement
+      label: 档案室地下库
+      location_type: police_archive
+      access_level: restricted
+      controlling_institution: local_police_station
+      public_visibility: low
+      crowd_density: low
+      rumor_density: low
+      surveillance_level: medium
+      memory_charge: high
+      material_conditions:
+        contamination: 0.72
+        mildew: 0.84
+      allowed_scene_types: [contaminated_evidence_review, controlled_disclosure, evidence_contamination]
+      forbidden_topics: [unofficial_accusation, missing_records]
+      linked_processes: [p1, p2]
+      evidence_refs: [water_damaged_child_drawing, old_tape_yellow_bleed]
+    - location_id: evidence_room_yellow_light
+      label: 黄灯证物室
+      location_type: evidence_room
+      access_level: restricted
+      controlling_institution: local_police_station
+      public_visibility: low
+      crowd_density: low
+      rumor_density: medium
+      surveillance_level: high
+      memory_charge: high
+      material_conditions:
+        contamination: 0.68
+        unstable_light: 0.74
+      allowed_scene_types: [contaminated_evidence_review, forbidden_symbol_confrontation, controlled_disclosure]
+      forbidden_topics: [chain_of_custody_break, unofficial_accusation]
+      linked_processes: [p1, p2]
+      evidence_refs: [yellow_paint_mark, old_tape_yellow_bleed]
     - location_id: police_front_office
       label: 派出所前厅
       location_type: institution
@@ -266,6 +300,21 @@ local_world:
       memory_charge: high
       allowed_scene_types: [testimony_gap, delayed_return]
       linked_processes: [p1]
+    - location_id: flooded_road_to_refinery
+      label: 通往炼油厂的积水路
+      location_type: road
+      access_level: dangerous
+      public_visibility: low
+      crowd_density: low
+      rumor_density: medium
+      surveillance_level: low
+      memory_charge: high
+      material_conditions:
+        floodwater: 0.78
+        mud: 0.72
+      allowed_scene_types: [delayed_return, forbidden_symbol_confrontation, evidence_contamination]
+      linked_processes: [p1, p2]
+      evidence_refs: [refinery_map_gap]
     - location_id: abandoned_factory
       label: 废弃炼油厂
       location_type: ruin
@@ -332,6 +381,24 @@ local_world:
       exposure_level: medium
       danger_level: low
       surveillance_points: [duty_desk]
+    - route_id: archive_to_basement
+      from_location: police_archive
+      to_location: archive_basement
+      travel_time_minutes: 3
+      access_level: restricted
+      exposure_level: low
+      danger_level: low
+      surveillance_points: [archive_register]
+      memory_charge: high
+    - route_id: archive_to_evidence_room
+      from_location: police_archive
+      to_location: evidence_room_yellow_light
+      travel_time_minutes: 2
+      access_level: restricted
+      exposure_level: medium
+      danger_level: low
+      surveillance_points: [evidence_room_log]
+      memory_charge: high
     - route_id: front_office_to_market
       from_location: police_front_office
       to_location: market_street
@@ -380,6 +447,26 @@ local_world:
       weather_sensitivity: high
       blocked_by_conditions: [heavy_rain, river_rise]
       memory_charge: high
+    - route_id: river_bridge_to_flooded_refinery_road
+      from_location: river_bridge
+      to_location: flooded_road_to_refinery
+      travel_time_minutes: 12
+      access_level: dangerous
+      exposure_level: low
+      danger_level: high
+      weather_sensitivity: high
+      blocked_by_conditions: [heavy_rain, river_rise, road_mud]
+      memory_charge: high
+    - route_id: flooded_refinery_road_to_factory
+      from_location: flooded_road_to_refinery
+      to_location: abandoned_factory
+      travel_time_minutes: 10
+      access_level: dangerous
+      exposure_level: low
+      danger_level: high
+      weather_sensitivity: high
+      blocked_by_conditions: [heavy_rain, river_rise, road_mud]
+      memory_charge: high
     - route_id: archive_to_zhou_office
       from_location: police_archive
       to_location: zhou_jibai_office
@@ -417,7 +504,7 @@ local_world:
       label: 派出所换班
       time_window: evening
       recurrence: daily
-      active_locations: [police_front_office, police_archive]
+      active_locations: [police_front_office, police_archive, archive_basement, evidence_room_yellow_light]
       crowd_density_delta: 0.22
       rumor_pressure_delta: 0.28
       institutional_pressure_delta: 0.46
@@ -425,7 +512,7 @@ local_world:
       label: 夜雨
       time_window: night
       recurrence: seasonal
-      active_locations: [river_bridge, abandoned_factory, old_residential_lane]
+      active_locations: [river_bridge, flooded_road_to_refinery, abandoned_factory, old_residential_lane]
       crowd_density_delta: -0.2
       rumor_pressure_delta: 0.2
       mobility_cost_delta: 0.4
@@ -468,7 +555,7 @@ local_world:
     - audience_id: police_colleagues
       label: 派出所同事
       audience_type: police
-      usual_locations: [police_front_office, police_archive]
+      usual_locations: [police_front_office, police_archive, archive_basement, evidence_room_yellow_light]
       rumor_power: 0.48
       sanction_power: 0.62
       legitimacy_power: 0.7
@@ -519,7 +606,7 @@ local_world:
     - institution_id: local_police_station
       label: 黄印镇派出所
       domain: police
-      locations: [police_archive, police_front_office]
+      locations: [police_archive, archive_basement, evidence_room_yellow_light, police_front_office]
       recognized_roles: [local_officer, outside_investigator, witness_assistant]
       records: [old_case_file, archive_register, evidence_room_log]
       sanction_rules: [procedural_reprimand, access_revocation]
@@ -578,6 +665,36 @@ local_world:
       avoidance_pressure: 0.35
       attraction_pressure: 0.62
       future_scene_biases: [contaminated_evidence_review, controlled_disclosure]
+    - site_id: archive_basement_flooded_boxes
+      location_id: archive_basement
+      memory_type: evidence_site
+      source_events: [file_room_flood]
+      affected_processes: [p1, p2]
+      salience: 0.86
+      contamination: 0.72
+      avoidance_pressure: 0.42
+      attraction_pressure: 0.58
+      future_scene_biases: [contaminated_evidence_review, evidence_contamination]
+    - site_id: evidence_room_yellow_light_site
+      location_id: evidence_room_yellow_light
+      memory_type: evidence_site
+      source_events: [old_tape_yellow_bleed]
+      affected_processes: [p1, p2]
+      salience: 0.8
+      contamination: 0.68
+      avoidance_pressure: 0.46
+      attraction_pressure: 0.54
+      future_scene_biases: [forbidden_symbol_confrontation, controlled_disclosure]
+    - site_id: flooded_refinery_road_memory
+      location_id: flooded_road_to_refinery
+      memory_type: route_memory
+      source_events: [night_of_old_case]
+      affected_processes: [p1, p2]
+      salience: 0.78
+      contamination: 0.5
+      avoidance_pressure: 0.62
+      attraction_pressure: 0.32
+      future_scene_biases: [delayed_return, forbidden_symbol_confrontation]
     - site_id: market_rumor_corner
       location_id: market_street
       memory_type: public_humiliation_site
@@ -611,8 +728,8 @@ local_world:
       label: 大雨
       condition_type: heavy_rain
       active_time_window: always
-      affected_routes: [old_lane_to_river_bridge, river_bridge_to_abandoned_factory]
-      affected_locations: [river_bridge, abandoned_factory, old_residential_lane]
+      affected_routes: [old_lane_to_river_bridge, river_bridge_to_abandoned_factory, river_bridge_to_flooded_refinery_road, flooded_refinery_road_to_factory]
+      affected_locations: [river_bridge, flooded_road_to_refinery, abandoned_factory, old_residential_lane]
       mobility_delta: 0.62
       visibility_delta: 0.28
       bodily_cost_delta: 0.34
@@ -622,8 +739,8 @@ local_world:
       label: 黄雾
       condition_type: fog
       active_time_window: morning
-      affected_routes: [river_bridge_to_abandoned_factory]
-      affected_locations: [river_bridge, abandoned_factory]
+      affected_routes: [river_bridge_to_abandoned_factory, river_bridge_to_flooded_refinery_road, flooded_refinery_road_to_factory]
+      affected_locations: [river_bridge, flooded_road_to_refinery, abandoned_factory]
       mobility_delta: 0.24
       visibility_delta: 0.58
       bodily_cost_delta: 0.16
@@ -632,7 +749,7 @@ local_world:
       label: 电灯闪烁
       condition_type: power_outage
       active_time_window: evening
-      affected_locations: [police_archive, police_front_office, zhou_jibai_office]
+      affected_locations: [police_archive, archive_basement, evidence_room_yellow_light, police_front_office, zhou_jibai_office]
       mobility_delta: 0.08
       visibility_delta: 0.38
       evidence_degradation_delta: 0.18
@@ -640,8 +757,8 @@ local_world:
       label: 河水上涨
       condition_type: flood
       active_time_window: night
-      affected_routes: [old_lane_to_river_bridge, river_bridge_to_abandoned_factory]
-      affected_locations: [river_bridge]
+      affected_routes: [old_lane_to_river_bridge, river_bridge_to_abandoned_factory, river_bridge_to_flooded_refinery_road, flooded_refinery_road_to_factory]
+      affected_locations: [river_bridge, flooded_road_to_refinery]
       mobility_delta: 0.7
       visibility_delta: 0.18
       bodily_cost_delta: 0.42
@@ -649,14 +766,14 @@ local_world:
       label: 霉季
       condition_type: pollution
       active_time_window: always
-      affected_locations: [police_archive, abandoned_factory]
+      affected_locations: [police_archive, archive_basement, evidence_room_yellow_light, abandoned_factory]
       bodily_cost_delta: 0.24
       evidence_degradation_delta: 0.46
     - condition_id: road_mud
       label: 泥路
       condition_type: road_closure
       active_time_window: always
-      affected_routes: [old_lane_to_river_bridge]
+      affected_routes: [old_lane_to_river_bridge, river_bridge_to_flooded_refinery_road, flooded_refinery_road_to_factory]
       mobility_delta: 0.36
       bodily_cost_delta: 0.2
   resources:

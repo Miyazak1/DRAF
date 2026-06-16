@@ -165,6 +165,49 @@ def test_scene_has_valid_location_id(tmp_path):
         assert "memory_site_refs" in payload["scene_context"]
 
 
+def test_timeline_locations_do_not_escape_local_world_without_discovery(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    scenario = load_scenario(SCENARIO)
+    location_ids = {item["location_id"] for item in scenario["local_world"]["locations"]}
+    discovered = {
+        event["payload"].get("location_id")
+        for event in _read_events(output_dir)
+        if event["event_type"] == "LocationDiscoveryEvent"
+    }
+    allowed = location_ids | {item for item in discovered if item}
+    observed = set()
+    for event in _read_events(output_dir):
+        for value in _location_values(event.get("payload", {})):
+            observed.add(value)
+
+    assert observed
+    assert observed <= allowed
+
+
+def test_scene_memory_refs_are_declared_memory_sites(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    scenario = load_scenario(SCENARIO)
+    memory_site_ids = {item["site_id"] for item in scenario["local_world"]["memory_sites"]}
+    scene_events = [event for event in _read_events(output_dir) if event["event_type"] == "SceneCrystallizationEvent"]
+
+    assert scene_events
+    for event in scene_events:
+        refs = set(event["payload"].get("memory_site_refs", []))
+        assert refs <= memory_site_ids
+
+
+def test_scene_public_witnesses_are_declared_audiences(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    scenario = load_scenario(SCENARIO)
+    audience_ids = {item["audience_id"] for item in scenario["local_world"]["audiences"]}
+    scene_events = [event for event in _read_events(output_dir) if event["event_type"] == "SceneCrystallizationEvent"]
+
+    assert scene_events
+    for event in scene_events:
+        who_might_see = set(event["payload"].get("who_might_see", []))
+        assert who_might_see <= audience_ids
+
+
 def test_scene_location_selection_writes_candidate_scores(tmp_path):
     output_dir = _run_yellow_sign(tmp_path, steps=6)
     location_selection = json.loads((output_dir / "location_selection_trace.json").read_text(encoding="utf-8"))
@@ -347,3 +390,15 @@ def _read_events(output_dir: Path) -> list[dict]:
         for line in (output_dir / "timeline.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+
+
+def _location_values(value):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "location_id" and isinstance(item, str) and item:
+                yield item
+            else:
+                yield from _location_values(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _location_values(item)
