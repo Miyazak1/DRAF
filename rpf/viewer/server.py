@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 import yaml
 
 from rpf.core.events import Event
+from rpf.core.object_registry import ObjectRegistrySpec
 from rpf.engine.simulator import Simulator
 from rpf.engine.metrics import compute_metrics
 from rpf.scenarios.loader import load_scenario
@@ -195,6 +196,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "rpp_activation": _read_json(run_dir / "rpp_activation_trace.json", []),
         "rpp_dynamics": _read_json(run_dir / "rpp_dynamics_trace.json", []),
         "local_world": _read_json(run_dir / "local_world_trace.json", []),
+        "object_registry": _read_json(run_dir / "object_registry.json", {}),
         "location_selection": _read_json(run_dir / "location_selection_trace.json", []),
         "route_selection": _read_json(run_dir / "route_selection_trace.json", []),
         "audience_exposure": _read_json(run_dir / "audience_exposure_trace.json", []),
@@ -205,6 +207,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
     }
     payload["story"] = build_story_frames(payload)
     payload["local_world_view"] = build_local_world_view(payload)
+    payload["object_registry_view"] = build_object_registry_view(payload)
     payload["summary"] = {
         "event_count": metrics.get("event_count", len(timeline)),
         "phase": payload["derived_views"].get("relationship_view", {}).get("phase_label", "unknown"),
@@ -272,6 +275,7 @@ def build_viewer_payload_from_database_records(data: dict[str, Any]) -> dict[str
         "rpp_activation": traces.get("rpp_activation", []),
         "rpp_dynamics": traces.get("rpp_dynamics", []),
         "local_world": traces.get("local_world", []),
+        "object_registry": {},
         "location_selection": traces.get("location_selection", []),
         "route_selection": traces.get("route_selection", []),
         "audience_exposure": traces.get("audience_exposure", []),
@@ -282,6 +286,7 @@ def build_viewer_payload_from_database_records(data: dict[str, Any]) -> dict[str
     }
     payload["story"] = build_story_frames(payload)
     payload["local_world_view"] = build_local_world_view(payload)
+    payload["object_registry_view"] = build_object_registry_view(payload)
     payload["summary"] = {
         "event_count": metrics.get("event_count", len(events)),
         "phase": payload["derived_views"].get("relationship_view", {}).get("phase_label", "unknown"),
@@ -655,6 +660,7 @@ def _database_export_files(payload: dict[str, Any], report: str) -> dict[str, st
         "timeline_manifest.json": json.dumps(payload.get("manifest", {}), ensure_ascii=False, indent=2),
         "render_canon.json": json.dumps(payload.get("render_canon", {}), ensure_ascii=False, indent=2),
         "case_ledger.json": json.dumps(payload.get("case_ledger", {}), ensure_ascii=False, indent=2),
+        "object_registry.json": json.dumps(payload.get("object_registry", {}), ensure_ascii=False, indent=2),
         "metrics.json": json.dumps(payload.get("metrics", {}), ensure_ascii=False, indent=2),
         "derived_views.json": json.dumps(payload.get("derived_views", {}), ensure_ascii=False, indent=2),
         "timeline.jsonl": "\n".join(json.dumps(event, ensure_ascii=False) for event in payload.get("timeline", [])) + "\n",
@@ -677,6 +683,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "run_report.md",
         "render_canon.json",
         "case_ledger.json",
+        "object_registry.json",
         "effective_config.json",
         "metrics.json",
         "derived_views.json",
@@ -901,6 +908,49 @@ def build_local_world_view(payload: dict[str, Any]) -> dict[str, Any]:
         "local_constraints": _constraint_views(latest_constraints, timeline),
         "boundary_rules": update.get("boundary_rules", {}),
     }
+
+
+def build_object_registry_view(payload: dict[str, Any]) -> dict[str, Any]:
+    registry = ObjectRegistrySpec.model_validate(payload.get("object_registry") or {})
+    location_id = (
+        payload.get("local_world_view", {})
+        .get("active_location", {})
+        .get("location_id")
+    )
+    evidence_refs = _active_evidence_refs(payload)
+    excerpt = registry.active_excerpt(location_id=location_id, evidence_refs=evidence_refs)
+    excerpt["counts"] = {
+        "world_objects": len(registry.world_objects),
+        "record_objects": len(registry.record_objects),
+        "evidence_objects": len(registry.evidence_objects),
+        "message_objects": len(registry.message_objects),
+        "access_tokens": len(registry.access_tokens),
+        "object_links": len(registry.object_links),
+    }
+    excerpt["rules"] = {
+        "durable_objects_require_registry_refs": True,
+        "record_authority_is_not_record_existence": True,
+        "evidence_access_is_not_evidence_truth": True,
+    }
+    return excerpt
+
+
+def _active_evidence_refs(payload: dict[str, Any]) -> set[str]:
+    refs: set[str] = set()
+    location_id = (
+        payload.get("local_world_view", {})
+        .get("active_location", {})
+        .get("location_id")
+    )
+    for item in payload.get("case_ledger", {}).get("evidence_items", []) or []:
+        if location_id and item.get("location_id") == location_id and item.get("evidence_id"):
+            refs.add(str(item["evidence_id"]))
+    for frame in payload.get("story", []) or []:
+        inquiry = frame.get("inquiry", {}) or {}
+        for ref in inquiry.get("ledger_refs", []) or []:
+            if isinstance(ref, str):
+                refs.add(ref)
+    return refs
 
 
 def _active_location_view(selection: dict[str, Any], timeline: list[dict[str, Any]]) -> dict[str, Any]:

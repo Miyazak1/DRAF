@@ -180,6 +180,301 @@ case_ledger:
       ambiguity: 0.91
       may_not_be_supernatural: true
 
+object_registry:
+  world_objects:
+    - object_id: yellow_paint_mark_object
+      label: 黄漆符号样本
+      object_type: physical_trace
+      location_id: archive_basement
+      controlling_institution: local_police_station
+      access_level: restricted
+      visibility: low
+      portability: sealed
+      condition: flaking
+      memory_charge: 0.82
+      linked_processes: [p1, p2]
+      linked_records: [old_case_file, evidence_room_log]
+      linked_evidence: [yellow_paint_mark]
+      allowed_actions: [inspect, photograph, compare, avoid_touching]
+      forbidden_actions: [remove_without_log, identify_culprit]
+      current_state:
+        sealed: true
+        readable_pattern: partial
+    - object_id: water_damaged_child_drawing_object
+      label: 被水泡胀的儿童画
+      object_type: photograph_or_drawing
+      location_id: archive_basement
+      controlling_institution: local_police_station
+      access_level: restricted
+      visibility: low
+      portability: fragile
+      condition: water_swollen
+      memory_charge: 0.88
+      linked_processes: [p1]
+      linked_records: [old_case_file, archive_register]
+      linked_evidence: [water_damaged_child_drawing]
+      allowed_actions: [inspect, compare, leave_in_sleeve]
+      forbidden_actions: [flatten_by_hand, invent_child_identity]
+      current_state:
+        legible_edges: false
+        sleeve_condition: damp
+    - object_id: evidence_shelf_yellow_row
+      label: 黄灯证物室的第三排证物架
+      object_type: institutional_item
+      location_id: evidence_room_yellow_light
+      controlling_institution: local_police_station
+      access_level: restricted
+      visibility: medium
+      portability: fixed
+      condition: rusted
+      memory_charge: 0.7
+      linked_records: [evidence_room_log]
+      linked_evidence: [old_tape_yellow_bleed, yellow_paint_mark]
+      allowed_actions: [look_at, unlock_with_permission, inventory_check]
+      forbidden_actions: [remove_unlogged_evidence]
+    - object_id: flooded_refinery_route_marker
+      label: 积水路边褪色的炼油厂路牌
+      object_type: route_marker
+      location_id: flooded_road_to_refinery
+      access_level: open_but_dangerous
+      visibility: low
+      portability: fixed
+      condition: rusted_and_half_submerged
+      memory_charge: 0.76
+      linked_records: [refinery_map_gap_record]
+      linked_evidence: [refinery_map_gap]
+      allowed_actions: [observe, compare_to_map, photograph]
+      forbidden_actions: [treat_as_supernatural_proof]
+
+  record_objects:
+    - record_id: old_case_file
+      label: 旧案卷宗
+      record_type: case_file
+      location_id: police_archive
+      institution_id: local_police_station
+      access_level: restricted
+      authority_level: high
+      legibility: partial
+      completeness: incomplete
+      alteration_risk: medium
+      official_status: recognized_but_contested
+      linked_processes: [p1, p2]
+      linked_evidence: [yellow_paint_mark, water_damaged_child_drawing]
+      custody_state: police_controlled
+    - record_id: archive_register
+      label: 档案室登记簿
+      record_type: archive_register
+      location_id: police_archive
+      institution_id: local_police_station
+      access_level: restricted
+      authority_level: medium
+      legibility: partial
+      completeness: incomplete
+      alteration_risk: high
+      official_status: procedural_record
+      linked_evidence: [water_damaged_child_drawing]
+      custody_state: police_controlled
+    - record_id: evidence_room_log
+      label: 证物室出入日志
+      record_type: evidence_log
+      location_id: evidence_room_yellow_light
+      institution_id: local_police_station
+      access_level: restricted
+      authority_level: medium
+      legibility: partial
+      completeness: incomplete
+      alteration_risk: high
+      official_status: procedural_record
+      linked_evidence: [yellow_paint_mark, old_tape_yellow_bleed]
+      custody_state: police_controlled
+    - record_id: old_tape_yellow_bleed
+      label: 旧录像带转录记录
+      record_type: video_record
+      location_id: evidence_room_yellow_light
+      institution_id: local_police_station
+      access_level: restricted
+      authority_level: low
+      legibility: low
+      completeness: incomplete
+      alteration_risk: medium
+      official_status: contested
+      linked_processes: [p1, p2]
+      linked_evidence: [old_tape_yellow_bleed]
+      custody_state: police_controlled
+    - record_id: refinery_map_gap_record
+      label: 废弃炼油厂旧地图缺口记录
+      record_type: map
+      location_id: zhou_jibai_office
+      institution_id: county_investigation_team
+      access_level: controlled
+      authority_level: medium
+      legibility: partial
+      completeness: inconsistent
+      alteration_risk: medium
+      official_status: working_copy
+      linked_processes: [p2]
+      linked_evidence: [refinery_map_gap]
+      custody_state: county_controlled
+    - record_id: clinic_unfiled_report
+      label: 镇卫生院未归档报告
+      record_type: medical_report
+      location_id: clinic_corridor
+      institution_id: town_clinic
+      access_level: restricted
+      authority_level: low
+      legibility: medium
+      completeness: incomplete
+      alteration_risk: medium
+      official_status: unfiled
+      custody_state: clinic_controlled
+    - record_id: old_attendance_book
+      label: 镇小学旧点名册
+      record_type: attendance_book
+      location_id: town_school_gate
+      institution_id: town_school
+      access_level: restricted
+      authority_level: medium
+      legibility: partial
+      completeness: incomplete
+      alteration_risk: low
+      official_status: archival_record
+      custody_state: school_controlled
+    - record_id: reopen_order
+      label: 县里重启调查命令
+      record_type: inspection_report
+      location_id: zhou_jibai_office
+      institution_id: county_investigation_team
+      access_level: controlled
+      authority_level: high
+      legibility: high
+      completeness: complete
+      alteration_risk: low
+      official_status: active_order
+      custody_state: county_controlled
+    - record_id: county_report
+      label: 县调查组阶段报告
+      record_type: inspection_report
+      location_id: zhou_jibai_office
+      institution_id: county_investigation_team
+      access_level: controlled
+      authority_level: medium
+      legibility: high
+      completeness: draft
+      alteration_risk: medium
+      official_status: draft
+      custody_state: county_controlled
+
+  evidence_objects:
+    - evidence_id: yellow_paint_mark
+      label: 黄漆符号
+      evidence_type: physical_trace
+      registry_ref: world:yellow_paint_mark_object
+      location_id: archive_basement
+      custody_holder: local_police_station
+      accessibility: restricted
+      reliability: 0.46
+      contamination_risk: 0.88
+      legibility: partial
+      chain_of_custody_strength: weak
+      interpretive_status: contested
+      linked_records: [old_case_file, evidence_room_log]
+      linked_locations: [archive_basement, evidence_room_yellow_light]
+      forbidden_inferences: [culprit_identity, supernatural_truth]
+    - evidence_id: water_damaged_child_drawing
+      label: 被水泡胀的儿童画
+      evidence_type: damaged_record
+      registry_ref: world:water_damaged_child_drawing_object
+      location_id: archive_basement
+      custody_holder: local_police_station
+      accessibility: restricted
+      reliability: 0.38
+      contamination_risk: 0.74
+      legibility: low
+      chain_of_custody_strength: weak
+      interpretive_status: missing_context
+      linked_records: [old_case_file, archive_register]
+      linked_locations: [archive_basement]
+      forbidden_inferences: [child_identity, culprit_identity]
+    - evidence_id: refinery_map_gap
+      label: 废弃炼油厂地图缺口
+      evidence_type: map
+      registry_ref: record:refinery_map_gap_record
+      location_id: flooded_road_to_refinery
+      custody_holder: county_investigation_team
+      accessibility: controlled
+      reliability: 0.52
+      contamination_risk: 0.63
+      legibility: partial
+      chain_of_custody_strength: partial
+      interpretive_status: contested
+      linked_records: [refinery_map_gap_record, county_report]
+      linked_locations: [flooded_road_to_refinery, abandoned_factory]
+      forbidden_inferences: [supernatural_truth, hidden_road_fact]
+    - evidence_id: old_tape_yellow_bleed
+      label: 旧录像带里的黄色漏光
+      evidence_type: video
+      registry_ref: record:old_tape_yellow_bleed
+      location_id: evidence_room_yellow_light
+      custody_holder: local_police_station
+      accessibility: restricted
+      reliability: 0.41
+      contamination_risk: 0.79
+      legibility: low
+      chain_of_custody_strength: weak
+      interpretive_status: contested
+      linked_testimonies: [lin_ya_gap]
+      linked_records: [old_tape_yellow_bleed, evidence_room_log]
+      linked_locations: [evidence_room_yellow_light]
+      forbidden_inferences: [supernatural_truth, objective_memory_confirmation]
+
+  access_tokens:
+    - token_id: archive_key_permission
+      token_type: permission
+      label: 档案室临时协助权限
+      holder_process_id: p1
+      institution_id: local_police_station
+      grants_access_to: [record:old_case_file, record:archive_register, world:water_damaged_child_drawing_object]
+      revocable: true
+      legitimacy: fragile
+      visibility: institutional
+      current_state: active
+    - token_id: investigator_evidence_permission
+      token_type: role_badge
+      label: 县调查员证物调阅权限
+      holder_process_id: p2
+      institution_id: county_investigation_team
+      grants_access_to: [record:evidence_room_log, evidence:old_tape_yellow_bleed, evidence:refinery_map_gap]
+      revocable: true
+      legitimacy: contested_locally
+      visibility: public
+      current_state: active
+
+  object_links:
+    - link_id: old_file_documents_yellow_mark
+      source_ref: record:old_case_file
+      target_ref: evidence:yellow_paint_mark
+      link_type: documents
+      strength: 0.72
+      evidence_refs: [yellow_paint_mark]
+    - link_id: evidence_log_controls_tape
+      source_ref: record:evidence_room_log
+      target_ref: evidence:old_tape_yellow_bleed
+      link_type: institutionally_records
+      strength: 0.61
+      evidence_refs: [old_tape_yellow_bleed]
+    - link_id: archive_register_contaminates_drawing_access
+      source_ref: record:archive_register
+      target_ref: evidence:water_damaged_child_drawing
+      link_type: contaminates
+      strength: 0.58
+      evidence_refs: [water_damaged_child_drawing]
+    - link_id: refinery_map_contradicts_closed_case
+      source_ref: record:refinery_map_gap_record
+      target_ref: evidence:refinery_map_gap
+      link_type: contradicts
+      strength: 0.66
+      evidence_refs: [refinery_map_gap]
+
 local_world:
   id: yellow_sign_town
   name: 黄印镇

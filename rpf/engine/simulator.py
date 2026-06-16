@@ -78,6 +78,7 @@ class Simulator:
         render_canon: dict[str, Any] | None = None,
         case_ledger: dict[str, Any] | None = None,
         local_world: dict[str, Any] | None = None,
+        object_registry: dict[str, Any] | None = None,
         steps: int | None = None,
         run_store: RunStore | None = None,
         run_id: str | None = None,
@@ -88,6 +89,7 @@ class Simulator:
         self.render_canon = render_canon or {}
         self.case_ledger = case_ledger or {}
         self.local_world_spec = local_world or {}
+        self.object_registry = object_registry or {}
         local_world_spec = LocalWorldSpec.model_validate(local_world) if local_world else None
         self.local_world = LocalWorldEngine(local_world_spec)
         self.steps = steps
@@ -206,6 +208,7 @@ class Simulator:
             render_canon=_render_canon_for_scenario(scenario),
             case_ledger=scenario.get("case_ledger", {}),
             local_world=scenario.get("local_world"),
+            object_registry=scenario.get("object_registry", {}),
             run_store=run_store,
             run_id=run_id,
         )
@@ -309,6 +312,10 @@ class Simulator:
         (output_dir / "effective_config.json").write_text(json.dumps(self.config, indent=2), encoding="utf-8")
         (output_dir / "render_canon.json").write_text(
             json.dumps(self.render_canon, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (output_dir / "object_registry.json").write_text(
+            json.dumps(self.object_registry, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
         write_timeline_manifest(output_dir, scenario_path=self.scenario_path, seed=self.state.seed, steps=planned_steps)

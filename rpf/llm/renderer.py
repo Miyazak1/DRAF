@@ -142,6 +142,7 @@ def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dic
         "common_ground_trace": payload.get("common_ground", []),
         "memory_trace": payload.get("memory", []),
         "local_world_view": payload.get("local_world_view", {}),
+        "object_registry_view": payload.get("object_registry_view", {}),
         "summary": payload.get("summary"),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
         "person_views": payload.get("derived_views", {}).get("person_views", {}),
@@ -164,6 +165,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
     common_ground_trace = render_payload.get("common_ground_trace", []) or []
     memory_trace = render_payload.get("memory_trace", []) or []
     local_world_view = render_payload.get("local_world_view", {}) or {}
+    object_registry_view = render_payload.get("object_registry_view", {}) or {}
     title = canon.get("title") or "RPF 故事回放"
     lines = [
         f"# {title}",
@@ -189,6 +191,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         f"- 行动可逆性：{_reversibility_summary(reversibility_trace)}",
         f"- 共同现实：{_common_ground_summary(common_ground_trace)}",
         f"- 本地世界：{_local_world_summary(local_world_view)}",
+        f"- 物件/记录/证据：{_object_registry_summary(object_registry_view)}",
         f"- 地点耦合：{_location_coupling_summary(inquiry_trace)}",
         f"- 证据可达性：{_evidence_access_summary(inquiry_trace)}",
         f"- 案件记忆：{_case_memory_summary(memory_trace)}",
@@ -283,6 +286,23 @@ def _local_world_summary(local_world_view: dict[str, Any]) -> str:
         f"{location_label}；路线 {route_id}（{route_status}）；"
         f"可见观众：{visible or '-'}；"
         f"阻断路线 {len(blocked_routes)}，本地约束 {len(constraints)}"
+    )
+
+
+def _object_registry_summary(object_registry_view: dict[str, Any]) -> str:
+    if not object_registry_view:
+        return "-"
+    objects = object_registry_view.get("world_objects", []) or []
+    records = object_registry_view.get("record_objects", []) or []
+    evidence = object_registry_view.get("evidence_objects", []) or []
+    tokens = object_registry_view.get("access_tokens", []) or []
+    anchors = [
+        str(item.get("label") or item.get("object_id") or item.get("record_id") or item.get("evidence_id"))
+        for item in [*objects[:2], *records[:2], *evidence[:2]]
+    ]
+    return (
+        f"活跃物件 {len(objects)}，记录 {len(records)}，证据 {len(evidence)}，权限 {len(tokens)}；"
+        f"锚点：{'，'.join(anchors) or '-'}"
     )
 
 
@@ -528,6 +548,11 @@ def llm_markdown(
                 "local_world_view.blocked_routes",
                 "local_world_view.local_constraints",
                 "local_world_view.boundary_rules",
+                "object_registry_view.world_objects",
+                "object_registry_view.record_objects",
+                "object_registry_view.evidence_objects",
+                "object_registry_view.access_tokens",
+                "object_registry_view.rules",
             ],
             "must_not_invent": [
                 "new characters",
@@ -539,7 +564,13 @@ def llm_markdown(
                 "new institutions",
                 "new audiences",
                 "new geography",
+                "new durable objects",
+                "new records",
+                "new messages",
+                "new access tokens",
+                "new custody changes",
                 "changed local_world_view",
+                "changed object_registry_view",
                 "places not present in local_world_view or story.locality",
                 "movement without route evidence",
                 "new case facts",
@@ -572,6 +603,7 @@ def llm_markdown(
                 "low-to-medium metaphor consistent with render_canon",
                 "scene transitions grounded in source_ticks",
                 "environmental detail grounded in local_world_view",
+                "object handling grounded in object_registry_view",
                 "implicit atmosphere derived from viability pressure and deformation evidence",
             ],
             "viability_use": [
@@ -592,6 +624,14 @@ def llm_markdown(
                 "do not move a scene to another place unless story.locality or local_world_view.route supports it",
                 "do not invent weather, institutions, crowds, rooms, roads, or offscreen places",
                 "public shame or public reinterpretation requires local_world_view.audiences or story.who_might_see evidence",
+            ],
+            "object_registry_rules": [
+                "object_registry_view is authoritative durable material context",
+                "render only durable objects, records, evidence, and access tokens present in object_registry_view",
+                "object existence is separate from object access",
+                "record authority is separate from record existence",
+                "evidence access is separate from evidence truth",
+                "do not invent files, keys, tapes, messages, weapons, reports, or evidence bags",
             ],
         },
         "input": render_payload,

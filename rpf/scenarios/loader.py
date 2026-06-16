@@ -6,6 +6,7 @@ from typing import Any
 import yaml
 
 from rpf.core.local_world import LocalWorldSpec
+from rpf.core.object_registry import ObjectRegistrySpec
 
 
 def load_scenario(path: Path) -> dict[str, Any]:
@@ -17,7 +18,18 @@ def load_scenario(path: Path) -> dict[str, Any]:
             raise ValueError(f"Scenario missing required key: {key}")
     if "local_world" not in data:
         data["local_world"] = _default_local_world(data)
-    data["local_world"] = LocalWorldSpec.model_validate(data["local_world"]).model_dump(mode="json")
+    local_world = LocalWorldSpec.model_validate(data["local_world"])
+    data["local_world"] = local_world.model_dump(mode="json")
+    registry = ObjectRegistrySpec.model_validate(data.get("object_registry") or {})
+    registry.validate_against_scenario(
+        location_ids={item.location_id for item in local_world.locations},
+        institution_ids={item.institution_id for item in local_world.institutions},
+        process_ids=set(data.get("processes", {})),
+        case_evidence_ids=_case_evidence_ids(data),
+        local_world_evidence_refs=_local_world_evidence_refs(data["local_world"]),
+        institution_record_refs={record for item in local_world.institutions for record in item.records},
+    )
+    data["object_registry"] = registry.model_dump(mode="json")
     return data
 
 
@@ -248,3 +260,26 @@ def _infer_scale(place: str, scenario_id: str) -> str:
     if any(token in haystack for token in ["family", "parent", "公寓", "apartment", "home", "家"]):
         return "apartment_building"
     return "town"
+
+
+def _case_evidence_ids(scenario: dict[str, Any]) -> set[str]:
+    ledger = scenario.get("case_ledger", {}) or {}
+    return {
+        str(item.get("evidence_id"))
+        for item in ledger.get("evidence_items", []) or []
+        if item.get("evidence_id")
+    }
+
+
+def _local_world_evidence_refs(value: Any) -> set[str]:
+    refs: set[str] = set()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "evidence_refs" and isinstance(item, list):
+                refs.update(str(ref) for ref in item if ref)
+            else:
+                refs.update(_local_world_evidence_refs(item))
+    elif isinstance(value, list):
+        for item in value:
+            refs.update(_local_world_evidence_refs(item))
+    return refs
