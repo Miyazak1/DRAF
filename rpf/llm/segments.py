@@ -77,6 +77,7 @@ def next_render_segment(
         "reversibility_trace": payload.get("reversibility", []),
         "common_ground_trace": payload.get("common_ground", []),
         "memory_trace": payload.get("memory", []),
+        "local_world_view": payload.get("local_world_view", {}),
         "summary": payload.get("summary", {}),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
         "person_views": payload.get("derived_views", {}).get("person_views", {}),
@@ -456,6 +457,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             for item in segment.get("common_ground_trace", [])[-16:]
             if int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
         ],
+        "local_world_view": segment.get("local_world_view", {}),
         "previous_story_tail": [
             {
                 "segment_id": item.get("segment_id"),
@@ -494,6 +496,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "opportunity_trace_is_authoritative": True,
             "reversibility_trace_is_authoritative": True,
             "common_ground_trace_is_authoritative": True,
+            "local_world_view_is_authoritative": True,
             "case_memory_trace_is_authoritative": True,
             "do_not_add_case_facts_evidence_witnesses_or_culprits": True,
             "if_multiple_frames_have_the_same_summary": "write them as a sustained pattern with small pressure changes; do not restage the same dialogue or objects repeatedly",

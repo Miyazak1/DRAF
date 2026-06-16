@@ -47,6 +47,9 @@ def test_render_payload_contains_render_canon(tmp_path):
     assert payload["opportunity_trace"]
     assert payload["reversibility_trace"]
     assert payload["common_ground_trace"]
+    assert payload["local_world_view"]
+    assert payload["local_world_view"]["active_location"]["location_id"]
+    assert payload["local_world_view"]["route"]["route_id"]
     assert any(frame["opportunity_cost"] for frame in payload["story"])
     assert any(frame["reversibility"] for frame in payload["story"])
     assert any(frame["common_ground"] for frame in payload["story"])
@@ -84,6 +87,7 @@ def test_yellow_sign_render_payload_inherits_case_ledger(tmp_path):
     assert "机会成本" in text
     assert "行动可逆性" in text
     assert "共同现实" in text
+    assert "本地世界" in text
     assert "地点耦合" in text
     assert "证据可达性" in text
     assert "案件记忆" in text
@@ -169,6 +173,10 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert "reversibility_trace" in body
     assert "common_ground_trace" in body
     assert "memory_trace" in body
+    assert "local_world_view" in body
+    assert "local_world_view is authoritative causal geography" in body
+    assert "movement without route evidence" in body
+    assert "changed route access, audience exposure, memory site, resource, or local constraint state" in body
     assert "changed evidence accessibility state" in body
     assert "changed location-evidence coupling state" in body
     assert "changed institutional pressure state" in body
@@ -245,3 +253,17 @@ def test_segment_renderer_sanitizes_full_story_llm_response(tmp_path, monkeypatc
     assert "## 结束状态" not in text
     assert "## 边界说明" not in text
     assert not text.startswith("# 共享公寓")
+
+
+def test_segment_payload_inherits_local_world_view(tmp_path):
+    scenario_path = Path("examples/yellow_sign_cold_case.yaml")
+    sim = Simulator.from_scenario(load_scenario(scenario_path), scenario_path, seed=42)
+    output_dir = tmp_path / "run"
+    sim.run(steps=5, output_dir=output_dir)
+
+    segment = segments.next_render_segment(output_dir, force=True)
+    payload = segments._segment_llm_payload(segment, output_dir)
+
+    assert segment["local_world_view"]["active_location"]["location_id"]
+    assert payload["local_world_view"]["route"]["route_id"]
+    assert payload["rules"]["local_world_view_is_authoritative"] is True

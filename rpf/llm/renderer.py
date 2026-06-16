@@ -141,6 +141,7 @@ def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dic
         "reversibility_trace": payload.get("reversibility", []),
         "common_ground_trace": payload.get("common_ground", []),
         "memory_trace": payload.get("memory", []),
+        "local_world_view": payload.get("local_world_view", {}),
         "summary": payload.get("summary"),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
         "person_views": payload.get("derived_views", {}).get("person_views", {}),
@@ -162,6 +163,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
     reversibility_trace = render_payload.get("reversibility_trace", []) or []
     common_ground_trace = render_payload.get("common_ground_trace", []) or []
     memory_trace = render_payload.get("memory_trace", []) or []
+    local_world_view = render_payload.get("local_world_view", {}) or {}
     title = canon.get("title") or "RPF 故事回放"
     lines = [
         f"# {title}",
@@ -186,6 +188,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         f"- 机会成本：{_opportunity_cost_summary(opportunity_trace)}",
         f"- 行动可逆性：{_reversibility_summary(reversibility_trace)}",
         f"- 共同现实：{_common_ground_summary(common_ground_trace)}",
+        f"- 本地世界：{_local_world_summary(local_world_view)}",
         f"- 地点耦合：{_location_coupling_summary(inquiry_trace)}",
         f"- 证据可达性：{_evidence_access_summary(inquiry_trace)}",
         f"- 案件记忆：{_case_memory_summary(memory_trace)}",
@@ -261,6 +264,25 @@ def _evidence_access_summary(inquiry_trace: list[dict[str, Any]]) -> str:
     return (
         f"{latest.get('label') or latest.get('focus_id') or '-'}："
         f"{_label(after.get('access_status', '-'))}，可达 {_fmt(after.get('accessibility'))}"
+    )
+
+
+def _local_world_summary(local_world_view: dict[str, Any]) -> str:
+    if not local_world_view:
+        return "-"
+    location = local_world_view.get("active_location", {}) or {}
+    route = local_world_view.get("route", {}) or {}
+    audiences = local_world_view.get("audiences", []) or []
+    blocked_routes = local_world_view.get("blocked_routes", []) or []
+    constraints = local_world_view.get("local_constraints", []) or []
+    location_label = location.get("location_label") or location.get("location_id") or "-"
+    route_id = route.get("route_id") or "-"
+    route_status = _label(route.get("access_status", "-"))
+    visible = "，".join(str(item.get("label") or item.get("audience_id")) for item in audiences[:3])
+    return (
+        f"{location_label}；路线 {route_id}（{route_status}）；"
+        f"可见观众：{visible or '-'}；"
+        f"阻断路线 {len(blocked_routes)}，本地约束 {len(constraints)}"
     )
 
 
@@ -497,6 +519,15 @@ def llm_markdown(
                 "reversibility_trace",
                 "common_ground_trace",
                 "memory_trace",
+                "local_world_view.world_id",
+                "local_world_view.active_location",
+                "local_world_view.route",
+                "local_world_view.rhythms",
+                "local_world_view.audiences",
+                "local_world_view.memory_sites",
+                "local_world_view.blocked_routes",
+                "local_world_view.local_constraints",
+                "local_world_view.boundary_rules",
             ],
             "must_not_invent": [
                 "new characters",
@@ -504,6 +535,13 @@ def llm_markdown(
                 "new memories",
                 "new motives",
                 "new locations",
+                "new routes",
+                "new institutions",
+                "new audiences",
+                "new geography",
+                "changed local_world_view",
+                "places not present in local_world_view or story.locality",
+                "movement without route evidence",
                 "new case facts",
                 "new evidence",
                 "new testimonies",
@@ -524,6 +562,7 @@ def llm_markdown(
                 "changed action reversibility state",
                 "changed common ground state",
                 "changed case memory reconstruction",
+                "changed route access, audience exposure, memory site, resource, or local constraint state",
                 "causes not present in viability/action/expression/recognition evidence",
             ],
             "literary_freedom": [
@@ -532,6 +571,7 @@ def llm_markdown(
                 "observable gesture description",
                 "low-to-medium metaphor consistent with render_canon",
                 "scene transitions grounded in source_ticks",
+                "environmental detail grounded in local_world_view",
                 "implicit atmosphere derived from viability pressure and deformation evidence",
             ],
             "viability_use": [
@@ -545,6 +585,13 @@ def llm_markdown(
                 "do not repeat title, overview, ending_state, or boundary_note in segment mode",
                 "do not rewrite previous_story_tail",
                 "if current frames repeat the same action/outcome pattern, compress them as sustained repetition instead of restaging the same scene",
+            ],
+            "local_world_rules": [
+                "local_world_view is authoritative causal geography",
+                "render only active_location, route, audiences, memory_sites, blocked_routes, resources, and local_constraints present in input",
+                "do not move a scene to another place unless story.locality or local_world_view.route supports it",
+                "do not invent weather, institutions, crowds, rooms, roads, or offscreen places",
+                "public shame or public reinterpretation requires local_world_view.audiences or story.who_might_see evidence",
             ],
         },
         "input": render_payload,
