@@ -1665,7 +1665,7 @@ async function pollSimulationStatus() {
     }
     if (status.last_render_text) {
       $("llmOutput").innerHTML = markdownToHtml(status.last_render_text);
-      $("liveStoryStream").innerHTML = markdownToHtml(status.last_render_text);
+      if (!DATA?.rendered_story_stream) $("liveStoryStream").innerHTML = markdownToHtml(status.last_render_text);
       $("llmStatus").textContent = status.last_render_error
         ? `自动渲染失败：${status.last_render_error}`
         : `自动渲染：${status.last_render_output || "-"}`;

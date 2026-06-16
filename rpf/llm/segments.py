@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -106,6 +107,7 @@ def render_and_append_segment(
             thinking=thinking,
             reasoning_effort=reasoning_effort,
         )
+        text = normalize_segment_text(text, segment)
         mode = "llm"
     else:
         text = deterministic_segment_markdown(segment)
@@ -137,10 +139,134 @@ def render_and_append_segment(
         "tick_start": record["tick_start"],
         "tick_end": record["tick_end"],
         "boundary_reason": record["boundary_reason"],
-        "text": stream,
+        "text": text,
         "segment_text": text,
+        "stream_text": stream,
         "segment_count": len(records),
     }
+
+
+def normalize_segment_text(text: str, segment: dict[str, Any]) -> str:
+    """Keep an LLM response scoped to the current render segment."""
+
+    text = _extract_segment_text_from_json(text, segment) or text
+    text = _strip_markdown_fence(text).strip()
+    if not text:
+        return text
+    lines = text.splitlines()
+    lines = _extract_scene_lines(lines)
+    lines = _filter_lines_to_segment_ticks(lines, segment.get("source_ticks", []))
+    lines = _drop_forbidden_segment_sections(lines)
+    normalized = "\n".join(lines).strip()
+    return normalized + "\n" if normalized else text.strip() + "\n"
+
+
+def _extract_segment_text_from_json(text: str, segment: dict[str, Any]) -> str:
+    raw = _strip_markdown_fence(text).strip()
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return ""
+    if isinstance(data, dict):
+        for key in ("segment_text_only", "segment_text", "text"):
+            value = data.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+        scenes = data.get("scenes")
+        if isinstance(scenes, list):
+            source_ticks = {int(tick) for tick in segment.get("source_ticks", []) if str(tick).isdigit()}
+            selected: list[str] = []
+            for scene in scenes:
+                if not isinstance(scene, dict):
+                    continue
+                ticks = {int(tick) for tick in scene.get("source_ticks", []) if str(tick).isdigit()}
+                if source_ticks and ticks and source_ticks.isdisjoint(ticks):
+                    continue
+                scene_text = scene.get("text")
+                if isinstance(scene_text, str) and scene_text.strip():
+                    selected.append(scene_text.strip())
+            if selected:
+                return "\n\n".join(selected)
+    return ""
+
+
+def _strip_markdown_fence(text: str) -> str:
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.splitlines()
+    if len(lines) >= 2 and lines[-1].strip() == "```":
+        return "\n".join(lines[1:-1]).strip()
+    return stripped
+
+
+def _extract_scene_lines(lines: list[str]) -> list[str]:
+    start = None
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("## ") and any(label in stripped for label in ("场景", "时间线", "Scenes")):
+            start = index + 1
+            break
+    if start is None:
+        return lines
+    end = len(lines)
+    for index in range(start, len(lines)):
+        stripped = lines[index].strip()
+        if stripped.startswith("## ") and any(label in stripped for label in ("结束状态", "边界说明", "Ending", "Boundary")):
+            end = index
+            break
+    return lines[start:end]
+
+
+def _filter_lines_to_segment_ticks(lines: list[str], source_ticks: list[Any]) -> list[str]:
+    wanted = {int(tick) for tick in source_ticks if str(tick).isdigit()}
+    if not wanted or not any(line.lstrip().startswith("###") for line in lines):
+        return lines
+    kept: list[str] = []
+    include = True
+    saw_segment_heading = False
+    for line in lines:
+        if line.lstrip().startswith("###"):
+            ticks = _ticks_from_heading(line)
+            include = not ticks or not wanted.isdisjoint(ticks)
+            saw_segment_heading = True
+        if include:
+            kept.append(line)
+    return kept if saw_segment_heading and kept else lines
+
+
+def _ticks_from_heading(line: str) -> set[int]:
+    numbers = [int(item) for item in re.findall(r"\d+", line)]
+    if len(numbers) >= 2:
+        start, end = numbers[0], numbers[1]
+        if start <= end and end - start <= 200:
+            return set(range(start, end + 1))
+    return set(numbers[:1])
+
+
+def _drop_forbidden_segment_sections(lines: list[str]) -> list[str]:
+    forbidden = ("概述", "总览", "结束状态", "边界说明", "boundary_note", "ending_state", "overview")
+    kept: list[str] = []
+    skipping = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            continue
+        if stripped.startswith("## ") and any(label in stripped for label in forbidden):
+            skipping = True
+            continue
+        if stripped.startswith(("## ", "### ")):
+            skipping = False
+        if skipping:
+            continue
+        if stripped == "---":
+            continue
+        kept.append(line)
+    while kept and not kept[0].strip():
+        kept.pop(0)
+    while kept and not kept[-1].strip():
+        kept.pop()
+    return kept
 
 
 def deterministic_segment_markdown(segment: dict[str, Any]) -> str:

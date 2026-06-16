@@ -582,7 +582,7 @@ aggregation_traces.json
 metrics.json
 ```
 
-SQLite can come after the file-based MVP.
+PostgreSQL is the target persistence backend after the file-based MVP. File export remains supported for inspection and sharing.
 
 The event stream is authoritative.
 

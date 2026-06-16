@@ -1521,7 +1521,7 @@ def _run_session(server: ViewerServer, request: dict[str, Any]) -> None:
                 )
                 with server.session_lock:
                     server.session_status["last_render_output"] = result.get("output")
-                    server.session_status["last_render_text"] = result.get("text", "")
+                    server.session_status["last_render_text"] = result.get("segment_text") or result.get("text", "")
                     server.session_status["last_render_segment"] = {
                         "segment_id": result.get("segment_id"),
                         "tick_start": result.get("tick_start"),

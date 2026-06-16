@@ -106,16 +106,16 @@ For:
 Start with:
 
 ```text
-SQLite
+PostgreSQL
 ```
 
 Use:
 
 ```text
-SQLAlchemy
+SQLAlchemy Core or psycopg
 ```
 
-or a lightweight SQLite wrapper.
+behind a small storage interface.
 
 Also support:
 
@@ -125,8 +125,10 @@ JSONL timeline export
 
 Rationale:
 
-- easy local experimentation
+- canonical cloud persistence
 - replayable event logs
+- JSONB payload indexing
+- transactional append-only writes
 - inspectable state snapshots
 - simple migration to PostgreSQL later
 
@@ -222,7 +224,7 @@ rpf/
     validators.py
 
   storage/
-    sqlite_store.py
+    postgres_store.py
     timeline.py
     snapshots.py
     migrations.py
@@ -897,7 +899,7 @@ RPF contains many relational structures, but a graph database is not necessary a
 Start with:
 
 ```text
-SQLite + JSON payloads + event stream
+PostgreSQL + JSONB payloads + event stream
 ```
 
 Move to graph storage only if the system later needs:
@@ -908,6 +910,7 @@ Move to graph storage only if the system later needs:
 - large-scale historical dependency analysis
 
 For the initial two-position simulator, a graph database would add more complexity than value.
+See `docs/rpf-postgresql-persistence-plan.md` for the persistence schema and migration path.
 
 ---
 

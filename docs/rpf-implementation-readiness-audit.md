@@ -316,22 +316,23 @@ Low for MVP, high for research value.
 
 ### Why It Matters
 
-The technical plan recommends file output first and SQLite later. There is not yet a precise database schema.
+The technical plan now targets PostgreSQL for durable cloud persistence. The schema and migration path are defined, but the runtime still writes files first.
 
-### Missing Document
+### Reference Document
 
 ```text
-docs/rpf-persistence-backend.md
+docs/rpf-postgresql-persistence-plan.md
 ```
 
-### Should Define
+### Implementation Should Add
 
-- SQLite table schemas
+- PostgreSQL migrations
+- a storage interface
+- dual-write from file output to PostgreSQL
 - indexes
 - JSON payload format
 - snapshot storage
 - event stream storage
-- migration plan
 - export/import
 
 ### Priority

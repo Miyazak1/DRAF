@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from rpf.engine.simulator import Simulator
-from rpf.llm import renderer
+from rpf.llm import renderer, segments
 from rpf.llm.renderer import build_render_payload, render_output
 from rpf.scenarios.loader import load_scenario
 
@@ -180,3 +180,68 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert "changed action reversibility state" in body
     assert "changed common ground state" in body
     assert "causes not present in viability/action/expression/recognition evidence" in body
+
+
+def test_segment_renderer_sanitizes_full_story_llm_response(tmp_path, monkeypatch):
+    def fake_llm_markdown(render_payload, **kwargs):
+        return """# 共享公寓：未解决的牺牲
+
+## 概述
+
+这是一段不该进入分段记录的总览。
+
+## 场景
+
+### tick 1-3
+
+旧段落内容，不应该被追加进新的 segment。
+
+---
+
+### tick 4-5
+
+新的段落内容，应该被保留。
+
+*来源：tick 4-5*
+
+---
+
+## 结束状态
+
+这也是完整文档尾部，不应该进入 segment。
+
+## 边界说明
+
+渲染未改变因果状态。
+"""
+
+    monkeypatch.setattr(segments, "llm_markdown", fake_llm_markdown)
+    segment = {
+        "segment_id": "seg-0002",
+        "segment_index": 2,
+        "tick_start": 4,
+        "tick_end": 5,
+        "boundary_reason": "弱闭合：潜伏时间累积达到阈值",
+        "source_ticks": [4, 5],
+        "simulated_seconds": 120,
+        "frames": [],
+        "render_canon": {"title": "共享公寓：未解决的牺牲"},
+    }
+
+    result = segments.render_and_append_segment(
+        tmp_path,
+        segment,
+        use_llm=True,
+        api_key="test-key",
+    )
+    records = segments.load_render_segments(tmp_path)
+    text = records[0]["text"]
+
+    assert result["text"] == result["segment_text"]
+    assert "stream_text" in result
+    assert "新的段落内容" in text
+    assert "旧段落内容" not in text
+    assert "## 概述" not in text
+    assert "## 结束状态" not in text
+    assert "## 边界说明" not in text
+    assert not text.startswith("# 共享公寓")

@@ -537,6 +537,8 @@ def test_viewer_can_run_duration_session(tmp_path):
     assert status_payload["target_seconds"] == 1
     assert status_payload["last_render_output"]
     assert status_payload["last_render_segment"]
+    assert status_payload["last_render_text"]
+    assert "## 持续渲染" not in status_payload["last_render_text"]
     run_output_dir = Path(status_payload["output_dir"])
     assert run_output_dir != output_dir
     assert (run_output_dir / "rendered_story_stream.md").exists()
