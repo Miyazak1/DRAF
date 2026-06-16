@@ -27,6 +27,7 @@ from rpf.engine.account import AccountPressureEngine
 from rpf.engine.affordances import AffordanceEngine
 from rpf.engine.attention import AttentionDriftEngine
 from rpf.engine.binding import BindingEvolutionEngine
+from rpf.engine.common_ground import CommonGroundEngine
 from rpf.engine.disposition import ProcessDispositionEngine
 from rpf.engine.epistemic import EpistemicBoundaryEngine
 from rpf.engine.expression import ExpressionEngine
@@ -90,6 +91,7 @@ class Simulator:
         self.frame_definition = InteractionFrameEngine()
         self.account = AccountPressureEngine()
         self.binding_evolution = BindingEvolutionEngine()
+        self.common_ground = CommonGroundEngine()
         self.epistemic = EpistemicBoundaryEngine()
         self.expectation = ExpectationSedimentationEngine()
         self.memory = MemoryReconstructionEngine(config["memory"])
@@ -126,6 +128,7 @@ class Simulator:
         self.frame_trace: list[dict[str, Any]] = []
         self.account_trace: list[dict[str, Any]] = []
         self.binding_trace: list[dict[str, Any]] = []
+        self.common_ground_trace: list[dict[str, Any]] = []
         self.epistemic_trace: list[dict[str, Any]] = []
         self.expectation_trace: list[dict[str, Any]] = []
         self.memory_trace: list[dict[str, Any]] = []
@@ -330,6 +333,7 @@ class Simulator:
         (output_dir / "frame_trace.json").write_text(json.dumps(self.frame_trace, indent=2), encoding="utf-8")
         (output_dir / "account_trace.json").write_text(json.dumps(self.account_trace, indent=2), encoding="utf-8")
         (output_dir / "binding_trace.json").write_text(json.dumps(self.binding_trace, indent=2), encoding="utf-8")
+        (output_dir / "common_ground_trace.json").write_text(json.dumps(self.common_ground_trace, indent=2), encoding="utf-8")
         (output_dir / "epistemic_trace.json").write_text(json.dumps(self.epistemic_trace, indent=2), encoding="utf-8")
         (output_dir / "expectation_trace.json").write_text(json.dumps(self.expectation_trace, indent=2), encoding="utf-8")
         (output_dir / "memory_trace.json").write_text(json.dumps(self.memory_trace, indent=2), encoding="utf-8")
@@ -407,6 +411,7 @@ class Simulator:
         local.extend(self._update_accounts(local))
         local.extend(self._update_normativity(local))
         local.extend(self._update_frames(local))
+        local.extend(self._update_common_ground(context, local))
         local.extend(self._update_attention(context, local))
         if context.tick_type != "latent":
             local.extend(self._update_opportunity_costs(context, local))
@@ -581,6 +586,21 @@ class Simulator:
                 )
             )
         return emitted
+
+    def _update_common_ground(self, context: TickContext, local_events: list[Event]) -> list[Event]:
+        update = self.common_ground.update(self.state, context, local_events)
+        if not update:
+            return []
+        payload = update.payload()
+        self.common_ground_trace.append({"tick": self.state.tick, "event_type": "CommonGroundEvent", **payload})
+        return [
+            self._event(
+                "CommonGroundEvent",
+                "common_ground",
+                payload,
+                update.causal_refs,
+            )
+        ]
 
     def _update_relevance(self, local_events: list[Event]) -> list[Event]:
         emitted: list[Event] = []
@@ -1175,6 +1195,7 @@ class Simulator:
             "account_pressure": {"sources": ["account_trace", "AccountPressureEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("account_pressure.")}},
             "normative_pressure": {"sources": ["normativity_trace", "NormativePressureEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("norm_pressure.")}},
             "frame_definition": {"sources": ["frame_trace", "FrameDefinitionEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("frame_definition.")}},
+            "common_ground": {"sources": ["common_ground_trace", "CommonGroundEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("common_ground.")}},
             "relevance_landscape": {"sources": ["relevance_trace", "RelevanceShiftEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("relevance_field.")}},
             "position_field": {"sources": ["position_trace", "PositioningEvent"], "value": {key: value for key, value in self.state.relation_metrics.items() if key.startswith("position_field.")}},
         }

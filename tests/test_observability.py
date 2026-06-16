@@ -20,6 +20,7 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     account = json.loads((tmp_path / "run" / "account_trace.json").read_text())
     normativity = json.loads((tmp_path / "run" / "normativity_trace.json").read_text())
     relevance = json.loads((tmp_path / "run" / "relevance_trace.json").read_text())
+    common_ground = json.loads((tmp_path / "run" / "common_ground_trace.json").read_text())
     epistemic = json.loads((tmp_path / "run" / "epistemic_trace.json").read_text())
     attention = json.loads((tmp_path / "run" / "attention_trace.json").read_text())
     opportunity = json.loads((tmp_path / "run" / "opportunity_trace.json").read_text())
@@ -55,11 +56,13 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert all("attention_pressure" in item["input_factors"] for item in scheduler)
     assert all("opportunity_pressure" in item["input_factors"] for item in scheduler)
     assert all("reversibility_pressure" in item["input_factors"] for item in scheduler)
+    assert all("common_ground_pressure" in item["input_factors"] for item in scheduler)
     assert any(item["input_factors"]["epistemic_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["daily_ecology_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["attention_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["opportunity_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["reversibility_pressure"] > 0 for item in scheduler[1:])
+    assert any(item["input_factors"]["common_ground_pressure"] > 0 for item in scheduler[1:])
     assert all("viability_rhythm" in item for item in scheduler)
     assert all("scene_readiness" in item["viability_rhythm"] for item in scheduler)
     assert any(item["viability_rhythm"]["scene_viability_bias"] > 0 for item in scheduler)
@@ -223,6 +226,14 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert any("OpportunityCostEvent" in item["evidence_event_types"] for item in relevance)
     assert any("ActionReversibilityEvent" in item["evidence_event_types"] for item in relevance)
     assert any("EpistemicBoundaryEvent" in item["evidence_event_types"] for item in relevance)
+    assert any("CommonGroundEvent" in item["evidence_event_types"] for item in relevance)
+
+    assert common_ground
+    assert all(item["event_type"] == "CommonGroundEvent" for item in common_ground)
+    assert any(item["state"] in {"shared", "fragile", "contested", "fractured"} for item in common_ground)
+    assert all(item["caused_by_events"] for item in common_ground)
+    assert all("mutual_legibility" in item for item in common_ground)
+    assert all("repair_handle_width" in item for item in common_ground)
 
     assert epistemic
     assert all(item["event_type"] == "EpistemicBoundaryEvent" for item in epistemic)
@@ -405,6 +416,11 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
         for item in viability
         for constraint in item["future_constraints"]
     )
+    assert any(
+        constraint["source_layer"] == "common_ground"
+        for item in viability
+        for constraint in item["future_constraints"]
+    )
     assert any(item["dramatic_tension"] > 0 for item in viability)
     viability_event_types = {
         "ConstraintActivationEvent",
@@ -443,6 +459,7 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     account_events = [event for event in timeline_events if event["event_type"] == "AccountPressureEvent"]
     normativity_events = [event for event in timeline_events if event["event_type"] == "NormativePressureEvent"]
     frame_events = [event for event in timeline_events if event["event_type"] == "FrameDefinitionEvent"]
+    common_ground_events = [event for event in timeline_events if event["event_type"] == "CommonGroundEvent"]
     relevance_events = [event for event in timeline_events if event["event_type"] == "RelevanceShiftEvent"]
     position_events = [event for event in timeline_events if event["event_type"] == "PositioningEvent"]
     assert field_update_events
@@ -454,6 +471,7 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert account_events
     assert normativity_events
     assert frame_events
+    assert common_ground_events
     assert relevance_events
     assert position_events
     assert any(event["causal_refs"] for event in field_update_events + micro_world_events)
@@ -464,6 +482,7 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert any(event["causal_refs"] for event in account_events)
     assert any(event["causal_refs"] for event in normativity_events)
     assert any(event["causal_refs"] for event in frame_events)
+    assert any(event["causal_refs"] for event in common_ground_events)
     assert any(event["causal_refs"] for event in relevance_events)
     assert any(event["causal_refs"] for event in position_events)
     relation_event_ids = {event["event_id"] for event in relation_events}
@@ -501,6 +520,7 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert aggregation["account_pressure"]["value"]
     assert aggregation["normative_pressure"]["value"]
     assert aggregation["frame_definition"]["value"]
+    assert aggregation["common_ground"]["value"]
     assert aggregation["relevance_landscape"]["value"]
     assert aggregation["position_field"]["value"]
 
@@ -518,6 +538,7 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     attention = json.loads((output_dir / "attention_trace.json").read_text())
     opportunity = json.loads((output_dir / "opportunity_trace.json").read_text())
     reversibility = json.loads((output_dir / "reversibility_trace.json").read_text())
+    common_ground = json.loads((output_dir / "common_ground_trace.json").read_text())
     timeline_events = [
         json.loads(line)
         for line in (output_dir / "timeline.jsonl").read_text().splitlines()
@@ -542,6 +563,9 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     ]
 
     assert inquiry
+    assert common_ground
+    assert all(item["event_type"] == "CommonGroundEvent" for item in common_ground)
+    assert all("common_ground_pressure" in item["input_factors"] for item in scheduler)
     assert institutional_events
     assert institutional_trace
     assert witness_events

@@ -45,6 +45,7 @@ const ZH = {
   projection: "投影",
   diagnostic: "诊断",
   viability: "可存续性",
+  common_ground: "共同现实",
   SimulationInitializedEvent: "模拟初始化",
   TickStartedEvent: "Tick 开始",
   FieldPressureEvent: "场压力",
@@ -81,6 +82,7 @@ const ZH = {
   DeformationTraceEvent: "变形追踪",
   FutureConstraintEvent: "未来约束",
   DerivedDramaticTensionEvent: "派生戏剧张力",
+  CommonGroundEvent: "共同现实更新",
   WitnessStrategyEvent: "证人策略",
   material_pressure_intrusion: "物质压力闯入",
   unacknowledged_contribution_claim: "未被承认的付出索取",
@@ -170,6 +172,9 @@ const ZH = {
   material_urgency: "物质紧迫",
   granted: "承认成功",
   partial: "部分承认",
+  shared: "共同现实稳定",
+  contested: "共同现实争夺",
+  fractured: "共同现实断裂",
   misunderstood: "被误解",
   displaced: "被转移",
   refused: "被拒绝",
@@ -559,6 +564,7 @@ function renderStory() {
           ${frame.opportunity_cost?.cost_type ? `<span class="tag">机会成本：${zh(frame.opportunity_cost.cost_type)}</span>` : ""}
           ${frame.reversibility?.threshold_state ? `<span class="tag">可逆性：${zh(frame.reversibility.threshold_state)}</span>` : ""}
           ${frame.epistemic_boundary?.boundary_type ? `<span class="tag">信息边界：${zh(frame.epistemic_boundary.boundary_type)}</span>` : ""}
+          ${frame.common_ground?.state ? `<span class="tag">共同现实：${zh(frame.common_ground.state)}</span>` : ""}
           ${frame.daily_ecology?.routine_phase ? `<span class="tag">日常：${zh(frame.daily_ecology.routine_phase)}</span>` : ""}
           ${frame.memory_count ? `<span class="tag">记忆重构：${frame.memory_count}</span>` : ""}
           ${frame.fate_count ? `<span class="tag">命运转折：${frame.fate_count}</span>` : ""}
@@ -574,6 +580,7 @@ function renderStory() {
     <div class="state-row"><span>物质紧迫</span><b>${fmt(pressure.material_urgency)}</b></div>
     <div class="state-row"><span>日常压力</span><b>${fmt(pressure.daily_ecology_pressure)}</b></div>
     <div class="state-row"><span>信息边界</span><b>${fmt(pressure.epistemic_pressure)}</b></div>
+    <div class="state-row"><span>共同现实</span><b>${fmt(pressure.common_ground_pressure)}</b></div>
     <div class="state-row"><span>机会成本</span><b>${fmt(pressure.opportunity_pressure)}</b></div>
     <div class="state-row"><span>可逆性压力</span><b>${fmt(pressure.reversibility_pressure)}</b></div>
     <div class="state-row"><span>冲突压力</span><b>${fmt(pressure.conflict_pressure)}</b></div>
@@ -628,6 +635,7 @@ function buildEvolutionPoints() {
       recognition_pressure: numberOrNull(pressure.recognition_pressure ?? recognition.demand_pressure),
       memory_pressure: numberOrNull(pressure.memory_pressure),
       epistemic_pressure: numberOrNull(pressure.epistemic_pressure),
+      common_ground_pressure: numberOrNull(pressure.common_ground_pressure),
       opportunity_pressure: numberOrNull(pressure.opportunity_pressure),
       reversibility_pressure: numberOrNull(pressure.reversibility_pressure),
     };
@@ -661,6 +669,7 @@ function renderPressureChart(points) {
     {key: "recognition_pressure", label: "承认压力", color: "#315f8f"},
     {key: "memory_pressure", label: "记忆压力", color: "#6f5a8f"},
     {key: "epistemic_pressure", label: "信息边界", color: "#46635f"},
+    {key: "common_ground_pressure", label: "共同现实", color: "#7b4b64"},
     {key: "opportunity_pressure", label: "机会成本", color: "#7a6a2d"},
     {key: "reversibility_pressure", label: "可逆性压力", color: "#8b3d5b"},
   ];
@@ -742,6 +751,7 @@ function renderEvolutionStats(points) {
     ["承认压力", trend(last.recognition_pressure, previous.recognition_pressure)],
     ["记忆压力", trend(last.memory_pressure, previous.memory_pressure)],
     ["信息边界", trend(last.epistemic_pressure, previous.epistemic_pressure)],
+    ["共同现实", trend(last.common_ground_pressure, previous.common_ground_pressure)],
     ["机会成本", trend(last.opportunity_pressure, previous.opportunity_pressure)],
     ["可逆性压力", trend(last.reversibility_pressure, previous.reversibility_pressure)],
   ];
@@ -1194,6 +1204,14 @@ function zhKey(key) {
     description: "描述",
     future_constraints: "未来约束",
     lost_alternatives: "失去的可能性",
+    common_ground_id: "共同现实编号",
+    mutual_legibility: "互相可读性",
+    interpretive_gap: "解释裂缝",
+    shared_definition_width: "共同定义宽度",
+    repair_handle_width: "修复抓手宽度",
+    dominant_frame: "主导框架",
+    contested_fact: "争夺事实",
+    consequence: "后果",
   };
   return keys[key] || key;
 }

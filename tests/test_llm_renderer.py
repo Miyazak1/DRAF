@@ -28,6 +28,7 @@ def test_deterministic_renderer_writes_story_markdown(tmp_path):
     assert "信息边界" in text
     assert "机会成本" in text
     assert "行动可逆性" in text
+    assert "共同现实" in text
 
 
 def test_render_payload_contains_render_canon(tmp_path):
@@ -45,8 +46,10 @@ def test_render_payload_contains_render_canon(tmp_path):
     assert any(frame["epistemic_boundary"] for frame in payload["story"])
     assert payload["opportunity_trace"]
     assert payload["reversibility_trace"]
+    assert payload["common_ground_trace"]
     assert any(frame["opportunity_cost"] for frame in payload["story"])
     assert any(frame["reversibility"] for frame in payload["story"])
+    assert any(frame["common_ground"] for frame in payload["story"])
     assert "affordance_width" in payload["story"][0]["viability"]
 
 
@@ -66,6 +69,7 @@ def test_yellow_sign_render_payload_inherits_case_ledger(tmp_path):
     assert payload["attention_trace"]
     assert payload["opportunity_trace"]
     assert payload["reversibility_trace"]
+    assert payload["common_ground_trace"]
     assert payload["memory_trace"]
     assert any("case_memory_contamination" in item["reconstruction_biases"] for item in payload["memory_trace"])
     assert any(item["label"] == "黄漆符号" for item in payload["case_ledger"]["evidence_items"])
@@ -79,6 +83,7 @@ def test_yellow_sign_render_payload_inherits_case_ledger(tmp_path):
     assert "注意力漂移" in text
     assert "机会成本" in text
     assert "行动可逆性" in text
+    assert "共同现实" in text
     assert "地点耦合" in text
     assert "证据可达性" in text
     assert "案件记忆" in text
@@ -162,6 +167,7 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert "attention_trace" in body
     assert "opportunity_trace" in body
     assert "reversibility_trace" in body
+    assert "common_ground_trace" in body
     assert "memory_trace" in body
     assert "changed evidence accessibility state" in body
     assert "changed location-evidence coupling state" in body
@@ -172,4 +178,5 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert "changed attention drift state" in body
     assert "changed opportunity cost state" in body
     assert "changed action reversibility state" in body
+    assert "changed common ground state" in body
     assert "causes not present in viability/action/expression/recognition evidence" in body

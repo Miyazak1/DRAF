@@ -17,7 +17,10 @@ LABELS = {
     "locked-in": "锁定",
     "cold-war": "冷战",
     "repair-avoidant": "回避修复",
+    "shared": "共同现实稳定",
     "fragile": "脆弱",
+    "contested": "共同现实争夺",
+    "fractured": "共同现实断裂",
     "available": "可用",
     "restricted": "受限",
     "blocked": "被遮蔽",
@@ -136,6 +139,7 @@ def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dic
         "attention_trace": payload.get("attention", []),
         "opportunity_trace": payload.get("opportunity", []),
         "reversibility_trace": payload.get("reversibility", []),
+        "common_ground_trace": payload.get("common_ground", []),
         "memory_trace": payload.get("memory", []),
         "summary": payload.get("summary"),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
@@ -156,6 +160,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
     attention_trace = render_payload.get("attention_trace", []) or []
     opportunity_trace = render_payload.get("opportunity_trace", []) or []
     reversibility_trace = render_payload.get("reversibility_trace", []) or []
+    common_ground_trace = render_payload.get("common_ground_trace", []) or []
     memory_trace = render_payload.get("memory_trace", []) or []
     title = canon.get("title") or "RPF 故事回放"
     lines = [
@@ -180,6 +185,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         f"- 注意力漂移：{_attention_drift_summary(attention_trace)}",
         f"- 机会成本：{_opportunity_cost_summary(opportunity_trace)}",
         f"- 行动可逆性：{_reversibility_summary(reversibility_trace)}",
+        f"- 共同现实：{_common_ground_summary(common_ground_trace)}",
         f"- 地点耦合：{_location_coupling_summary(inquiry_trace)}",
         f"- 证据可达性：{_evidence_access_summary(inquiry_trace)}",
         f"- 案件记忆：{_case_memory_summary(memory_trace)}",
@@ -373,6 +379,19 @@ def _reversibility_summary(reversibility_trace: list[dict[str, Any]]) -> str:
     )
 
 
+def _common_ground_summary(common_ground_trace: list[dict[str, Any]]) -> str:
+    if not common_ground_trace:
+        return "-"
+    latest = common_ground_trace[-1]
+    return (
+        f"{_label(latest.get('state', '-'))}；"
+        f"互相可读性 {_fmt(latest.get('mutual_legibility'))}，"
+        f"解释裂缝 {_fmt(latest.get('interpretive_gap'))}，"
+        f"修复抓手 {_fmt(latest.get('repair_handle_width'))}，"
+        f"主导框架 {_label(latest.get('dominant_frame', '-'))}"
+    )
+
+
 def _case_memory_summary(memory_trace: list[dict[str, Any]]) -> str:
     case_memories = [
         item
@@ -476,6 +495,7 @@ def llm_markdown(
                 "attention_trace",
                 "opportunity_trace",
                 "reversibility_trace",
+                "common_ground_trace",
                 "memory_trace",
             ],
             "must_not_invent": [
@@ -502,6 +522,7 @@ def llm_markdown(
                 "changed attention drift state",
                 "changed opportunity cost state",
                 "changed action reversibility state",
+                "changed common ground state",
                 "changed case memory reconstruction",
                 "causes not present in viability/action/expression/recognition evidence",
             ],

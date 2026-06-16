@@ -25,6 +25,7 @@ class TemporalScheduler:
         attention_pressure = self._attention_pressure(state)
         opportunity_pressure = self._opportunity_pressure(state)
         reversibility_pressure = self._reversibility_pressure(state)
+        common_ground_pressure = self._common_ground_pressure(state)
         fatigue = sum(p.fatigue for p in state.processes.values()) / max(1, len(state.processes))
         recognition = max(
             (d.current_pressure for p in state.processes.values() for d in p.recognition_demands),
@@ -62,6 +63,7 @@ class TemporalScheduler:
             + attention_pressure * scene_weights.get("attention_pressure", 0.035)
             + opportunity_pressure * scene_weights.get("opportunity_pressure", 0.045)
             + reversibility_pressure * scene_weights.get("reversibility_pressure", 0.025)
+            + common_ground_pressure * scene_weights.get("common_ground_pressure", 0.052)
             + fatigue * scene_weights["mean_fatigue"]
             + scene_viability_bias
         )
@@ -78,6 +80,7 @@ class TemporalScheduler:
             + attention_pressure * micro_weights.get("attention_pressure", 0.04)
             + opportunity_pressure * micro_weights.get("opportunity_pressure", 0.032)
             + reversibility_pressure * micro_weights.get("reversibility_pressure", 0.018)
+            + common_ground_pressure * micro_weights.get("common_ground_pressure", 0.038)
             + (state.tick % 3 == 1) * micro_weights["routine_overlap_bonus"]
             + scene_score * micro_weights["scene_score"]
             + micro_viability_bias
@@ -117,6 +120,7 @@ class TemporalScheduler:
                 "attention_pressure": round(attention_pressure, 4),
                 "opportunity_pressure": round(opportunity_pressure, 4),
                 "reversibility_pressure": round(reversibility_pressure, 4),
+                "common_ground_pressure": round(common_ground_pressure, 4),
                 "mean_fatigue": round(fatigue, 4),
                 "recognition_pressure": round(recognition, 4),
                 "viability_pressure": round(viability_preview.get("viability_pressure", 0.0), 4),
@@ -218,3 +222,18 @@ class TemporalScheduler:
         crossed = float(state.relation_metrics.get("action_reversibility.threshold_crossed", 0.0) or 0.0)
         symbolic = float(state.relation_metrics.get("action_reversibility.symbolic_only", 0.0) or 0.0)
         return min(1.0, base * 0.7 + crossed * 0.55 + symbolic * 0.75)
+
+    def _common_ground_pressure(self, state: SimulationState) -> float:
+        fracture = float(state.relation_metrics.get("common_ground.fracture", 0.0) or 0.0)
+        legibility = float(state.relation_metrics.get("common_ground.mutual_legibility", 0.45) or 0.45)
+        repair_width = float(state.relation_metrics.get("common_ground.repair_handle_width", 0.5) or 0.5)
+        contested = float(state.relation_metrics.get("common_ground.state.contested", 0.0) or 0.0)
+        fractured = float(state.relation_metrics.get("common_ground.state.fractured", 0.0) or 0.0)
+        return min(
+            1.0,
+            fracture * 0.55
+            + (1.0 - legibility) * 0.25
+            + (1.0 - repair_width) * 0.2
+            + contested * 0.38
+            + fractured * 0.52,
+        )

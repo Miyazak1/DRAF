@@ -552,6 +552,7 @@ class RelationalViabilityEngine:
         traces.extend(self._opportunity_future_constraints(state))
         traces.extend(self._action_reversibility_future_constraints(state))
         traces.extend(self._epistemic_future_constraints(state))
+        traces.extend(self._common_ground_future_constraints(state))
         return traces
 
     def _opportunity_future_constraints(self, state: SimulationState) -> list[FutureConstraintTrace]:
@@ -708,6 +709,70 @@ class RelationalViabilityEngine:
                     intensity=clamp(value * 0.86),
                     persistence="decaying",
                     mechanism=f"{boundary_type} changes what future interaction can safely know or say",
+                    downstream_effects=downstream,
+                    evidence_refs=[],
+                )
+            )
+        return traces
+
+    def _common_ground_future_constraints(self, state: SimulationState) -> list[FutureConstraintTrace]:
+        specs = [
+            (
+                "fracture",
+                clamp(state.relation_metrics.get("common_ground.fracture", 0.0)),
+                "common_ground_fracture_constraint",
+                ["recognition_access", "repair_availability", "speech_access"],
+                ["future speech must first establish what counts as the same event"],
+                "operative",
+            ),
+            (
+                "contested",
+                clamp(state.relation_metrics.get("common_ground.state.contested", 0.0)),
+                "common_ground_contested_constraint",
+                ["truth_integration", "relation_continuation", "memory_integration"],
+                ["the same scene can be used as evidence for incompatible relation realities"],
+                "decaying",
+            ),
+            (
+                "fractured",
+                clamp(state.relation_metrics.get("common_ground.state.fractured", 0.0)),
+                "common_ground_fractured_constraint",
+                ["repair_availability", "identity_continuity", "recognition_access"],
+                ["direct repair lacks a stable shared reality to repair from"],
+                "operative",
+            ),
+            (
+                "low_repair_handle",
+                clamp(1.0 - float(state.relation_metrics.get("common_ground.repair_handle_width", 0.5) or 0.5)),
+                "common_ground_low_repair_handle_constraint",
+                ["repair_availability", "speech_access"],
+                ["future repair has to create a usable handle before it can resolve the content"],
+                "decaying",
+            ),
+            (
+                "low_mutual_legibility",
+                clamp(1.0 - float(state.relation_metrics.get("common_ground.mutual_legibility", 0.45) or 0.45)),
+                "common_ground_low_legibility_constraint",
+                ["recognition_access", "truth_integration"],
+                ["future signals are more likely to be read as belonging to different realities"],
+                "decaying",
+            ),
+        ]
+        traces: list[FutureConstraintTrace] = []
+        for index, (slug, value, constraint_type, requirements, downstream, persistence) in enumerate(specs, start=1):
+            if value <= 0.06:
+                continue
+            traces.append(
+                FutureConstraintTrace(
+                    constraint_id=f"fc-cg-{index:02d}-{slug}",
+                    constraint_type=constraint_type,
+                    source_layer="common_ground",
+                    source_ref_id=f"common_ground.{slug}",
+                    affected_processes=sorted(state.processes),
+                    constrained_requirements=requirements,
+                    intensity=clamp(value * 0.82),
+                    persistence=persistence,
+                    mechanism=f"{slug} in shared reality changes what future repair and recognition can use as common fact",
                     downstream_effects=downstream,
                     evidence_refs=[],
                 )

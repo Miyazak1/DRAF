@@ -212,6 +212,8 @@ class RelevanceLandscapeEngine:
                 updates.extend(self._reversibility_updates(state, event, refs))
             elif event_type == "EpistemicBoundaryEvent":
                 updates.extend(self._epistemic_updates(state, event, refs))
+            elif event_type == "CommonGroundEvent":
+                updates.extend(self._common_ground_updates(state, event, refs))
         return [update for update in updates if update.previous_value != update.new_value]
 
     def _affordance_updates(
@@ -515,6 +517,41 @@ class RelevanceLandscapeEngine:
                     [event.event_type],
                 )
             )
+        return updates
+
+    def _common_ground_updates(
+        self,
+        state: SimulationState,
+        event: Event,
+        refs: list[str],
+    ) -> list[RelevanceShift]:
+        common_state = str(event.payload.get("state", ""))
+        gap = self._payload_float(event, "interpretive_gap")
+        repair_width = self._payload_float(event, "repair_handle_width")
+        legibility = self._payload_float(event, "mutual_legibility")
+        pressure = clamp(gap * 0.45 + (1.0 - repair_width) * 0.3 + (1.0 - legibility) * 0.25)
+        if pressure <= 0.02:
+            return []
+        marker_weights = {
+            "shared": {"repair_opening": 0.018},
+            "fragile": {"repair_opening": 0.014, "recognition_claim": 0.012},
+            "contested": {"recognition_claim": 0.024, "double_bind": 0.014},
+            "fractured": {"double_bind": 0.026, "exit_threat": 0.018, "recognition_claim": 0.012},
+        }.get(common_state, {"recognition_claim": 0.012})
+        updates: list[RelevanceShift] = []
+        for process_id in state.processes:
+            for marker, weight in marker_weights.items():
+                updates.append(
+                    self._delta(
+                        state,
+                        process_id,
+                        marker,
+                        pressure * weight,
+                        f"common ground {common_state} makes {marker} relevant",
+                        refs,
+                        [event.event_type],
+                    )
+                )
         return updates
 
     def _coalesce(self, updates: list[RelevanceShift]) -> list[RelevanceShift]:

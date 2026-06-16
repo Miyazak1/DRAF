@@ -73,6 +73,7 @@ def next_render_segment(
         "attention_trace": payload.get("attention", []),
         "opportunity_trace": payload.get("opportunity", []),
         "reversibility_trace": payload.get("reversibility", []),
+        "common_ground_trace": payload.get("common_ground", []),
         "memory_trace": payload.get("memory", []),
         "summary": payload.get("summary", {}),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
@@ -180,6 +181,9 @@ def deterministic_segment_markdown(segment: dict[str, Any]) -> str:
         epistemic = _epistemic_brief(frame)
         if epistemic:
             lines.append(f"  - 信息边界：{epistemic}")
+        common_ground = _common_ground_brief(frame)
+        if common_ground:
+            lines.append(f"  - 共同现实：{common_ground}")
     return "\n".join(lines).strip() + "\n"
 
 
@@ -256,6 +260,23 @@ def _epistemic_brief(frame: dict[str, Any]) -> str:
     return f"{label}，{focus}处于{state}，可说宽度 {speakability}"
 
 
+def _common_ground_brief(frame: dict[str, Any]) -> str:
+    common_ground = frame.get("common_ground", {}) or {}
+    if not common_ground:
+        return ""
+    state = common_ground.get("state_label") or common_ground.get("state")
+    frame_label = common_ground.get("dominant_frame_label") or common_ground.get("dominant_frame")
+    try:
+        legibility = f"{float(common_ground.get('mutual_legibility') or 0.0):.2f}"
+    except (TypeError, ValueError):
+        legibility = "-"
+    try:
+        repair_width = f"{float(common_ground.get('repair_handle_width') or 0.0):.2f}"
+    except (TypeError, ValueError):
+        repair_width = "-"
+    return f"{state}，互相可读性 {legibility}，修复抓手 {repair_width}，主导框架：{frame_label}"
+
+
 def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str, Any]:
     previous = load_render_segments(output_dir)[-2:]
     return {
@@ -299,6 +320,11 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             for item in segment.get("reversibility_trace", [])[-16:]
             if int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
         ],
+        "common_ground_trace": [
+            item
+            for item in segment.get("common_ground_trace", [])[-16:]
+            if int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
+        ],
         "previous_story_tail": [
             {
                 "segment_id": item.get("segment_id"),
@@ -336,6 +362,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "attention_trace_is_authoritative": True,
             "opportunity_trace_is_authoritative": True,
             "reversibility_trace_is_authoritative": True,
+            "common_ground_trace_is_authoritative": True,
             "case_memory_trace_is_authoritative": True,
             "do_not_add_case_facts_evidence_witnesses_or_culprits": True,
             "if_multiple_frames_have_the_same_summary": "write them as a sustained pattern with small pressure changes; do not restage the same dialogue or objects repeatedly",

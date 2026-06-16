@@ -36,7 +36,10 @@ ZH = {
     "unspeakable": "变得不可说",
     "granted": "承认成功",
     "partial": "部分承认",
+    "shared": "共同现实稳定",
     "fragile": "脆弱",
+    "contested": "共同现实争夺",
+    "fractured": "共同现实断裂",
     "locked-in": "锁定",
     "cold-war": "冷战",
     "repair-avoidant": "回避修复",
@@ -181,6 +184,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "expectation": _read_json(run_dir / "expectation_trace.json", []),
         "memory": _read_json(run_dir / "memory_trace.json", []),
         "binding": _read_json(run_dir / "binding_trace.json", []),
+        "common_ground": _read_json(run_dir / "common_ground_trace.json", []),
         "epistemic": _read_json(run_dir / "epistemic_trace.json", []),
         "environment": _read_json(run_dir / "environment_trace.json", []),
         "disposition": _read_json(run_dir / "disposition_trace.json", []),
@@ -447,6 +451,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "expectation_trace.json",
         "memory_trace.json",
         "binding_trace.json",
+        "common_ground_trace.json",
         "epistemic_trace.json",
         "environment_trace.json",
         "disposition_trace.json",
@@ -486,6 +491,10 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
     epistemic_by_tick: dict[int, list[dict[str, Any]]] = {}
     for epistemic_update in payload.get("epistemic", []):
         epistemic_by_tick.setdefault(int(epistemic_update.get("tick", 0)), []).append(epistemic_update)
+    common_ground_by_tick = {
+        int(item.get("tick", 0)): item
+        for item in payload.get("common_ground", [])
+    }
     daily_ecology_by_tick = {
         int(item.get("tick", 0)): item
         for item in payload.get("environment", [])
@@ -514,6 +523,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
         opportunity_cost = _opportunity_summary(opportunity_by_tick.get(tick_index, []))
         reversibility = _reversibility_summary(reversibility_by_tick.get(tick_index, []))
         epistemic_boundary = _epistemic_summary(epistemic_by_tick.get(tick_index, []))
+        common_ground = _common_ground_summary(common_ground_by_tick.get(tick_index, {}))
         daily_ecology = daily_ecology_by_tick.get(tick_index, {})
         memories = memories_by_tick.get(tick_index, [])
         fates = fate_by_tick.get(tick_index, [])
@@ -539,6 +549,8 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
             summary_parts.append(_reversibility_sentence(reversibility))
         if epistemic_boundary:
             summary_parts.append(_epistemic_sentence(epistemic_boundary))
+        if common_ground:
+            summary_parts.append(_common_ground_sentence(common_ground))
         if daily_ecology:
             summary_parts.append(_daily_ecology_sentence(daily_ecology))
         if recognition:
@@ -571,6 +583,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "opportunity_cost": opportunity_cost,
                 "reversibility": reversibility,
                 "epistemic_boundary": epistemic_boundary,
+                "common_ground": common_ground,
                 "daily_ecology": daily_ecology,
                 "memory_count": len(memories),
                 "case_memory_count": _case_memory_count(memories),
@@ -868,6 +881,32 @@ def _epistemic_sentence(epistemic: dict[str, Any]) -> str:
     speakability = _fmt_report(epistemic.get("speakability_width"))
     risk = _fmt_report(epistemic.get("disclosure_risk"))
     return f"信息边界形成{label}：{focus}处于{state}，可说宽度 {speakability}，披露风险 {risk}。"
+
+
+def _common_ground_summary(update: dict[str, Any]) -> dict[str, Any]:
+    if not update:
+        return {}
+    return {
+        "state": update.get("state"),
+        "state_label": _zh(update.get("state", "")),
+        "mutual_legibility": update.get("mutual_legibility"),
+        "interpretive_gap": update.get("interpretive_gap"),
+        "shared_definition_width": update.get("shared_definition_width"),
+        "repair_handle_width": update.get("repair_handle_width"),
+        "dominant_frame": update.get("dominant_frame"),
+        "dominant_frame_label": _zh(update.get("dominant_frame", "")),
+        "contested_fact": update.get("contested_fact"),
+        "consequence": update.get("consequence"),
+    }
+
+
+def _common_ground_sentence(common_ground: dict[str, Any]) -> str:
+    state = common_ground.get("state_label") or _zh(common_ground.get("state", ""))
+    legibility = _fmt_report(common_ground.get("mutual_legibility"))
+    repair_width = _fmt_report(common_ground.get("repair_handle_width"))
+    frame = common_ground.get("dominant_frame_label") or _zh(common_ground.get("dominant_frame", ""))
+    contested = common_ground.get("contested_fact") or "当前事实"
+    return f"共同现实变为{state}：围绕{contested}，互相可读性 {legibility}，修复抓手宽度 {repair_width}；主导框架是{frame}。"
 
 
 def _daily_ecology_sentence(daily: dict[str, Any]) -> str:
