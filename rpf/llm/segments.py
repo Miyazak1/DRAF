@@ -81,6 +81,7 @@ def next_render_segment(
         "memory_trace": payload.get("memory", []),
         "local_world_view": payload.get("local_world_view", {}),
         "object_registry_view": payload.get("object_registry_view", {}),
+        "world_detail_context": _world_detail_context_for_ticks(payload.get("world_detail_context", {}), source_ticks),
         "summary": payload.get("summary", {}),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
         "person_views": payload.get("derived_views", {}).get("person_views", {}),
@@ -577,6 +578,16 @@ def _outline_why_it_mattered(segment: dict[str, Any], frames: list[dict[str, Any
     objects = _active_registry_labels(segment.get("object_registry_view", {}) or {})
     if objects:
         parts.append(f"可用的物质锚点包括：{'，'.join(objects[:4])}。")
+    world_details = segment.get("world_detail_context", {}) or {}
+    details = world_details.get("ephemeral_details", []) or []
+    profiles = world_details.get("soft_world_profiles", []) or []
+    if details:
+        detail_texts = [str(item.get("text") or item.get("detail_id")) for item in details[:3]]
+        parts.append(f"注意力只唤醒了当前可感知细节：{'；'.join(detail_texts)}。")
+    if profiles:
+        tags = _unique_nonempty(tag for item in profiles for tag in (item.get("sensory_tags", []) or []))
+        if tags:
+            parts.append(f"稳定的本地质地被压缩为：{'，'.join(tags[:5])}。")
     beats = segment.get("narrative_beats", []) or []
     if beats:
         beat_types = _unique_nonempty(beat.get("beat_type") for beat in beats)
@@ -808,6 +819,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
         ],
         "local_world_view": segment.get("local_world_view", {}),
         "object_registry_view": segment.get("object_registry_view", {}),
+        "world_detail_context": segment.get("world_detail_context", {}),
         "narrative_beats": segment.get("narrative_beats", []),
         "previous_story_tail": [
             {
@@ -849,6 +861,8 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "common_ground_trace_is_authoritative": True,
             "local_world_view_is_authoritative": True,
             "object_registry_view_is_authoritative": True,
+            "world_detail_context_is_attention_gated": True,
+            "world_detail_context_is_non_causal_render_context": True,
             "narrative_beats_are_authoritative": True,
             "case_memory_trace_is_authoritative": True,
             "do_not_add_case_facts_evidence_witnesses_or_culprits": True,
@@ -907,6 +921,43 @@ def _beats_for_ticks(beats: list[dict[str, Any]], source_ticks: list[Any]) -> li
             continue
         selected.append(beat)
     return selected
+
+
+def _world_detail_context_for_ticks(context: dict[str, Any], source_ticks: list[Any]) -> dict[str, Any]:
+    wanted = {int(tick) for tick in source_ticks if str(tick).isdigit()}
+    if not context:
+        return {}
+    focuses = [
+        item
+        for item in context.get("attention_focuses", []) or []
+        if int(item.get("tick", 0) or 0) in wanted
+    ]
+    focus_ids = {item.get("focus_id") for item in focuses}
+    scope_ids = {item.get("scope_id") for item in focuses}
+    details = [
+        item
+        for item in context.get("ephemeral_details", []) or []
+        if int(item.get("tick", 0) or 0) in wanted
+    ]
+    gaps = [
+        item
+        for item in context.get("detail_gaps", []) or []
+        if item.get("focus_id") in focus_ids
+    ]
+    profiles = [
+        item
+        for item in context.get("soft_world_profiles", []) or []
+        if item.get("scope_id") in scope_ids
+    ]
+    return {
+        "rules": context.get("rules", {}),
+        "attention_focuses": focuses,
+        "detail_gaps": gaps,
+        "ephemeral_details": details,
+        "soft_world_profiles": profiles,
+        "causal_world_details": [],
+        "rejected_details": context.get("rejected_details", []),
+    }
 
 
 def _minimum_segment_reached(frames: list[dict[str, Any]], policy: dict[str, Any]) -> bool:

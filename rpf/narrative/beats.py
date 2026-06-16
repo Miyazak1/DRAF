@@ -9,8 +9,15 @@ def build_narrative_beats(payload: dict[str, Any]) -> list[dict[str, Any]]:
     story = payload.get("story", []) or []
     timeline_by_tick = _timeline_event_ids_by_tick(payload.get("timeline", []) or [])
     registry = payload.get("object_registry_view", {}) or {}
+    details_by_tick = _world_detail_ids_by_tick(payload.get("world_detail_context", {}) or {})
     raw_beats = [
-        _beat_from_frame(index, frame, timeline_by_tick.get(int(frame.get("tick", 0) or 0), []), registry)
+        _beat_from_frame(
+            index,
+            frame,
+            timeline_by_tick.get(int(frame.get("tick", 0) or 0), []),
+            registry,
+            details_by_tick,
+        )
         for index, frame in enumerate(story, start=1)
         if frame.get("summary")
     ]
@@ -22,6 +29,7 @@ def _beat_from_frame(
     frame: dict[str, Any],
     source_events: list[str],
     registry: dict[str, Any],
+    details_by_tick: dict[int, list[str]],
 ) -> dict[str, Any]:
     tick = int(frame.get("tick", 0) or 0)
     action = frame.get("action", {}) or {}
@@ -54,7 +62,7 @@ def _beat_from_frame(
         "object_refs": object_refs,
         "record_refs": record_refs,
         "evidence_refs": evidence_refs,
-        "local_detail_refs": _local_detail_refs(frame),
+        "local_detail_refs": _local_detail_refs(frame, details_by_tick.get(tick, [])),
         "obstruction": obstruction,
         "observation": observation,
         "recognition_implication": _recognition_implication(recognition),
@@ -233,14 +241,26 @@ def _registry_refs_for_frame(registry: dict[str, Any], inquiry: dict[str, Any]) 
     return objects, records, evidence
 
 
-def _local_detail_refs(frame: dict[str, Any]) -> list[str]:
+def _local_detail_refs(frame: dict[str, Any], world_detail_ids: list[str]) -> list[str]:
     locality = frame.get("locality", {}) or {}
     refs = []
     if locality.get("location_id"):
         refs.append(f"location:{locality['location_id']}")
     if locality.get("route_id"):
         refs.append(f"route:{locality['route_id']}")
+    refs.extend(f"detail:{detail_id}" for detail_id in world_detail_ids)
     return refs
+
+
+def _world_detail_ids_by_tick(context: dict[str, Any]) -> dict[int, list[str]]:
+    result: dict[int, list[str]] = {}
+    for detail in context.get("ephemeral_details", []) or []:
+        detail_id = detail.get("detail_id")
+        if not detail_id:
+            continue
+        tick = int(detail.get("tick", 0) or 0)
+        result.setdefault(tick, []).append(str(detail_id))
+    return result
 
 
 def _participants(frame: dict[str, Any]) -> list[str]:

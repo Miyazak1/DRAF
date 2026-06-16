@@ -713,6 +713,7 @@ h3 {
 .trace-list,
 .event-list,
 .beat-list,
+.world-detail-list,
 .story-list {
   display: grid;
   gap: 9px;
@@ -791,6 +792,7 @@ h3 {
 .event,
 .tick-detail,
 .beat-card,
+.world-detail-card,
 .story-card {
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -905,6 +907,35 @@ h3 {
   color: var(--muted);
   font-size: 12px;
   margin-bottom: 5px;
+}
+
+.world-detail-panel {
+  margin-top: 12px;
+}
+
+.world-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.world-detail-grid h4 {
+  margin-bottom: 8px;
+}
+
+.world-detail-card {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.world-detail-card small {
+  color: var(--muted);
+}
+
+.world-detail-card p {
+  color: #26342f;
+  line-height: 1.55;
 }
 
 .local-world-summary strong {
@@ -1348,6 +1379,7 @@ h3 {
     .case-grid,
     .local-world-summary,
     .local-world-grid,
+    .world-detail-grid,
     .paper-grid,
     .layer-list,
     .beat-grid,

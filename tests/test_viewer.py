@@ -64,6 +64,9 @@ def test_viewer_static_contains_viability_dynamics_panel():
     assert "叙事节拍" in html
     assert "narrativeBeats" in html
     assert "renderNarrativeBeats" in js
+    assert "注意力唤醒的世界细节" in html
+    assert "worldDetailPanel" in html
+    assert "renderWorldDetails" in js
 
 
 def test_scenario_catalog_exposes_example_scenarios():

@@ -337,6 +337,60 @@ const ZH = {
   institutional_silencing: "制度静默",
   public_exposure_forces_movement: "公共曝光推动调查",
   procedural_force_opens_access: "程序力量打开权限",
+  body_load_anchor: "身体负荷锚点",
+  resource_surface: "资源表面",
+  room_pressure: "房间压力",
+  record_surface: "记录表面",
+  evidence_condition: "证据状态",
+  inspection_light: "审视光线",
+  sight_lines: "视线关系",
+  sound_leakage: "声音泄漏",
+  exposure_boundary: "暴露边界",
+  interpersonal_distance: "人际距离",
+  speech_surface: "话语表面",
+  audience_presence: "观众在场",
+  route_surface: "路线表面",
+  exit_visibility: "出口可见性",
+  blocking_conditions: "阻断条件",
+  memory_site_anchor: "记忆地点锚点",
+  sensory_cue: "感官线索",
+  avoidance_pressure: "回避压力",
+  fatigue_surface: "疲惫表面",
+  stale_air: "滞重空气",
+  paper_trace: "纸面痕迹",
+  thin_walls: "薄墙",
+  listening_pressure: "被听见的压力",
+  held_distance: "被保持的距离",
+  speech_pressure: "话语压力",
+  route_friction: "路线摩擦",
+  exit_line: "离开线",
+  memory_residue: "记忆残留",
+  returning_cue: "回返线索",
+  compressed: "压缩",
+  draining: "耗竭",
+  procedural: "程序化",
+  watched: "被观看",
+  narrow: "狭窄",
+  hesitant: "迟疑",
+  charged: "带电",
+  emergent: "刚浮现",
+  recurring: "反复出现",
+  sight: "视觉",
+  sound: "声音",
+  distance: "距离",
+  route: "路线",
+  body: "身体",
+  gaze: "凝视",
+  listening: "倾听",
+  touch: "触碰",
+  smell: "嗅觉",
+  search: "寻找",
+  memory_intrusion: "记忆侵入",
+  practical_use: "实际使用",
+  threat_monitoring: "威胁监测",
+  repair_attempt: "修复尝试",
+  evidence_review: "证据审阅",
+  route_assessment: "路线评估",
 };
 
 function zh(value) {
@@ -394,6 +448,7 @@ function renderAll() {
   renderStory();
   renderNarrativeBeats();
   renderLocalWorld();
+  renderWorldDetails();
   renderLiveStory();
   renderEvolution();
   renderViabilityDynamics();
@@ -791,6 +846,64 @@ function renderLocalWorld() {
       ${localWorldGroup("本地约束", view.local_constraints || [], constraintCard)}
     </div>
   `;
+}
+
+function renderWorldDetails() {
+  const target = $("worldDetailPanel");
+  if (!target) return;
+  const context = DATA.world_detail_context || {};
+  const focuses = context.attention_focuses || [];
+  const details = context.ephemeral_details || [];
+  const profiles = context.soft_world_profiles || [];
+  if (!focuses.length && !details.length && !profiles.length) {
+    target.innerHTML = "<div class=\"trace\"><small>当前没有达到门控条件的世界细节。没有注意力，就不展开世界。</small></div>";
+    return;
+  }
+  target.innerHTML = `
+    <div class="world-detail-grid">
+      <div>
+        <h4>注意力焦点</h4>
+        ${focuses.slice(-6).map((item) => `
+          <article class="world-detail-card">
+            <strong>第 ${escapeHtml(item.tick ?? "-")} 步 · ${escapeHtml(item.focus_label || zh(item.dominant_focus))}</strong>
+            <small>${escapeHtml(item.process_id || "-")} / ${escapeHtml(item.scope_id || "-")} / 强度 ${fmt(item.intensity)}</small>
+            <p>${escapeHtml(attentionFocusText(item))}</p>
+            ${sourceLinks(item.evidence)}
+          </article>
+        `).join("")}
+      </div>
+      <div>
+        <h4>当前临时细节</h4>
+        ${details.slice(-6).map((item) => `
+          <article class="world-detail-card">
+            <strong>${escapeHtml(zh(item.sensory_channel))} · ${escapeHtml(item.scope_id || "-")}</strong>
+            <p>${escapeHtml(item.text || "-")}</p>
+            <small>仅用于当前渲染，不进入因果状态</small>
+          </article>
+        `).join("")}
+      </div>
+      <div>
+        <h4>压缩质地</h4>
+        ${profiles.slice(-4).map((item) => `
+          <article class="world-detail-card">
+            <strong>${escapeHtml(item.scope_id || "-")} · ${escapeHtml(zh(item.stability))}</strong>
+            <small>新鲜度 ${fmt(item.freshness)}</small>
+            <div class="tags">
+              ${(item.sensory_tags || []).concat(item.atmosphere_tags || []).slice(0, 8).map((tag) => `<span class="tag">${escapeHtml(zh(tag))}</span>`).join("")}
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function attentionFocusText(item) {
+  const process = item.process_id || "某一方";
+  const focus = item.focus_label || zh(item.dominant_focus);
+  const mode = zh(item.attention_mode || "gaze");
+  const scope = item.scope_id || "当前场景";
+  return `${process} 的注意力以${mode}方式落到${scope}，${focus}不再只是背景。`;
 }
 
 function localWorldGroup(title, rows, mapper) {

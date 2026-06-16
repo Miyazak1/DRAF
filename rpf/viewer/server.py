@@ -20,6 +20,7 @@ from rpf.engine.metrics import compute_metrics
 from rpf.narrative.beats import build_narrative_beats
 from rpf.scenarios.loader import load_scenario
 from rpf.storage import RunStore, configured_run_store
+from rpf.world.details import build_world_detail_context
 
 
 STATIC_DIR = Path(__file__).with_name("static")
@@ -210,6 +211,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
     payload["story"] = build_story_frames(payload)
     payload["local_world_view"] = build_local_world_view(payload)
     payload["object_registry_view"] = build_object_registry_view(payload)
+    payload["world_detail_context"] = build_world_detail_context(payload)
     payload["narrative_beats"] = build_narrative_beats(payload)
     payload["summary"] = {
         "event_count": metrics.get("event_count", len(timeline)),
@@ -291,6 +293,7 @@ def build_viewer_payload_from_database_records(data: dict[str, Any]) -> dict[str
     payload["story"] = build_story_frames(payload)
     payload["local_world_view"] = build_local_world_view(payload)
     payload["object_registry_view"] = build_object_registry_view(payload)
+    payload["world_detail_context"] = build_world_detail_context(payload)
     payload["narrative_beats"] = build_narrative_beats(payload)
     payload["summary"] = {
         "event_count": metrics.get("event_count", len(events)),
@@ -660,6 +663,9 @@ def _database_export_files(payload: dict[str, Any], report: str) -> dict[str, st
         "route_selection_trace.json": payload.get("route_selection", []),
         "audience_exposure_trace.json": payload.get("audience_exposure", []),
         "narrative_beats.json": payload.get("narrative_beats", []),
+        "world_detail_context.json": payload.get("world_detail_context", {}),
+        "soft_world_profiles.json": payload.get("world_detail_context", {}).get("soft_world_profiles", []),
+        "detail_gap_trace.json": payload.get("world_detail_context", {}).get("detail_gaps", []),
         "render_repetition_trace.json": payload.get("render_repetition", []),
     }
     files: dict[str, str] = {
@@ -731,6 +737,9 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "route_selection_trace.json",
         "audience_exposure_trace.json",
         "narrative_beats.json",
+        "world_detail_context.json",
+        "soft_world_profiles.json",
+        "detail_gap_trace.json",
         "irreversibility_report.json",
         "aggregation_traces.json",
     ]
