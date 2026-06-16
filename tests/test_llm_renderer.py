@@ -295,6 +295,62 @@ def test_segment_renderer_accepts_valid_segment_json(tmp_path, monkeypatch):
     assert records[0]["validation"]["violations"] == []
 
 
+def test_deterministic_segment_uses_storyteller_outline(tmp_path):
+    scenario_path = Path("examples/yellow_sign_cold_case.yaml")
+    sim = Simulator.from_scenario(load_scenario(scenario_path), scenario_path, seed=42)
+    output_dir = tmp_path / "run"
+    sim.run(steps=6, output_dir=output_dir)
+    segment = segments.next_render_segment(output_dir, force=True)
+
+    result = segments.render_and_append_segment(output_dir, segment, use_llm=False)
+    text = result["text"]
+
+    assert result["mode"] == "deterministic"
+    assert "### 发生了什么" in text
+    assert "### 为什么重要" in text
+    assert "### 承认与误认" in text
+    assert "### 关系移动" in text
+    assert "### 记忆与不可逆" in text
+    assert "### 延续压力" in text
+    assert "来源 tick:" in text
+    assert "本段闭合原因是" in text
+    assert "关系阶段现在是" in text
+
+
+def test_deterministic_segment_compresses_repeated_frame_patterns():
+    frame = {
+        "tick": 1,
+        "tick_type": "micro_interaction",
+        "phase": "fragile",
+        "summary": "同一沉默结构持续。",
+        "participants": {"source": {"name": "甲"}, "target": {"name": "乙"}},
+        "action": {"action_id": "inhibited_omission", "action_mode": "inhibited"},
+        "expression": {"expression_id": "charged_silence", "expression_mode": "silence"},
+        "recognition": {"outcome": "postponed"},
+        "memory_count": 0,
+        "fate_count": 0,
+    }
+    frames = [{**frame, "tick": 1}, {**frame, "tick": 2}, {**frame, "tick": 3}]
+    segment = {
+        "segment_id": "seg-0001",
+        "segment_index": 1,
+        "tick_start": 1,
+        "tick_end": 3,
+        "boundary_reason": "弱闭合：连续微交互达到 3 次",
+        "source_ticks": [1, 2, 3],
+        "simulated_seconds": 180,
+        "frames": frames,
+        "relationship_view": {"phase_label": "fragile", "recurring_rpps": ["repair_avoidance"]},
+        "render_canon": {"title": "测试"},
+    }
+
+    text = segments.deterministic_segment_markdown(segment)
+
+    assert "第 1 至 3 步" in text
+    assert "同一结构连续出现 3 次" in text
+    assert "重复结构没有被当作新剧情处理" in text
+
+
 def test_segment_guard_rejects_previous_story_repetition(tmp_path, monkeypatch):
     previous_text = "## 第 1 段：旧段落\n\n" + "这是一段已经写过的内容。" * 12 + "\n\n*来源 tick: 1-3*"
     (tmp_path / "rendered_segments.json").write_text(

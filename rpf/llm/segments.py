@@ -466,15 +466,66 @@ def _unique_nonempty(values: Any) -> list[str]:
 
 
 def deterministic_segment_markdown(segment: dict[str, Any]) -> str:
-    title = f"## 第 {segment['segment_index']} 段：第 {segment['tick_start']} 至 {segment['tick_end']} 步"
+    frames = segment.get("frames", []) or []
+    title = f"## 第 {segment['segment_index']} 段：{_outline_title(segment)}"
     lines = [
         title,
         "",
-        f"- 闭合原因：{segment['boundary_reason']}",
-        f"- 来源 tick：{', '.join(str(tick) for tick in segment['source_ticks'])}",
+        "### 发生了什么",
         "",
+        *_outline_what_happened(frames),
+        "",
+        "### 为什么重要",
+        "",
+        _outline_why_it_mattered(segment, frames),
+        "",
+        "### 承认与误认",
+        "",
+        _outline_recognition(frames),
+        "",
+        "### 关系移动",
+        "",
+        _outline_relationship_movement(segment, frames),
+        "",
+        "### 记忆与不可逆",
+        "",
+        _outline_memory_and_irreversibility(frames),
+        "",
+        "### 延续压力",
+        "",
+        _outline_carry_forward_pressure(segment, frames),
+        "",
+        f"（来源 tick: {', '.join(str(tick) for tick in segment['source_ticks'])}）",
     ]
-    for frame_group in _compressed_frame_groups(segment.get("frames", [])):
+    return "\n".join(line for line in lines if line is not None).strip() + "\n"
+
+
+def _outline_title(segment: dict[str, Any]) -> str:
+    reason = str(segment.get("boundary_reason") or "")
+    if "记忆" in reason:
+        label = "记忆重新压回现场"
+    elif "命运" in reason or "不可逆" in reason:
+        label = "不可逆的门槛被触动"
+    elif "关系阶段" in reason:
+        label = "关系阶段发生移动"
+    elif "承认" in reason or "误认" in reason:
+        label = "承认问题浮出表面"
+    elif "场景" in reason:
+        label = "场景结晶"
+    elif "微交互" in reason:
+        label = "微交互连续成形"
+    elif "潜伏" in reason:
+        label = "沉默时间开始累积"
+    else:
+        label = "压力闭合为一段"
+    return f"{label}（第 {segment['tick_start']} 至 {segment['tick_end']} 步）"
+
+
+def _outline_what_happened(frames: list[dict[str, Any]]) -> list[str]:
+    if not frames:
+        return ["本段没有可见场景帧；渲染回退为结构性摘要。"]
+    lines: list[str] = []
+    for frame_group in _compressed_frame_groups(frames):
         frame = frame_group["frame"]
         participants = frame.get("participants", {})
         names = "、".join(
@@ -485,28 +536,111 @@ def deterministic_segment_markdown(segment: dict[str, Any]) -> str:
         tick_label = str(frame.get("tick"))
         if frame_group["count"] > 1:
             tick_label = f"{frame_group['tick_start']} 至 {frame_group['tick_end']}"
+        prefix = f"第 {tick_label} 步"
         if names:
-            lines.append(f"第 {tick_label} 步，{names}：{frame.get('summary', '')}")
-        else:
-            lines.append(f"第 {tick_label} 步：{frame.get('summary', '')}")
+            prefix += f"，{names}"
+        lines.append(f"{prefix}：{frame.get('summary', '')}")
         if frame_group["count"] > 1:
-            lines.append(f"  - 重复模式：该结构连续出现 {frame_group['count']} 次，渲染时应压缩为关系模式持续，而不是重演同一场面。")
-        viability = _viability_brief(frame)
-        if viability:
-            lines.append(f"  - 底层依据：{viability}")
-        opportunity = _opportunity_brief(frame)
-        if opportunity:
-            lines.append(f"  - 机会成本：{opportunity}")
-        reversibility = _reversibility_brief(frame)
-        if reversibility:
-            lines.append(f"  - 行动可逆性：{reversibility}")
-        epistemic = _epistemic_brief(frame)
-        if epistemic:
-            lines.append(f"  - 信息边界：{epistemic}")
-        common_ground = _common_ground_brief(frame)
-        if common_ground:
-            lines.append(f"  - 共同现实：{common_ground}")
-    return "\n".join(lines).strip() + "\n"
+            lines.append(f"同一结构连续出现 {frame_group['count']} 次。这里应被理解为模式持续，而不是新的独立场面。")
+    return lines
+
+
+def _outline_why_it_mattered(segment: dict[str, Any], frames: list[dict[str, Any]]) -> str:
+    parts = [f"本段闭合原因是：{segment.get('boundary_reason', '-')}。"]
+    viability = _strongest_brief(frames, _viability_brief)
+    if viability:
+        parts.append(f"底层压力集中在：{viability}。")
+    locality = _dominant_locality(frames)
+    if locality:
+        parts.append(f"场景被本地世界压在“{locality}”附近，冲突不是抽象发生的。")
+    objects = _active_registry_labels(segment.get("object_registry_view", {}) or {})
+    if objects:
+        parts.append(f"可用的物质锚点包括：{'，'.join(objects[:4])}。")
+    return "".join(parts)
+
+
+def _outline_recognition(frames: list[dict[str, Any]]) -> str:
+    outcomes = _unique_nonempty(
+        (frame.get("recognition", {}) or {}).get("outcome_label")
+        or (frame.get("recognition", {}) or {}).get("outcome")
+        for frame in frames
+    )
+    epistemic = _strongest_brief(frames, _epistemic_brief)
+    common_ground = _strongest_brief(frames, _common_ground_brief)
+    parts = []
+    if outcomes:
+        parts.append(f"承认结果集中表现为：{'，'.join(outcomes)}。")
+    else:
+        parts.append("本段没有形成新的明确承认结果，但承认压力仍在背景中持续。")
+    if epistemic:
+        parts.append(f"信息边界显示：{epistemic}。")
+    if common_ground:
+        parts.append(f"共同现实显示：{common_ground}。")
+    return "".join(parts)
+
+
+def _outline_relationship_movement(segment: dict[str, Any], frames: list[dict[str, Any]]) -> str:
+    relationship = segment.get("relationship_view", {}) or {}
+    phase = relationship.get("phase_label") or relationship.get("phase") or _last_nonempty(frame.get("phase") for frame in frames)
+    rpps = relationship.get("recurring_rpps", []) or []
+    changed = any(frame.get("phase_changed") for frame in frames)
+    parts = [f"关系阶段现在是：{phase or '-'}。"]
+    if rpps:
+        parts.append(f"反复出现的关系模式包括：{'，'.join(str(item) for item in rpps[:4])}。")
+    if changed:
+        parts.append("本段内出现阶段移动，后续互动会在新的关系读法下展开。")
+    else:
+        parts.append("本段没有彻底改变关系阶段，但延续了已有模式的可预期性。")
+    return "".join(parts)
+
+
+def _outline_memory_and_irreversibility(frames: list[dict[str, Any]]) -> str:
+    memory_count = sum(int(frame.get("memory_count", 0) or 0) for frame in frames)
+    fate_count = sum(int(frame.get("fate_count", 0) or 0) for frame in frames)
+    reversibility = _strongest_brief(frames, _reversibility_brief)
+    opportunity = _strongest_brief(frames, _opportunity_brief)
+    parts = []
+    if memory_count:
+        parts.append(f"本段触发了 {memory_count} 次记忆重构，过去没有保持静止。")
+    else:
+        parts.append("本段没有显式记忆重构。")
+    if fate_count:
+        parts.append(f"同时出现 {fate_count} 个命运或不可逆转折信号。")
+    if reversibility:
+        parts.append(f"行动可逆性显示：{reversibility}。")
+    if opportunity:
+        parts.append(f"机会成本显示：{opportunity}。")
+    return "".join(parts)
+
+
+def _outline_carry_forward_pressure(segment: dict[str, Any], frames: list[dict[str, Any]]) -> str:
+    groups = _compressed_frame_groups(frames)
+    repeated = [group for group in groups if int(group.get("count", 0) or 0) > 1]
+    parts = []
+    if repeated:
+        parts.append("重复结构没有被当作新剧情处理，而是作为关系模式继续沉积。")
+    last_summary = str(frames[-1].get("summary", "")) if frames else ""
+    if last_summary:
+        parts.append(f"下一段承接的最近压力是：{last_summary}")
+    else:
+        parts.append("下一段承接的是尚未被具体场景释放的结构压力。")
+    parts.append(f"段落边界来自“{segment.get('boundary_reason', '-')}”，因此后续模拟仍应从这个未完全解决的压力继续。")
+    return "".join(parts)
+
+
+def _strongest_brief(frames: list[dict[str, Any]], fn) -> str:
+    for frame in reversed(frames):
+        value = fn(frame)
+        if value:
+            return value
+    return ""
+
+
+def _last_nonempty(values: Any) -> str:
+    for value in reversed(list(values)):
+        if value:
+            return str(value)
+    return ""
 
 
 def render_segment_stream(records: list[dict[str, Any]], canon: dict[str, Any]) -> str:
