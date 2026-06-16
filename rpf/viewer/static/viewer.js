@@ -383,6 +383,7 @@ const ZH = {
   activated_projection: "已激活投影",
   inactive: "未激活",
   activated: "已激活",
+  projection_only: "仅投影",
   evidence_access: "证据可达性",
   memory_integration: "记忆整合",
   private_speech: "私下言说",
@@ -731,7 +732,9 @@ function renderNarrativeBeats() {
       ...(beat.record_refs || []),
       ...(beat.evidence_refs || []),
       ...(beat.local_detail_refs || []),
+      ...(beat.activated_detail_refs || []),
     ].filter(Boolean).slice(0, 8);
+    const constraints = beat.materialized_constraints || [];
     return `
       <article class="beat-card">
         <div class="beat-head">
@@ -745,6 +748,7 @@ function renderNarrativeBeats() {
         </div>
         <p>${escapeHtml(beatValueText(beat.outcome || beat.observation || beat.recognition_implication) || "节拍已形成，但尚无表层说明。")}</p>
         ${beat.obstruction ? `<small class="beat-line">阻碍：${escapeHtml(beatValueText(beat.obstruction))}</small>` : ""}
+        ${constraints.length ? `<small class="beat-line">激活细节：${escapeHtml(constraints.map((item) => `${zh(item.affected_capacity)} / ${zh(item.effect_scope)}`).join("，"))}</small>` : ""}
         ${beat.unresolved_remainder ? `<small class="beat-line">未解决余量：${escapeHtml(beatValueText(beat.unresolved_remainder))}</small>` : ""}
         <div class="tags">
           ${actions.map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}

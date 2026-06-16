@@ -475,6 +475,7 @@ def _candidate(
     tick = int(record.get("tick", 0) or 0)
     return {
         "candidate_id": f"cand-{tick:04d}-{index:02d}",
+        "tick": tick,
         "focus_id": record.get("focus_id"),
         "gap_id": gap.get("gap_id"),
         "scope_type": record.get("scope_type"),
@@ -497,6 +498,7 @@ def _rejected_candidate(index: int, record: dict[str, Any], detail_type: str, re
     tick = int(record.get("tick", 0) or 0)
     return {
         "candidate_id": f"cand-{tick:04d}-{index:02d}",
+        "tick": tick,
         "focus_id": record.get("focus_id"),
         "gap_id": None,
         "scope_type": record.get("scope_type"),
@@ -555,6 +557,7 @@ def _validated_causal_details(candidates: list[dict[str, Any]], decisions: list[
             {
                 "detail_id": f"causal-{candidate['candidate_id']}",
                 "candidate_id": candidate.get("candidate_id"),
+                "tick": candidate.get("tick"),
                 "scope_type": candidate.get("scope_type"),
                 "scope_id": candidate.get("scope_id"),
                 "target_ref": candidate.get("target_ref"),
@@ -594,6 +597,7 @@ def _causal_detail_activations(
             {
                 "event_type": "CausalWorldDetailActivatedEvent",
                 "activation_id": activation_id,
+                "tick": detail.get("tick"),
                 "detail_id": detail.get("detail_id"),
                 "candidate_id": detail.get("candidate_id"),
                 "scope_type": detail.get("scope_type"),

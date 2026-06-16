@@ -9,7 +9,9 @@ def build_narrative_beats(payload: dict[str, Any]) -> list[dict[str, Any]]:
     story = payload.get("story", []) or []
     timeline_by_tick = _timeline_event_ids_by_tick(payload.get("timeline", []) or [])
     registry = payload.get("object_registry_view", {}) or {}
-    details_by_tick = _world_detail_ids_by_tick(payload.get("world_detail_context", {}) or {})
+    world_detail_context = payload.get("world_detail_context", {}) or {}
+    details_by_tick = _world_detail_ids_by_tick(world_detail_context)
+    activated_by_tick = _activated_detail_context_by_tick(world_detail_context)
     raw_beats = [
         _beat_from_frame(
             index,
@@ -17,6 +19,7 @@ def build_narrative_beats(payload: dict[str, Any]) -> list[dict[str, Any]]:
             timeline_by_tick.get(int(frame.get("tick", 0) or 0), []),
             registry,
             details_by_tick,
+            activated_by_tick,
         )
         for index, frame in enumerate(story, start=1)
         if frame.get("summary")
@@ -30,6 +33,7 @@ def _beat_from_frame(
     source_events: list[str],
     registry: dict[str, Any],
     details_by_tick: dict[int, list[str]],
+    activated_by_tick: dict[int, list[dict[str, Any]]],
 ) -> dict[str, Any]:
     tick = int(frame.get("tick", 0) or 0)
     action = frame.get("action", {}) or {}
@@ -39,6 +43,8 @@ def _beat_from_frame(
     inquiry = frame.get("inquiry", {}) or {}
     beat_type = _beat_type(frame)
     object_refs, record_refs, evidence_refs = _registry_refs_for_frame(registry, inquiry)
+    activated_details = activated_by_tick.get(tick, [])
+    activated_refs = [str(item["detail_ref"]) for item in activated_details if item.get("detail_ref")]
     intended = _intended_action(action, recognition)
     realized = _realized_action(action, expression)
     inhibited = _inhibited_action(action)
@@ -62,7 +68,9 @@ def _beat_from_frame(
         "object_refs": object_refs,
         "record_refs": record_refs,
         "evidence_refs": evidence_refs,
-        "local_detail_refs": _local_detail_refs(frame, details_by_tick.get(tick, [])),
+        "local_detail_refs": _local_detail_refs(frame, details_by_tick.get(tick, []), activated_refs),
+        "activated_detail_refs": activated_refs,
+        "materialized_constraints": _materialized_constraints(activated_details),
         "obstruction": obstruction,
         "observation": observation,
         "recognition_implication": _recognition_implication(recognition),
@@ -72,6 +80,7 @@ def _beat_from_frame(
             "do_not_change_causal_outcome": True,
             "do_not_add_unregistered_durable_objects": True,
             "do_not_resolve_uncertainty": bool(frame.get("epistemic_boundary")),
+            "activated_details_are_projection_only": bool(activated_details),
         },
     }
 
@@ -241,7 +250,11 @@ def _registry_refs_for_frame(registry: dict[str, Any], inquiry: dict[str, Any]) 
     return objects, records, evidence
 
 
-def _local_detail_refs(frame: dict[str, Any], world_detail_ids: list[str]) -> list[str]:
+def _local_detail_refs(
+    frame: dict[str, Any],
+    world_detail_ids: list[str],
+    activated_detail_refs: list[str] | None = None,
+) -> list[str]:
     locality = frame.get("locality", {}) or {}
     refs = []
     if locality.get("location_id"):
@@ -249,7 +262,23 @@ def _local_detail_refs(frame: dict[str, Any], world_detail_ids: list[str]) -> li
     if locality.get("route_id"):
         refs.append(f"route:{locality['route_id']}")
     refs.extend(f"detail:{detail_id}" for detail_id in world_detail_ids)
-    return refs
+    refs.extend(activated_detail_refs or [])
+    return _unique_nonempty(refs)
+
+
+def _materialized_constraints(activated_details: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "activation_id": item.get("activation_id"),
+            "detail_id": item.get("detail_id"),
+            "target_ref": item.get("target_ref"),
+            "affected_capacity": item.get("affected_capacity"),
+            "mechanism": item.get("mechanism"),
+            "effect_scope": item.get("effect_scope"),
+            "projection_only": bool(item.get("does_not_mutate_simulation_state")),
+        }
+        for item in activated_details
+    ]
 
 
 def _world_detail_ids_by_tick(context: dict[str, Any]) -> dict[int, list[str]]:
@@ -260,6 +289,29 @@ def _world_detail_ids_by_tick(context: dict[str, Any]) -> dict[int, list[str]]:
             continue
         tick = int(detail.get("tick", 0) or 0)
         result.setdefault(tick, []).append(str(detail_id))
+    for detail in context.get("causal_world_details", []) or []:
+        detail_id = detail.get("detail_id")
+        if not detail_id:
+            continue
+        tick = int(detail.get("tick", 0) or 0)
+        if tick <= 0:
+            continue
+        result.setdefault(tick, []).append(str(detail_id))
+    return result
+
+
+def _activated_detail_context_by_tick(context: dict[str, Any]) -> dict[int, list[dict[str, Any]]]:
+    result: dict[int, list[dict[str, Any]]] = {}
+    for activation in context.get("causal_world_detail_activations", []) or []:
+        detail_id = activation.get("detail_id")
+        if not detail_id:
+            continue
+        tick = int(activation.get("tick", 0) or 0)
+        if tick <= 0:
+            continue
+        item = dict(activation)
+        item["detail_ref"] = f"activated_detail:{detail_id}"
+        result.setdefault(tick, []).append(item)
     return result
 
 
@@ -312,6 +364,17 @@ def _pattern_continuation(group: list[dict[str, Any]]) -> dict[str, Any]:
         "object_refs": first.get("object_refs", []),
         "record_refs": first.get("record_refs", []),
         "evidence_refs": first.get("evidence_refs", []),
+        "local_detail_refs": _unique_nonempty(
+            [ref for beat in group for ref in beat.get("local_detail_refs", [])]
+        ),
+        "activated_detail_refs": _unique_nonempty(
+            [ref for beat in group for ref in beat.get("activated_detail_refs", [])]
+        ),
+        "materialized_constraints": [
+            constraint
+            for beat in group
+            for constraint in beat.get("materialized_constraints", [])
+        ],
         "stable_objects": first.get("object_refs", []) + first.get("record_refs", []) + first.get("evidence_refs", []),
         "pressure_changes": [beat.get("outcome", {}) for beat in group],
         "what_did_not_change": first.get("unresolved_remainder", []),
@@ -321,6 +384,10 @@ def _pattern_continuation(group: list[dict[str, Any]]) -> dict[str, Any]:
         "rendering_constraints": {
             "compress_repetition": True,
             "do_not_restage_same_scene": True,
+            "activated_details_are_projection_only": any(
+                beat.get("rendering_constraints", {}).get("activated_details_are_projection_only")
+                for beat in group
+            ),
         },
     }
 

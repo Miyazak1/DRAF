@@ -558,17 +558,33 @@ def _outline_what_happened(segment: dict[str, Any], frames: list[dict[str, Any]]
 def _beat_sentence(beat: dict[str, Any]) -> str:
     if beat.get("beat_type") == "pattern_continuation":
         tick_label = f"第 {beat.get('tick_start')} 至 {beat.get('tick_end')} 步"
+        constraints = _beat_materialized_constraints(beat)
+        constraint_text = f"被激活的材料约束包括：{constraints}。" if constraints else ""
         return (
             f"{tick_label}：{beat.get('repeated_beat_type')} 持续重复。"
             f"未改变的是：{'；'.join(str(item) for item in beat.get('what_did_not_change', [])[:2]) or '-'}。"
             f"收窄处：{beat.get('what_narrowed') or '-'}。"
+            f"{constraint_text}"
         )
     tick_label = f"第 {beat.get('tick')} 步"
     intended = (beat.get("intended_action") or {}).get("description") or "-"
     realized = (beat.get("realized_action") or {}).get("description") or "-"
     obstruction = (beat.get("obstruction") or {}).get("description") or "-"
     outcome = (beat.get("outcome") or {}).get("recognition_outcome") or beat.get("beat_type")
-    return f"{tick_label}：{beat.get('beat_type')}。试图发生的是“{intended}”，实际呈现为“{realized}”；受阻于“{obstruction}”，结果是“{outcome}”。"
+    constraints = _beat_materialized_constraints(beat)
+    constraint_text = f"被激活的材料约束包括：{constraints}。" if constraints else ""
+    return f"{tick_label}：{beat.get('beat_type')}。试图发生的是“{intended}”，实际呈现为“{realized}”；受阻于“{obstruction}”，结果是“{outcome}”。{constraint_text}"
+
+
+def _beat_materialized_constraints(beat: dict[str, Any]) -> str:
+    constraints = beat.get("materialized_constraints", []) or []
+    parts = []
+    for item in constraints[:3]:
+        capacity = item.get("affected_capacity") or "-"
+        target = item.get("target_ref") or item.get("detail_id") or "-"
+        scope = item.get("effect_scope") or "-"
+        parts.append(f"{target} 触碰 {capacity}（{scope}）")
+    return "；".join(parts)
 
 
 def _outline_why_it_mattered(segment: dict[str, Any], frames: list[dict[str, Any]]) -> str:
