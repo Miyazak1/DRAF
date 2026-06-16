@@ -58,15 +58,17 @@ def next_render_segment(
         return None
     frames = selected_frames
     segment_index = len(rendered) + 1
+    source_ticks = [frame.get("tick") for frame in frames]
     return {
         "segment_id": f"seg-{segment_index:04d}",
         "segment_index": segment_index,
         "tick_start": frames[0].get("tick"),
         "tick_end": frames[-1].get("tick"),
         "boundary_reason": reason,
-        "source_ticks": [frame.get("tick") for frame in frames],
+        "source_ticks": source_ticks,
         "simulated_seconds": _elapsed_seconds(frames),
         "frames": frames,
+        "narrative_beats": _beats_for_ticks(payload.get("narrative_beats", []), source_ticks),
         "render_canon": payload.get("render_canon", {}),
         "case_ledger": payload.get("case_ledger", {}),
         "inquiry_trace": payload.get("inquiry", []),
@@ -473,7 +475,7 @@ def deterministic_segment_markdown(segment: dict[str, Any]) -> str:
         "",
         "### 发生了什么",
         "",
-        *_outline_what_happened(frames),
+        *_outline_what_happened(segment, frames),
         "",
         "### 为什么重要",
         "",
@@ -521,7 +523,10 @@ def _outline_title(segment: dict[str, Any]) -> str:
     return f"{label}（第 {segment['tick_start']} 至 {segment['tick_end']} 步）"
 
 
-def _outline_what_happened(frames: list[dict[str, Any]]) -> list[str]:
+def _outline_what_happened(segment: dict[str, Any], frames: list[dict[str, Any]]) -> list[str]:
+    beats = segment.get("narrative_beats", []) or []
+    if beats:
+        return [_beat_sentence(beat) for beat in beats]
     if not frames:
         return ["本段没有可见场景帧；渲染回退为结构性摘要。"]
     lines: list[str] = []
@@ -545,6 +550,22 @@ def _outline_what_happened(frames: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _beat_sentence(beat: dict[str, Any]) -> str:
+    if beat.get("beat_type") == "pattern_continuation":
+        tick_label = f"第 {beat.get('tick_start')} 至 {beat.get('tick_end')} 步"
+        return (
+            f"{tick_label}：{beat.get('repeated_beat_type')} 持续重复。"
+            f"未改变的是：{'；'.join(str(item) for item in beat.get('what_did_not_change', [])[:2]) or '-'}。"
+            f"收窄处：{beat.get('what_narrowed') or '-'}。"
+        )
+    tick_label = f"第 {beat.get('tick')} 步"
+    intended = (beat.get("intended_action") or {}).get("description") or "-"
+    realized = (beat.get("realized_action") or {}).get("description") or "-"
+    obstruction = (beat.get("obstruction") or {}).get("description") or "-"
+    outcome = (beat.get("outcome") or {}).get("recognition_outcome") or beat.get("beat_type")
+    return f"{tick_label}：{beat.get('beat_type')}。试图发生的是“{intended}”，实际呈现为“{realized}”；受阻于“{obstruction}”，结果是“{outcome}”。"
+
+
 def _outline_why_it_mattered(segment: dict[str, Any], frames: list[dict[str, Any]]) -> str:
     parts = [f"本段闭合原因是：{segment.get('boundary_reason', '-')}。"]
     viability = _strongest_brief(frames, _viability_brief)
@@ -556,6 +577,10 @@ def _outline_why_it_mattered(segment: dict[str, Any], frames: list[dict[str, Any
     objects = _active_registry_labels(segment.get("object_registry_view", {}) or {})
     if objects:
         parts.append(f"可用的物质锚点包括：{'，'.join(objects[:4])}。")
+    beats = segment.get("narrative_beats", []) or []
+    if beats:
+        beat_types = _unique_nonempty(beat.get("beat_type") for beat in beats)
+        parts.append(f"叙事节拍集中在：{'，'.join(beat_types[:5])}。")
     return "".join(parts)
 
 
@@ -783,6 +808,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
         ],
         "local_world_view": segment.get("local_world_view", {}),
         "object_registry_view": segment.get("object_registry_view", {}),
+        "narrative_beats": segment.get("narrative_beats", []),
         "previous_story_tail": [
             {
                 "segment_id": item.get("segment_id"),
@@ -823,6 +849,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "common_ground_trace_is_authoritative": True,
             "local_world_view_is_authoritative": True,
             "object_registry_view_is_authoritative": True,
+            "narrative_beats_are_authoritative": True,
             "case_memory_trace_is_authoritative": True,
             "do_not_add_case_facts_evidence_witnesses_or_culprits": True,
             "do_not_add_durable_objects_records_messages_or_custody_changes": True,
@@ -865,6 +892,21 @@ def _boundary_reason(frames: list[dict[str, Any]], policy: dict[str, Any], *, fo
 
 def _elapsed_seconds(frames: list[dict[str, Any]]) -> int:
     return sum(int(frame.get("simulated_time_delta_seconds") or 0) for frame in frames)
+
+
+def _beats_for_ticks(beats: list[dict[str, Any]], source_ticks: list[Any]) -> list[dict[str, Any]]:
+    wanted = {int(tick) for tick in source_ticks if str(tick).isdigit()}
+    selected = []
+    for beat in beats:
+        beat_ticks = {int(beat.get("tick", 0) or 0)}
+        if beat.get("tick_start") and beat.get("tick_end"):
+            start = int(beat.get("tick_start") or 0)
+            end = int(beat.get("tick_end") or start)
+            beat_ticks = set(range(start, end + 1))
+        if wanted and beat_ticks and wanted.isdisjoint(beat_ticks):
+            continue
+        selected.append(beat)
+    return selected
 
 
 def _minimum_segment_reached(frames: list[dict[str, Any]], policy: dict[str, Any]) -> bool:

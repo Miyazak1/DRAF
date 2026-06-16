@@ -17,6 +17,7 @@ from rpf.core.events import Event
 from rpf.core.object_registry import ObjectRegistrySpec
 from rpf.engine.simulator import Simulator
 from rpf.engine.metrics import compute_metrics
+from rpf.narrative.beats import build_narrative_beats
 from rpf.scenarios.loader import load_scenario
 from rpf.storage import RunStore, configured_run_store
 
@@ -209,6 +210,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
     payload["story"] = build_story_frames(payload)
     payload["local_world_view"] = build_local_world_view(payload)
     payload["object_registry_view"] = build_object_registry_view(payload)
+    payload["narrative_beats"] = build_narrative_beats(payload)
     payload["summary"] = {
         "event_count": metrics.get("event_count", len(timeline)),
         "phase": payload["derived_views"].get("relationship_view", {}).get("phase_label", "unknown"),
@@ -289,6 +291,7 @@ def build_viewer_payload_from_database_records(data: dict[str, Any]) -> dict[str
     payload["story"] = build_story_frames(payload)
     payload["local_world_view"] = build_local_world_view(payload)
     payload["object_registry_view"] = build_object_registry_view(payload)
+    payload["narrative_beats"] = build_narrative_beats(payload)
     payload["summary"] = {
         "event_count": metrics.get("event_count", len(events)),
         "phase": payload["derived_views"].get("relationship_view", {}).get("phase_label", "unknown"),
@@ -656,6 +659,7 @@ def _database_export_files(payload: dict[str, Any], report: str) -> dict[str, st
         "location_selection_trace.json": payload.get("location_selection", []),
         "route_selection_trace.json": payload.get("route_selection", []),
         "audience_exposure_trace.json": payload.get("audience_exposure", []),
+        "narrative_beats.json": payload.get("narrative_beats", []),
         "render_repetition_trace.json": payload.get("render_repetition", []),
     }
     files: dict[str, str] = {
@@ -726,6 +730,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "location_selection_trace.json",
         "route_selection_trace.json",
         "audience_exposure_trace.json",
+        "narrative_beats.json",
         "irreversibility_report.json",
         "aggregation_traces.json",
     ]

@@ -143,6 +143,7 @@ def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dic
         "memory_trace": payload.get("memory", []),
         "local_world_view": payload.get("local_world_view", {}),
         "object_registry_view": payload.get("object_registry_view", {}),
+        "narrative_beats": payload.get("narrative_beats", []),
         "summary": payload.get("summary"),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
         "person_views": payload.get("derived_views", {}).get("person_views", {}),
