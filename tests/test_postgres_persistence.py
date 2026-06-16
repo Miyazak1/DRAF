@@ -3,8 +3,43 @@ from pathlib import Path
 import pytest
 
 from rpf.config import database_settings, load_env_file
+from rpf.engine.simulator import Simulator
+from rpf.llm import segments
+from rpf.scenarios.loader import load_scenario
 from rpf.storage.base import NullRunStore
 from rpf.storage.postgres import DEFAULT_MIGRATIONS_DIR, PostgresRunStore
+
+
+class RecordingStore:
+    backend_name = "recording"
+
+    def __init__(self):
+        self.calls = []
+        self.events = []
+        self.traces = []
+        self.snapshots = []
+        self.render_segments = []
+
+    def upsert_scenario(self, **kwargs):
+        self.calls.append(("upsert_scenario", kwargs))
+
+    def begin_run(self, **kwargs):
+        self.calls.append(("begin_run", kwargs))
+
+    def write_events(self, **kwargs):
+        self.events.append(kwargs)
+
+    def write_traces(self, **kwargs):
+        self.traces.append(kwargs)
+
+    def write_snapshot(self, **kwargs):
+        self.snapshots.append(kwargs)
+
+    def write_render_segment(self, **kwargs):
+        self.render_segments.append(kwargs)
+
+    def complete_run(self, **kwargs):
+        self.calls.append(("complete_run", kwargs))
 
 
 def test_database_settings_defaults_to_file_backend(tmp_path, monkeypatch):
@@ -69,3 +104,49 @@ def test_initial_postgres_migration_contains_core_tables_and_indexes():
     assert "jsonb" in migration
     assert "events_payload_gin_idx" in migration
     assert "render_segments_order_idx" in migration
+
+
+def test_simulator_writes_run_state_through_store(tmp_path):
+    store = RecordingStore()
+    scenario_path = Path("examples/shared_apartment_unresolved_sacrifice.yaml")
+    sim = Simulator.from_scenario(
+        load_scenario(scenario_path),
+        scenario_path,
+        seed=42,
+        run_store=store,
+        run_id="00000000-0000-0000-0000-000000000001",
+    )
+
+    result = sim.run(steps=5, output_dir=tmp_path / "run")
+
+    assert result["run_id"] == "00000000-0000-0000-0000-000000000001"
+    assert result["storage_backend"] == "recording"
+    assert ("upsert_scenario", store.calls[0][1]) in store.calls
+    assert any(name == "begin_run" for name, _ in store.calls)
+    assert any(call["events"] for call in store.events)
+    assert any(call["layer"] == "scheduler" for call in store.traces)
+    assert store.snapshots
+    assert any(name == "complete_run" and data["status"] == "completed" for name, data in store.calls)
+
+
+def test_segment_renderer_writes_render_segment_to_store(tmp_path, monkeypatch):
+    store = RecordingStore()
+    monkeypatch.setattr(segments, "configured_run_store", lambda: store)
+    segment = {
+        "segment_id": "seg-0001",
+        "segment_index": 1,
+        "tick_start": 1,
+        "tick_end": 1,
+        "boundary_reason": "测试闭合",
+        "source_ticks": [1],
+        "simulated_seconds": 1,
+        "frames": [],
+        "render_canon": {"title": "测试"},
+    }
+
+    result = segments.render_and_append_segment(tmp_path, segment, run_id="00000000-0000-0000-0000-000000000001")
+
+    assert result["segment_id"] == "seg-0001"
+    assert store.render_segments
+    assert store.render_segments[0]["run_id"] == "00000000-0000-0000-0000-000000000001"
+    assert store.render_segments[0]["segment"]["segment_id"] == "seg-0001"

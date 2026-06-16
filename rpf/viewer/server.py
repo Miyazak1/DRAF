@@ -1518,6 +1518,7 @@ def _run_session(server: ViewerServer, request: dict[str, Any]) -> None:
                     api_key=request.get("api_key") or None,
                     thinking=request.get("thinking") or None,
                     reasoning_effort=request.get("reasoning_effort") or None,
+                    run_id=update.get("run_id"),
                 )
                 with server.session_lock:
                     server.session_status["last_render_output"] = result.get("output")

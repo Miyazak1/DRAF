@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from rpf.llm.renderer import llm_markdown
+from rpf.storage import configured_run_store
 from rpf.viewer.server import build_viewer_payload
 
 
@@ -94,6 +95,7 @@ def render_and_append_segment(
     provider: str | None = "deepseek",
     thinking: str | None = None,
     reasoning_effort: str | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
     if use_llm:
         if not api_key:
@@ -122,6 +124,7 @@ def render_and_append_segment(
         "simulated_seconds": segment["simulated_seconds"],
         "mode": mode,
         "text": text,
+        "model": model if use_llm else None,
     }
     records = load_render_segments(output_dir)
     records.append(record)
@@ -132,6 +135,8 @@ def render_and_append_segment(
     stream = render_segment_stream(records, segment.get("render_canon", {}))
     stream_path = output_dir / "rendered_story_stream.md"
     stream_path.write_text(stream, encoding="utf-8")
+    if run_id:
+        configured_run_store().write_render_segment(run_id=run_id, segment=record)
     return {
         "mode": mode,
         "output": str(stream_path),

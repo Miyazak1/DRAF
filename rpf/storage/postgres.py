@@ -123,8 +123,6 @@ class PostgresRunStore:
         self._executemany(query, rows)
 
     def write_traces(self, *, run_id: str, layer: str, records: list[dict[str, Any]]) -> None:
-        if not records:
-            return
         rows = [
             (
                 run_id,
@@ -139,7 +137,12 @@ class PostgresRunStore:
         insert into traces (run_id, tick, layer, event_type, payload)
         values (%s, %s, %s, %s, %s)
         """
-        self._executemany(query, rows)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("delete from traces where run_id = %s and layer = %s", (run_id, layer))
+                if rows:
+                    cur.executemany(query, rows)
+            conn.commit()
 
     def write_snapshot(self, *, run_id: str, state: SimulationState) -> None:
         query = """

@@ -4,6 +4,7 @@ import json
 import random
 import shutil
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +62,7 @@ from rpf.rpps import (
 )
 from rpf.storage.snapshots import write_snapshot
 from rpf.storage.timeline import TimelineWriter, write_timeline_manifest
+from rpf.storage import RunStore, configured_run_store
 from rpf.core.versioning import manifest
 from rpf.core.semantics import material_urgency, set_material_urgency, unrecognized_contribution
 
@@ -74,6 +76,8 @@ class Simulator:
         render_canon: dict[str, Any] | None = None,
         case_ledger: dict[str, Any] | None = None,
         steps: int | None = None,
+        run_store: RunStore | None = None,
+        run_id: str | None = None,
     ) -> None:
         self.state = state
         self.scenario_path = scenario_path
@@ -81,6 +85,8 @@ class Simulator:
         self.render_canon = render_canon or {}
         self.case_ledger = case_ledger or {}
         self.steps = steps
+        self.run_id = run_id or str(uuid.uuid4())
+        self.run_store = run_store or configured_run_store()
         self.rng = random.Random(state.seed)
         self.scheduler = TemporalScheduler(config["scheduler"])
         self.affordances = AffordanceEngine(config["affordances"])
@@ -149,7 +155,14 @@ class Simulator:
         self._order = 0
 
     @classmethod
-    def from_scenario(cls, scenario: dict[str, Any], scenario_path: Path, seed: int) -> "Simulator":
+    def from_scenario(
+        cls,
+        scenario: dict[str, Any],
+        scenario_path: Path,
+        seed: int,
+        run_store: RunStore | None = None,
+        run_id: str | None = None,
+    ) -> "Simulator":
         processes = {}
         recognition_by_holder: dict[str, list[RecognitionDemand]] = {}
         for item in scenario.get("recognition_demands", []):
@@ -182,6 +195,8 @@ class Simulator:
             config=effective_config(scenario),
             render_canon=_render_canon_for_scenario(scenario),
             case_ledger=scenario.get("case_ledger", {}),
+            run_store=run_store,
+            run_id=run_id,
         )
 
     def _event(self, event_type: str, source_layer: str, payload: dict[str, Any] | None = None, causal_refs: list[str] | None = None) -> Event:
@@ -191,11 +206,11 @@ class Simulator:
         return event
 
     def run(self, steps: int, output_dir: Path) -> dict[str, Any]:
-        self._prepare_output(output_dir, planned_steps=steps)
+        self._prepare_output(output_dir, planned_steps=steps, mode="steps")
         for _ in range(steps):
             self.tick()
             if self.state.tick % 5 == 0:
-                write_snapshot(output_dir, self.state)
+                self._write_snapshot(output_dir)
         return self._complete_output(output_dir)
 
     def run_for_duration(
@@ -208,7 +223,7 @@ class Simulator:
         on_update: Any | None = None,
         should_stop: Any | None = None,
     ) -> dict[str, Any]:
-        self._prepare_output(output_dir, planned_steps=0, target_seconds=target_seconds)
+        self._prepare_output(output_dir, planned_steps=0, target_seconds=target_seconds, mode="duration")
         elapsed_seconds = 0
         while elapsed_seconds < target_seconds and self.state.tick < max_steps:
             if should_stop and should_stop():
@@ -217,7 +232,7 @@ class Simulator:
             context = self.tick(max_delta_seconds=remaining_seconds)
             elapsed_seconds += context.simulated_time_delta_seconds
             if self.state.tick % 5 == 0:
-                write_snapshot(output_dir, self.state)
+                self._write_snapshot(output_dir)
             if self.state.tick % max(1, write_interval_ticks) == 0:
                 partial = self._write_outputs(output_dir, completed=False)
                 if on_update:
@@ -240,7 +255,7 @@ class Simulator:
         on_update: Any | None = None,
         should_stop: Any | None = None,
     ) -> dict[str, Any]:
-        self._prepare_output(output_dir, planned_steps=0, target_wall_clock_seconds=duration_seconds)
+        self._prepare_output(output_dir, planned_steps=0, target_wall_clock_seconds=duration_seconds, mode="wall_clock")
         started = time.monotonic()
         elapsed_seconds = 0.0
         while elapsed_seconds < duration_seconds and self.state.tick < max_steps:
@@ -250,7 +265,7 @@ class Simulator:
             self.tick()
             elapsed_seconds = min(duration_seconds, time.monotonic() - started)
             if self.state.tick % 5 == 0:
-                write_snapshot(output_dir, self.state)
+                self._write_snapshot(output_dir)
             if self.state.tick % max(1, write_interval_ticks) == 0:
                 partial = self._write_outputs(output_dir, completed=False)
                 if on_update:
@@ -274,6 +289,7 @@ class Simulator:
         planned_steps: int,
         target_seconds: int | None = None,
         target_wall_clock_seconds: int | None = None,
+        mode: str = "steps",
     ) -> None:
         if output_dir.exists():
             shutil.rmtree(output_dir)
@@ -285,6 +301,7 @@ class Simulator:
             encoding="utf-8",
         )
         write_timeline_manifest(output_dir, scenario_path=self.scenario_path, seed=self.state.seed, steps=planned_steps)
+        self._begin_persistent_run(output_dir, mode=mode, planned_steps=planned_steps)
         self._event(
             "SimulationInitializedEvent",
             "diagnostic",
@@ -353,13 +370,90 @@ class Simulator:
         (output_dir / "projection_trace.json").write_text(json.dumps(self.projection_trace, indent=2), encoding="utf-8")
         (output_dir / "irreversibility_report.json").write_text(self.state.irreversibility_register.model_dump_json(indent=2), encoding="utf-8")
         (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+        self._persist_outputs(metrics=metrics, completed=completed)
         return {
             "output_dir": str(output_dir),
+            "run_id": self.run_id,
+            "storage_backend": self.run_store.backend_name,
             "final_state_hash": self.state.state_hash(),
             "completed": completed,
             "tick": self.state.tick,
             "metrics": metrics,
         }
+
+    def _begin_persistent_run(self, output_dir: Path, *, mode: str, planned_steps: int) -> None:
+        title = self.render_canon.get("title") or self.state.simulation_id
+        source_yaml = self.scenario_path.read_text(encoding="utf-8") if self.scenario_path.exists() else ""
+        if hasattr(self.run_store, "apply_migrations"):
+            self.run_store.apply_migrations()  # type: ignore[attr-defined]
+        self.run_store.upsert_scenario(
+            scenario_id=self.state.simulation_id,
+            title=str(title),
+            source_yaml=source_yaml,
+            source_path=self.scenario_path,
+            render_canon=self.render_canon,
+            case_ledger=self.case_ledger,
+        )
+        self.run_store.begin_run(
+            run_id=self.run_id,
+            scenario_id=self.state.simulation_id,
+            title=str(title),
+            seed=self.state.seed,
+            mode=mode,
+            output_dir=output_dir,
+            metadata={
+                "planned_steps": planned_steps,
+                "scenario_path": str(self.scenario_path),
+                "manifest": manifest(),
+            },
+        )
+
+    def _write_snapshot(self, output_dir: Path) -> None:
+        write_snapshot(output_dir, self.state)
+        self.run_store.write_snapshot(run_id=self.run_id, state=self.state)
+
+    def _persist_outputs(self, *, metrics: dict[str, Any], completed: bool) -> None:
+        self.run_store.write_events(run_id=self.run_id, events=self.events)
+        for layer, records in self._trace_records():
+            self.run_store.write_traces(run_id=self.run_id, layer=layer, records=records)
+        self.run_store.complete_run(
+            run_id=self.run_id,
+            status="completed" if completed else "running",
+            tick_count=self.state.tick,
+            event_count=int(metrics.get("event_count", len(self.events))),
+            final_state_hash=self.state.state_hash() if completed else None,
+        )
+
+    def _trace_records(self) -> list[tuple[str, list[dict[str, Any]]]]:
+        return [
+            ("scheduler", self.scheduler_diagnostics),
+            ("affordance", self.affordance_trace),
+            ("action", self.action_trace),
+            ("expression", self.expression_trace),
+            ("recognition", self.recognition_trace),
+            ("fate_transition", self.fate_transition_trace),
+            ("frame", self.frame_trace),
+            ("account", self.account_trace),
+            ("binding", self.binding_trace),
+            ("common_ground", self.common_ground_trace),
+            ("epistemic", self.epistemic_trace),
+            ("expectation", self.expectation_trace),
+            ("memory", self.memory_trace),
+            ("normativity", self.normativity_trace),
+            ("opportunity", self.opportunity_trace),
+            ("position", self.position_trace),
+            ("relevance", self.relevance_trace),
+            ("reversibility", self.reversibility_trace),
+            ("attention", self.attention_trace),
+            ("environment", self.environment_trace),
+            ("disposition", self.disposition_trace),
+            ("relation", self.relation_trace),
+            ("viability", self.viability_trace),
+            ("inquiry", self.inquiry_trace),
+            ("rpp_activation", self.rpp_activation_trace),
+            ("rpp_dynamics", self.rpp_dynamics_trace),
+            ("projection", self.projection_trace),
+        ]
 
     def tick(self, max_delta_seconds: int | None = None) -> TickContext:
         self.state.tick += 1
