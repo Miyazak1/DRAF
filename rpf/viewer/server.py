@@ -668,6 +668,9 @@ def _database_export_files(payload: dict[str, Any], report: str) -> dict[str, st
         "active_soft_profiles.json": payload.get("world_detail_context", {}).get("active_soft_profiles", []),
         "soft_profile_history.json": payload.get("world_detail_context", {}).get("soft_profile_history", []),
         "detail_gap_trace.json": payload.get("world_detail_context", {}).get("detail_gaps", []),
+        "causal_detail_candidates.json": payload.get("world_detail_context", {}).get("causal_detail_candidates", []),
+        "detail_persistence_decisions.json": payload.get("world_detail_context", {}).get("detail_persistence_decisions", []),
+        "causal_world_details.json": payload.get("world_detail_context", {}).get("causal_world_details", []),
         "render_repetition_trace.json": payload.get("render_repetition", []),
     }
     files: dict[str, str] = {
@@ -744,6 +747,9 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "active_soft_profiles.json",
         "soft_profile_history.json",
         "detail_gap_trace.json",
+        "causal_detail_candidates.json",
+        "detail_persistence_decisions.json",
+        "causal_world_details.json",
         "irreversibility_report.json",
         "aggregation_traces.json",
     ]

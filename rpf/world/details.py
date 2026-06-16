@@ -9,6 +9,7 @@ REPEATED_ATTENTION_INTENSITY_MIN = 0.08
 SAME_FOCUS_REPEAT_MIN = 2
 DETAIL_BUDGET_PER_SCOPE = 12
 EPHEMERAL_DETAIL_BUDGET = 5
+CAUSAL_DETAIL_BUDGET_PER_SCOPE = 4
 SOFT_PROFILE_FRESHNESS_MIN = 0.35
 SOFT_PROFILE_DECAY_PER_TICK = 0.035
 
@@ -85,6 +86,9 @@ def build_world_detail_context(payload: dict[str, Any]) -> dict[str, Any]:
     detail_gaps = _detail_gaps(focus_records)
     ephemeral = _ephemeral_details(focus_records, local_world)
     profiles = _soft_profiles(focus_records, local_world)
+    candidates = _causal_detail_candidates(focus_records, detail_gaps, local_world, registry)
+    decisions = _persistence_decisions(candidates)
+    causal_details = _validated_causal_details(candidates, decisions)
     current_tick = max(
         [int(frame.get("tick", 0) or 0) for frame in story]
         + [int(record.get("tick", 0) or 0) for record in focus_records]
@@ -108,8 +112,11 @@ def build_world_detail_context(payload: dict[str, Any]) -> dict[str, Any]:
             "same_focus_repeat_min": SAME_FOCUS_REPEAT_MIN,
             "detail_budget_per_scope": DETAIL_BUDGET_PER_SCOPE,
             "ephemeral_detail_budget": EPHEMERAL_DETAIL_BUDGET,
+            "causal_detail_budget_per_scope": CAUSAL_DETAIL_BUDGET_PER_SCOPE,
             "soft_profile_freshness_min": SOFT_PROFILE_FRESHNESS_MIN,
             "soft_profile_decay_per_tick": SOFT_PROFILE_DECAY_PER_TICK,
+            "causal_details_do_not_activate_without_activation_event": True,
+            "causal_detail_candidates_require_existing_refs": True,
         },
         "attention_focuses": focus_records,
         "detail_gaps": detail_gaps,
@@ -117,8 +124,10 @@ def build_world_detail_context(payload: dict[str, Any]) -> dict[str, Any]:
         "soft_world_profiles": profiles,
         "active_soft_profiles": active_profiles,
         "soft_profile_history": profile_history,
-        "causal_world_details": [],
-        "rejected_details": [],
+        "causal_detail_candidates": candidates,
+        "detail_persistence_decisions": decisions,
+        "causal_world_details": causal_details,
+        "rejected_details": [decision for decision in decisions if decision.get("decision") == "reject"],
     }
 
 
@@ -326,6 +335,279 @@ def _soft_profiles(focus_records: list[dict[str, Any]], local_world: dict[str, A
             }
         )
     return profiles
+
+
+def _causal_detail_candidates(
+    focus_records: list[dict[str, Any]],
+    detail_gaps: list[dict[str, Any]],
+    local_world: dict[str, Any],
+    registry: dict[str, Any],
+) -> list[dict[str, Any]]:
+    gap_by_focus = {gap.get("focus_id"): gap for gap in detail_gaps}
+    scope_counts: Counter[str] = Counter()
+    candidates: list[dict[str, Any]] = []
+    for index, record in enumerate(focus_records, start=1):
+        focus = str(record.get("dominant_focus") or "")
+        candidate = _candidate_for_focus(index, record, gap_by_focus.get(record.get("focus_id"), {}), local_world, registry)
+        if not candidate:
+            continue
+        scope_id = str(candidate.get("scope_id") or "")
+        if scope_counts[scope_id] >= CAUSAL_DETAIL_BUDGET_PER_SCOPE:
+            candidate["validation_status"] = "rejected"
+            candidate["risk_flags"].append("causal_detail_budget_exhausted")
+        scope_counts[scope_id] += 1
+        if focus in {"case_fixation", "avoidance_route", "threat_monitoring", "memory_intrusion"}:
+            candidates.append(candidate)
+    return candidates
+
+
+def _candidate_for_focus(
+    index: int,
+    record: dict[str, Any],
+    gap: dict[str, Any],
+    local_world: dict[str, Any],
+    registry: dict[str, Any],
+) -> dict[str, Any] | None:
+    focus = str(record.get("dominant_focus") or "")
+    if focus == "case_fixation":
+        target = _registry_target(record, registry)
+        if not target:
+            return _rejected_candidate(index, record, "case_fixation", "missing_registered_evidence_or_record")
+        ref, kind, item = target
+        forbidden = list(item.get("forbidden_inferences", []) or [])
+        risk_flags = ["do_not_infer_case_truth", *[f"forbidden_inference:{flag}" for flag in forbidden[:3]]]
+        field = "legibility" if kind in {"record", "evidence"} else "condition"
+        return _candidate(
+            index,
+            record,
+            gap,
+            detail_type="evidence_or_record_condition",
+            structural_field=field,
+            value=_condition_value(item, field),
+            affects_capacities=["evidence_access", "memory_integration"],
+            target_ref=ref,
+            validation_status="validated",
+            risk_flags=risk_flags,
+            validation_evidence=[ref, *record.get("evidence", [])[:4]],
+        )
+    if focus == "avoidance_route":
+        route = local_world.get("route", {}) or {}
+        route_id = record.get("route_id") or route.get("route_id")
+        if not route_id:
+            return _rejected_candidate(index, record, "route_surface", "missing_route_ref")
+        status = route.get("access_status") or "unknown"
+        constraints = [
+            item
+            for item in local_world.get("local_constraints", []) or []
+            if item.get("route_id") == route_id
+        ]
+        return _candidate(
+            index,
+            record,
+            gap,
+            detail_type="route_affordance_condition",
+            structural_field="access_surface",
+            value=f"route_access_is_{status}",
+            affects_capacities=["exit", "evidence_access"],
+            target_ref=f"route:{route_id}",
+            validation_status="validated",
+            risk_flags=["does_not_change_route_access", "requires_activation_event"],
+            validation_evidence=[*(route.get("source_event_ids", []) or [])[:4], *(item.get("event_type", "") for item in constraints[:2])],
+        )
+    if focus == "threat_monitoring":
+        audience = _audience_target(local_world)
+        if not audience:
+            return _rejected_candidate(index, record, "audience_exposure_condition", "missing_audience_ref")
+        audience_id = audience.get("audience_id") or audience.get("label")
+        return _candidate(
+            index,
+            record,
+            gap,
+            detail_type="audience_exposure_condition",
+            structural_field="visibility_or_sound_boundary",
+            value=f"exposure_state:{audience.get('exposure_state') or 'possible'}",
+            affects_capacities=["private_speech", "repair_attempt"],
+            target_ref=f"audience:{audience_id}",
+            validation_status="validated",
+            risk_flags=["does_not_create_new_witness", "requires_activation_event"],
+            validation_evidence=[*(audience.get("source_event_ids", []) or [])[:4]],
+        )
+    if focus == "memory_intrusion":
+        sites = local_world.get("memory_sites", []) or []
+        if not sites:
+            return _rejected_candidate(index, record, "memory_site_condition", "missing_memory_site_ref")
+        site = max(sites, key=lambda item: float(item.get("salience") or 0.0))
+        return _candidate(
+            index,
+            record,
+            gap,
+            detail_type="memory_site_condition",
+            structural_field="memory_anchor_salience",
+            value=f"salience:{site.get('salience')}",
+            affects_capacities=["memory_integration", "private_speech"],
+            target_ref=f"memory_site:{site.get('site_id')}",
+            validation_status="validated",
+            risk_flags=["does_not_create_new_memory", "requires_activation_event"],
+            validation_evidence=[*(site.get("source_event_ids", []) or [])[:4]],
+        )
+    return None
+
+
+def _candidate(
+    index: int,
+    record: dict[str, Any],
+    gap: dict[str, Any],
+    *,
+    detail_type: str,
+    structural_field: str,
+    value: Any,
+    affects_capacities: list[str],
+    target_ref: str,
+    validation_status: str,
+    risk_flags: list[str],
+    validation_evidence: list[str],
+) -> dict[str, Any]:
+    tick = int(record.get("tick", 0) or 0)
+    return {
+        "candidate_id": f"cand-{tick:04d}-{index:02d}",
+        "focus_id": record.get("focus_id"),
+        "gap_id": gap.get("gap_id"),
+        "scope_type": record.get("scope_type"),
+        "scope_id": record.get("scope_id"),
+        "target_ref": target_ref,
+        "detail_type": detail_type,
+        "structural_field": structural_field,
+        "value": value,
+        "affects_capacities": affects_capacities,
+        "validation_status": validation_status,
+        "risk_flags": _unique(risk_flags),
+        "confidence": 0.72 if validation_status == "validated" else 0.32,
+        "validation_evidence": _unique(validation_evidence),
+        "source_focus_events": [str(record.get("focus_id"))],
+        "source_events": record.get("evidence", []),
+    }
+
+
+def _rejected_candidate(index: int, record: dict[str, Any], detail_type: str, reason: str) -> dict[str, Any]:
+    tick = int(record.get("tick", 0) or 0)
+    return {
+        "candidate_id": f"cand-{tick:04d}-{index:02d}",
+        "focus_id": record.get("focus_id"),
+        "gap_id": None,
+        "scope_type": record.get("scope_type"),
+        "scope_id": record.get("scope_id"),
+        "target_ref": None,
+        "detail_type": detail_type,
+        "structural_field": None,
+        "value": None,
+        "affects_capacities": [],
+        "validation_status": "rejected",
+        "risk_flags": [reason, "requires_existing_registered_ref"],
+        "confidence": 0.0,
+        "validation_evidence": record.get("evidence", []),
+        "source_focus_events": [str(record.get("focus_id"))],
+        "source_events": record.get("evidence", []),
+    }
+
+
+def _persistence_decisions(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    decisions: list[dict[str, Any]] = []
+    for candidate in candidates:
+        status = candidate.get("validation_status")
+        if status == "validated":
+            decision = "persist_as_causal_record"
+            reason = "existing registered ref and structural field are present; activation still requires a later event"
+            target_record = f"causal:{candidate.get('candidate_id')}"
+        elif "requires_existing_registered_ref" in (candidate.get("risk_flags") or []):
+            decision = "reject"
+            reason = "candidate lacks an existing registered object, route, audience, or memory-site reference"
+            target_record = None
+        else:
+            decision = "compress_to_profile"
+            reason = "candidate is perceptual but not structurally validated"
+            target_record = None
+        decisions.append(
+            {
+                "candidate_id": candidate.get("candidate_id"),
+                "focus_id": candidate.get("focus_id"),
+                "decision": decision,
+                "reason": reason,
+                "target_record": target_record,
+                "activation_allowed": False,
+            }
+        )
+    return decisions
+
+
+def _validated_causal_details(candidates: list[dict[str, Any]], decisions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    decision_by_id = {item.get("candidate_id"): item for item in decisions}
+    details: list[dict[str, Any]] = []
+    for candidate in candidates:
+        decision = decision_by_id.get(candidate.get("candidate_id"), {})
+        if decision.get("decision") != "persist_as_causal_record":
+            continue
+        details.append(
+            {
+                "detail_id": f"causal-{candidate['candidate_id']}",
+                "candidate_id": candidate.get("candidate_id"),
+                "scope_type": candidate.get("scope_type"),
+                "scope_id": candidate.get("scope_id"),
+                "target_ref": candidate.get("target_ref"),
+                "detail_type": candidate.get("detail_type"),
+                "structural_field": candidate.get("structural_field"),
+                "value": candidate.get("value"),
+                "affects_capacities": candidate.get("affects_capacities", []),
+                "affected_events": [],
+                "causal_status": "validated_candidate",
+                "activation_state": "inactive",
+                "activation_requires_event": "CausalWorldDetailActivatedEvent",
+                "validation_evidence": candidate.get("validation_evidence", []),
+                "created_by_focus_event": candidate.get("focus_id"),
+                "source_events": candidate.get("source_events", []),
+            }
+        )
+    return details
+
+
+def _registry_target(record: dict[str, Any], registry: dict[str, Any]) -> tuple[str, str, dict[str, Any]] | None:
+    object_id = record.get("object_id")
+    if object_id:
+        for key, id_key, prefix, kind in (
+            ("evidence_objects", "evidence_id", "evidence", "evidence"),
+            ("record_objects", "record_id", "record", "record"),
+            ("world_objects", "object_id", "world", "world"),
+        ):
+            for item in registry.get(key, []) or []:
+                if item.get(id_key) == object_id:
+                    return f"{prefix}:{object_id}", kind, item
+    evidence = registry.get("evidence_objects", []) or []
+    if evidence:
+        item = evidence[0]
+        return f"evidence:{item.get('evidence_id')}", "evidence", item
+    records = registry.get("record_objects", []) or []
+    if records:
+        item = records[0]
+        return f"record:{item.get('record_id')}", "record", item
+    objects = registry.get("world_objects", []) or []
+    if objects:
+        item = objects[0]
+        return f"world:{item.get('object_id')}", "world", item
+    return None
+
+
+def _condition_value(item: dict[str, Any], field: str) -> Any:
+    value = item.get(field)
+    if value is not None and value != "":
+        return value
+    current = item.get("current_state", {}) or {}
+    return current.get(field) or "unknown_but_registered"
+
+
+def _audience_target(local_world: dict[str, Any]) -> dict[str, Any] | None:
+    audiences = local_world.get("audiences", []) or []
+    if not audiences:
+        return None
+    return max(audiences, key=lambda item: float(item.get("exposure_level") or 0.0))
 
 
 def _soft_profile_history(

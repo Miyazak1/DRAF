@@ -19,6 +19,8 @@ def test_world_detail_context_requires_attention():
     assert context["soft_world_profiles"] == []
     assert context["active_soft_profiles"] == []
     assert context["soft_profile_history"] == []
+    assert context["causal_detail_candidates"] == []
+    assert context["detail_persistence_decisions"] == []
     assert context["causal_world_details"] == []
     assert context["rules"]["no_attention_no_elaboration"] is True
 
@@ -34,7 +36,12 @@ def test_viewer_payload_builds_attention_gated_world_details(tmp_path):
     assert context["soft_world_profiles"]
     assert context["active_soft_profiles"]
     assert context["soft_profile_history"]
-    assert context["causal_world_details"] == []
+    assert context["causal_detail_candidates"]
+    assert context["detail_persistence_decisions"]
+    assert context["causal_world_details"]
+    assert all(item["activation_state"] == "inactive" for item in context["causal_world_details"])
+    assert all(item["causal_status"] == "validated_candidate" for item in context["causal_world_details"])
+    assert all(decision["activation_allowed"] is False for decision in context["detail_persistence_decisions"])
     assert all(detail["discard_after_render"] is True for detail in context["ephemeral_details"])
     profile = context["active_soft_profiles"][0]
     assert profile["last_reinforced_tick"] >= profile["first_seen_tick"]
@@ -59,9 +66,12 @@ def test_render_payload_and_segment_include_world_detail_context(tmp_path):
     assert segment["world_detail_context"]["ephemeral_details"]
     assert segment["world_detail_context"]["active_soft_profiles"]
     assert segment["world_detail_context"]["soft_profile_history"]
+    assert segment["world_detail_context"]["causal_world_details"]
     assert llm_payload["world_detail_context"]["ephemeral_details"]
+    assert llm_payload["world_detail_context"]["causal_world_details"]
     assert llm_payload["rules"]["world_detail_context_is_attention_gated"] is True
     assert "注意力只唤醒了当前可感知细节" in outline
+    assert "候选因果细节已被验证但尚未激活" in outline
 
 
 def test_export_files_include_world_detail_context(tmp_path):
@@ -74,6 +84,9 @@ def test_export_files_include_world_detail_context(tmp_path):
     assert "active_soft_profiles.json" in files
     assert "soft_profile_history.json" in files
     assert "detail_gap_trace.json" in files
+    assert "causal_detail_candidates.json" in files
+    assert "detail_persistence_decisions.json" in files
+    assert "causal_world_details.json" in files
     assert "ephemeral_details_are_render_only" in files["world_detail_context.json"]
 
 

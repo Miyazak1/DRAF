@@ -377,6 +377,16 @@ const ZH = {
   recurring: "反复出现",
   reinforced: "被强化",
   decayed: "已衰减",
+  evidence_or_record_condition: "证据/记录状态",
+  route_affordance_condition: "路线可行性状态",
+  audience_exposure_condition: "观众暴露状态",
+  memory_site_condition: "记忆地点状态",
+  validated_candidate: "已验证候选",
+  inactive: "未激活",
+  evidence_access: "证据可达性",
+  memory_integration: "记忆整合",
+  private_speech: "私下言说",
+  repair_attempt: "修复尝试",
   sight: "视觉",
   sound: "声音",
   distance: "距离",
@@ -858,7 +868,8 @@ function renderWorldDetails() {
   const details = context.ephemeral_details || [];
   const profiles = context.active_soft_profiles || context.soft_world_profiles || [];
   const profileHistory = context.soft_profile_history || [];
-  if (!focuses.length && !details.length && !profiles.length) {
+  const causalDetails = context.causal_world_details || [];
+  if (!focuses.length && !details.length && !profiles.length && !causalDetails.length) {
     target.innerHTML = "<div class=\"trace\"><small>当前没有达到门控条件的世界细节。没有注意力，就不展开世界。</small></div>";
     return;
   }
@@ -905,6 +916,17 @@ function renderWorldDetails() {
             <small>${escapeHtml(item.scope_id || "-")} / 新鲜度 ${fmt(item.freshness)}</small>
           </article>
         `).join("") || "<small>暂无衰减记录</small>"}
+      </div>
+      <div>
+        <h4>候选因果细节</h4>
+        ${causalDetails.slice(-6).map((item) => `
+          <article class="world-detail-card">
+            <strong>${escapeHtml(zh(item.detail_type))}</strong>
+            <small>${escapeHtml(item.target_ref || "-")} / ${escapeHtml(zh(item.causal_status))}</small>
+            <p>${escapeHtml(zhKey(item.structural_field || "-"))}：${escapeHtml(zhMemory(item.value || "-"))}</p>
+            <small>未激活：不会改变行动、路线、证据或承认结果</small>
+          </article>
+        `).join("") || "<small>暂无候选</small>"}
       </div>
     </div>
   `;

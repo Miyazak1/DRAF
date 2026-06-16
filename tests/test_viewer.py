@@ -68,6 +68,7 @@ def test_viewer_static_contains_viability_dynamics_panel():
     assert "worldDetailPanel" in html
     assert "renderWorldDetails" in js
     assert "质地衰减" in js
+    assert "候选因果细节" in js
 
 
 def test_scenario_catalog_exposes_example_scenarios():

@@ -592,6 +592,10 @@ def _outline_why_it_mattered(segment: dict[str, Any], frames: list[dict[str, Any
         tags = _unique_nonempty(tag for item in profiles for tag in (item.get("sensory_tags", []) or []))
         if tags:
             parts.append(f"稳定的本地质地被压缩为：{'，'.join(tags[:5])}。")
+    causal_details = world_details.get("causal_world_details", []) or []
+    if causal_details:
+        labels = _unique_nonempty(item.get("detail_type") for item in causal_details)
+        parts.append(f"候选因果细节已被验证但尚未激活：{'，'.join(labels[:4])}。")
     beats = segment.get("narrative_beats", []) or []
     if beats:
         beat_types = _unique_nonempty(beat.get("beat_type") for beat in beats)
@@ -968,6 +972,24 @@ def _world_detail_context_for_ticks(
         if item.get("scope_id") in scope_ids
         and (not wanted or int(item.get("tick", 0) or 0) <= max(wanted))
     ][-12:]
+    candidates = [
+        item
+        for item in context.get("causal_detail_candidates", []) or []
+        if item.get("scope_id") in scope_ids
+        and (item.get("focus_id") in focus_ids or item.get("validation_status") == "validated")
+    ]
+    candidate_ids = {item.get("candidate_id") for item in candidates}
+    decisions = [
+        item
+        for item in context.get("detail_persistence_decisions", []) or []
+        if item.get("candidate_id") in candidate_ids
+    ]
+    causal_details = [
+        item
+        for item in context.get("causal_world_details", []) or []
+        if item.get("scope_id") in scope_ids
+        and item.get("activation_state") == "inactive"
+    ]
     return {
         "rules": context.get("rules", {}),
         "attention_focuses": focuses,
@@ -976,7 +998,9 @@ def _world_detail_context_for_ticks(
         "soft_world_profiles": profiles,
         "active_soft_profiles": profiles,
         "soft_profile_history": history,
-        "causal_world_details": [],
+        "causal_detail_candidates": candidates,
+        "detail_persistence_decisions": decisions,
+        "causal_world_details": causal_details,
         "rejected_details": context.get("rejected_details", []),
     }
 
