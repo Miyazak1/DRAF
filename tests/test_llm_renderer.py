@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -247,12 +248,97 @@ def test_segment_renderer_sanitizes_full_story_llm_response(tmp_path, monkeypatc
 
     assert result["text"] == result["segment_text"]
     assert "stream_text" in result
-    assert "新的段落内容" in text
+    assert result["mode"] == "deterministic_fallback"
+    assert result["validation"]["fallback_used"] is True
+    assert "document_title" in result["validation"]["violations"]
+    assert "forbidden_full_document_section" in result["validation"]["violations"]
+    assert "source_tick_mismatch" in result["validation"]["violations"]
+    assert "新的段落内容" not in text
     assert "旧段落内容" not in text
     assert "## 概述" not in text
     assert "## 结束状态" not in text
     assert "## 边界说明" not in text
     assert not text.startswith("# 共享公寓")
+    trace = (tmp_path / "render_repetition_trace.json").read_text(encoding="utf-8")
+    assert "protocol_repetition" in trace
+    assert "reject_invalid_segment_output" in trace
+
+
+def test_segment_renderer_accepts_valid_segment_json(tmp_path, monkeypatch):
+    def fake_llm_markdown(render_payload, **kwargs):
+        return '{"segment_text_only":"## 第 2 段：门口的停顿\\n\\n新的段落内容。\\n\\n*来源 tick: 4-5*"}'
+
+    monkeypatch.setattr(segments, "llm_markdown", fake_llm_markdown)
+    segment = {
+        "segment_id": "seg-0002",
+        "segment_index": 2,
+        "tick_start": 4,
+        "tick_end": 5,
+        "boundary_reason": "弱闭合：潜伏时间累积达到阈值",
+        "source_ticks": [4, 5],
+        "simulated_seconds": 120,
+        "frames": [],
+        "render_canon": {"title": "共享公寓：未解决的牺牲"},
+    }
+
+    result = segments.render_and_append_segment(
+        tmp_path,
+        segment,
+        use_llm=True,
+        api_key="test-key",
+    )
+    records = segments.load_render_segments(tmp_path)
+
+    assert result["mode"] == "llm"
+    assert result["validation"]["valid"] is True
+    assert "新的段落内容" in records[0]["text"]
+    assert records[0]["validation"]["violations"] == []
+
+
+def test_segment_guard_rejects_previous_story_repetition(tmp_path, monkeypatch):
+    previous_text = "## 第 1 段：旧段落\n\n" + "这是一段已经写过的内容。" * 12 + "\n\n*来源 tick: 1-3*"
+    (tmp_path / "rendered_segments.json").write_text(
+        json.dumps(
+            [
+                {
+                    "segment_id": "seg-0001",
+                    "segment_index": 1,
+                    "tick_start": 1,
+                    "tick_end": 3,
+                    "source_ticks": [1, 2, 3],
+                    "boundary_reason": "test",
+                    "mode": "llm",
+                    "text": previous_text,
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_llm_markdown(render_payload, **kwargs):
+        return previous_text + "\n\n*来源 tick: 4-5*"
+
+    monkeypatch.setattr(segments, "llm_markdown", fake_llm_markdown)
+    segment = {
+        "segment_id": "seg-0002",
+        "segment_index": 2,
+        "tick_start": 4,
+        "tick_end": 5,
+        "boundary_reason": "弱闭合",
+        "source_ticks": [4, 5],
+        "simulated_seconds": 120,
+        "frames": [],
+        "render_canon": {"title": "共享公寓：未解决的牺牲"},
+    }
+
+    result = segments.render_and_append_segment(tmp_path, segment, use_llm=True, api_key="test-key")
+    records = segments.load_render_segments(tmp_path)
+
+    assert result["mode"] == "deterministic_fallback"
+    assert "previous_segment_repeated" in result["validation"]["violations"]
+    assert records[-1]["mode"] == "deterministic_fallback"
+    assert "这是一段已经写过的内容。" not in records[-1]["text"]
 
 
 def test_segment_payload_inherits_local_world_view(tmp_path):

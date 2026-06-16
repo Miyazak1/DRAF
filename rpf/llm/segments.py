@@ -99,10 +99,11 @@ def render_and_append_segment(
     reasoning_effort: str | None = None,
     run_id: str | None = None,
 ) -> dict[str, Any]:
+    previous_records = load_render_segments(output_dir)
     if use_llm:
         if not api_key:
             raise RuntimeError("Missing API key for segment LLM rendering.")
-        text = llm_markdown(
+        raw_text = llm_markdown(
             _segment_llm_payload(segment, output_dir),
             api_key=api_key,
             base_url=base_url,
@@ -111,11 +112,18 @@ def render_and_append_segment(
             thinking=thinking,
             reasoning_effort=reasoning_effort,
         )
-        text = normalize_segment_text(text, segment)
-        mode = "llm"
+        normalized_text = normalize_segment_text(raw_text, segment)
+        validation = validate_segment_output(raw_text, normalized_text, segment, previous_records)
+        if validation["valid"]:
+            text = normalized_text
+            mode = "llm"
+        else:
+            text = deterministic_segment_markdown(segment)
+            mode = "deterministic_fallback"
     else:
         text = deterministic_segment_markdown(segment)
         mode = "deterministic"
+        validation = {"valid": True, "violations": [], "fallback_used": False}
     record = {
         "segment_id": segment["segment_id"],
         "segment_index": segment["segment_index"],
@@ -127,9 +135,9 @@ def render_and_append_segment(
         "mode": mode,
         "text": text,
         "model": model if use_llm else None,
+        "validation": validation,
     }
-    records = load_render_segments(output_dir)
-    records.append(record)
+    records = [*previous_records, record]
     (output_dir / "rendered_segments.json").write_text(
         json.dumps(records, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -137,6 +145,8 @@ def render_and_append_segment(
     stream = render_segment_stream(records, segment.get("render_canon", {}))
     stream_path = output_dir / "rendered_story_stream.md"
     stream_path.write_text(stream, encoding="utf-8")
+    repetition_record = build_render_repetition_record(segment, record, previous_records)
+    append_render_repetition_trace(output_dir, repetition_record)
     if run_id:
         configured_run_store().write_render_segment(run_id=run_id, segment=record)
     return {
@@ -150,7 +160,107 @@ def render_and_append_segment(
         "segment_text": text,
         "stream_text": stream,
         "segment_count": len(records),
+        "validation": validation,
+        "render_repetition": repetition_record,
     }
+
+
+def validate_segment_output(
+    raw_text: str,
+    normalized_text: str,
+    segment: dict[str, Any],
+    previous_records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Validate an LLM segment before it can be persisted."""
+
+    violations: list[str] = []
+    raw = _strip_markdown_fence(raw_text).strip()
+    normalized = normalized_text.strip()
+    source_ticks = {int(tick) for tick in segment.get("source_ticks", []) if str(tick).isdigit()}
+    if not normalized:
+        violations.append("empty_segment")
+    if raw.startswith("# ") or normalized.startswith("# "):
+        violations.append("document_title")
+    forbidden_headings = ("概述", "总览", "结束状态", "边界说明", "overview", "ending_state", "boundary_note")
+    for line in raw.splitlines():
+        stripped = line.strip().lower()
+        if stripped.startswith("## ") and any(label.lower() in stripped for label in forbidden_headings):
+            violations.append("forbidden_full_document_section")
+            break
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("###"):
+            continue
+        ticks = _ticks_from_heading(stripped)
+        if source_ticks and ticks and source_ticks.isdisjoint(ticks):
+            violations.append("source_tick_mismatch")
+            break
+    if source_ticks and not _mentions_source_tick(normalized, source_ticks):
+        violations.append("missing_source_ticks")
+    if _repeats_previous_segment(normalized, previous_records):
+        violations.append("previous_segment_repeated")
+    return {
+        "valid": not violations,
+        "violations": sorted(set(violations)),
+        "fallback_used": bool(violations),
+    }
+
+
+def build_render_repetition_record(
+    segment: dict[str, Any],
+    record: dict[str, Any],
+    previous_records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    groups = _compressed_frame_groups(segment.get("frames", []))
+    repeated_groups = [group for group in groups if int(group.get("count", 0) or 0) > 1]
+    validation = record.get("validation", {}) or {}
+    locality = _dominant_locality(segment.get("frames", []))
+    structural_similarity = max((group["count"] for group in groups), default=1) / max(len(segment.get("frames", [])) or 1, 1)
+    summary_similarity = _summary_similarity(segment.get("frames", []), previous_records)
+    if validation.get("violations"):
+        repetition_class = "protocol_repetition"
+        recommended_action = "reject_invalid_segment_output"
+    elif repeated_groups:
+        repetition_class = "state_repetition"
+        recommended_action = "compress_as_pattern"
+    elif summary_similarity >= 0.85:
+        repetition_class = "expression_repetition"
+        recommended_action = "shift_to_new_focus"
+    else:
+        repetition_class = "none"
+        recommended_action = "append_segment"
+    return {
+        "segment_id": record.get("segment_id"),
+        "tick_start": record.get("tick_start"),
+        "tick_end": record.get("tick_end"),
+        "mode": record.get("mode"),
+        "repeated_scope": locality,
+        "repeated_focuses": _unique_nonempty(frame.get("inquiry", {}).get("focus_id") for frame in segment.get("frames", [])),
+        "repeated_objects": _active_registry_labels(segment.get("object_registry_view", {})),
+        "repeated_actions": _unique_nonempty(
+            (frame.get("action", {}) or {}).get("action_id") for frame in segment.get("frames", [])
+        ),
+        "summary_similarity": round(summary_similarity, 4),
+        "structural_similarity": round(structural_similarity, 4),
+        "repetition_class": repetition_class,
+        "recommended_action": recommended_action,
+        "protocol_violations": validation.get("violations", []),
+    }
+
+
+def append_render_repetition_trace(output_dir: Path, record: dict[str, Any]) -> None:
+    path = output_dir / "render_repetition_trace.json"
+    if path.exists():
+        try:
+            records = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            records = []
+    else:
+        records = []
+    if not isinstance(records, list):
+        records = []
+    records.append(record)
+    path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def normalize_segment_text(text: str, segment: dict[str, Any]) -> str:
@@ -274,6 +384,85 @@ def _drop_forbidden_segment_sections(lines: list[str]) -> list[str]:
     while kept and not kept[-1].strip():
         kept.pop()
     return kept
+
+
+def _mentions_source_tick(text: str, source_ticks: set[int]) -> bool:
+    lower = text.lower()
+    if "source tick" in lower or "来源 tick" in lower or "来源：" in text or "来源:" in text:
+        numbers = {int(item) for item in re.findall(r"\d+", text)}
+        return not numbers.isdisjoint(source_ticks)
+    numbers = {int(item) for item in re.findall(r"\d+", text)}
+    return not numbers.isdisjoint(source_ticks)
+
+
+def _repeats_previous_segment(text: str, previous_records: list[dict[str, Any]]) -> bool:
+    normalized = _compact_text(text)
+    if len(normalized) < 80:
+        return False
+    for record in previous_records[-3:]:
+        previous = _compact_text(str(record.get("text", "")))
+        if len(previous) < 80:
+            continue
+        if normalized in previous or previous in normalized:
+            return True
+        chunk = previous[: min(240, len(previous))]
+        if len(chunk) >= 80 and chunk in normalized:
+            return True
+    return False
+
+
+def _compact_text(text: str) -> str:
+    return re.sub(r"\s+", "", text.strip())
+
+
+def _dominant_locality(frames: list[dict[str, Any]]) -> str:
+    for frame in reversed(frames):
+        locality = frame.get("locality", {}) or {}
+        location = locality.get("location_label") or locality.get("location_id")
+        if location:
+            return str(location)
+    return ""
+
+
+def _summary_similarity(frames: list[dict[str, Any]], previous_records: list[dict[str, Any]]) -> float:
+    summaries = [_compact_text(str(frame.get("summary", ""))) for frame in frames if frame.get("summary")]
+    if not summaries:
+        return 0.0
+    current = "".join(summaries)
+    if not current:
+        return 0.0
+    previous_text = _compact_text("\n".join(str(record.get("text", "")) for record in previous_records[-3:]))
+    if not previous_text:
+        return 0.0
+    overlap = sum(1 for summary in summaries if summary and summary in previous_text)
+    return overlap / max(len(summaries), 1)
+
+
+def _active_registry_labels(view: dict[str, Any]) -> list[str]:
+    items = []
+    for key, id_key in (
+        ("world_objects", "object_id"),
+        ("record_objects", "record_id"),
+        ("evidence_objects", "evidence_id"),
+    ):
+        for item in view.get(key, []) or []:
+            if isinstance(item, dict):
+                items.append(str(item.get("label") or item.get(id_key) or ""))
+    return _unique_nonempty(items)
+
+
+def _unique_nonempty(values: Any) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
 
 
 def deterministic_segment_markdown(segment: dict[str, Any]) -> str:

@@ -203,6 +203,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "irreversibility": _read_json(run_dir / "irreversibility_report.json", {}),
         "timeline": timeline,
         "rendered_segments": _read_json(run_dir / "rendered_segments.json", []),
+        "render_repetition": _read_json(run_dir / "render_repetition_trace.json", []),
         "rendered_story_stream": _read_text(run_dir / "rendered_story_stream.md"),
     }
     payload["story"] = build_story_frames(payload)
@@ -282,6 +283,7 @@ def build_viewer_payload_from_database_records(data: dict[str, Any]) -> dict[str
         "irreversibility": {},
         "timeline": events,
         "rendered_segments": rendered_segments,
+        "render_repetition": traces.get("render_repetition", []),
         "rendered_story_stream": _db_rendered_story_stream(render_canon, rendered_segments),
     }
     payload["story"] = build_story_frames(payload)
@@ -654,6 +656,7 @@ def _database_export_files(payload: dict[str, Any], report: str) -> dict[str, st
         "location_selection_trace.json": payload.get("location_selection", []),
         "route_selection_trace.json": payload.get("route_selection", []),
         "audience_exposure_trace.json": payload.get("audience_exposure", []),
+        "render_repetition_trace.json": payload.get("render_repetition", []),
     }
     files: dict[str, str] = {
         "run_report.md": report,
@@ -692,6 +695,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "rendered_story_llm.md",
         "rendered_story_stream.md",
         "rendered_segments.json",
+        "render_repetition_trace.json",
         "scheduler_diagnostics.json",
         "inquiry_trace.json",
         "projection_trace.json",
