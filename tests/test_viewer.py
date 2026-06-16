@@ -61,6 +61,9 @@ def test_viewer_static_contains_viability_dynamics_panel():
     assert "buildViabilityPoints" in js
     assert "renderCaseLedger" in js
     assert "调查推进" in js
+    assert "叙事节拍" in html
+    assert "narrativeBeats" in html
+    assert "renderNarrativeBeats" in js
 
 
 def test_scenario_catalog_exposes_example_scenarios():

@@ -47,6 +47,9 @@ const ZH = {
   diagnostic: "诊断",
   viability: "可存续性",
   common_ground: "共同现实",
+  field: "场域",
+  relation: "关系",
+  person: "人物过程",
   SimulationInitializedEvent: "模拟初始化",
   TickStartedEvent: "Tick 开始",
   FieldPressureEvent: "场压力",
@@ -134,6 +137,19 @@ const ZH = {
   practical_substitution: "实际行动替代",
   public_substitution: "公开形式替代",
   recognition_claim: "承认索取",
+  threshold_crossing: "阈值跨越",
+  memory_intrusion: "记忆侵入",
+  evidence_misread: "证据误读",
+  object_handling: "物件处置",
+  failed_disclosure: "表达失败",
+  delayed_answer: "回应延迟",
+  recognition_refusal: "承认拒绝",
+  repair_displaced: "修复转移",
+  missed_window: "窗口错过",
+  attention_fixation: "注意固着",
+  pattern_continuation: "模式延续",
+  inhibited_omission: "抑制性缺席",
+  substituted_enactment: "替代性行动",
   enacted: "已行动",
   inhibited: "被抑制",
   substituted: "被替代",
@@ -376,6 +392,7 @@ function renderAll() {
   renderCaseLedger();
   renderCanon();
   renderStory();
+  renderNarrativeBeats();
   renderLocalWorld();
   renderLiveStory();
   renderEvolution();
@@ -626,6 +643,97 @@ function renderStory() {
     <div class="state-row"><span>记忆压力</span><b>${fmt(pressure.memory_pressure)}</b></div>
     <div class="state-row"><span>承认压力</span><b>${fmt(pressure.recognition_pressure)}</b></div>
   `;
+}
+
+function renderNarrativeBeats() {
+  const target = $("narrativeBeats");
+  if (!target) return;
+  const beats = DATA.narrative_beats || [];
+  if (!beats.length) {
+    target.innerHTML = "<div class=\"trace\"><small>当前运行还没有叙事节拍。运行模拟后会从故事帧和事件流中派生。</small></div>";
+    return;
+  }
+  target.innerHTML = beats.slice(-80).map((beat) => {
+    const actions = [
+      beat.realized_action ? `完成：${beatValueText(beat.realized_action)}` : "",
+      beat.inhibited_action ? `被压下：${beatValueText(beat.inhibited_action)}` : "",
+      beat.substituted_action ? `替代：${beatValueText(beat.substituted_action)}` : "",
+    ].filter(Boolean);
+    const refs = [
+      ...(beat.object_refs || []),
+      ...(beat.record_refs || []),
+      ...(beat.evidence_refs || []),
+      ...(beat.local_detail_refs || []),
+    ].filter(Boolean).slice(0, 8);
+    return `
+      <article class="beat-card">
+        <div class="beat-head">
+          <strong>第 ${escapeHtml(beat.tick ?? "-")} 步 · ${zh(beat.beat_type)}</strong>
+          <span>${escapeHtml(beat.time_window || "-")}</span>
+        </div>
+        <div class="beat-grid">
+          <div><label>焦点过程</label><b>${escapeHtml(beatValueText(beat.focal_process) || "-")}</b></div>
+          <div><label>地点</label><b>${escapeHtml(beatValueText(beat.location_id) || "-")}</b></div>
+          <div><label>参与者</label><b>${beatParticipants(beat.participants)}</b></div>
+        </div>
+        <p>${escapeHtml(beatValueText(beat.outcome || beat.observation || beat.recognition_implication) || "节拍已形成，但尚无表层说明。")}</p>
+        ${beat.obstruction ? `<small class="beat-line">阻碍：${escapeHtml(beatValueText(beat.obstruction))}</small>` : ""}
+        ${beat.unresolved_remainder ? `<small class="beat-line">未解决余量：${escapeHtml(beatValueText(beat.unresolved_remainder))}</small>` : ""}
+        <div class="tags">
+          ${actions.map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}
+          ${refs.map((item) => `<span class="tag">${escapeHtml(short(beatValueText(item), 28))}</span>`).join("")}
+        </div>
+        ${sourceLinks(beat.source_events)}
+      </article>
+    `;
+  }).join("");
+}
+
+function beatValueText(value) {
+  if (value === undefined || value === null || value === "") return "";
+  if (Array.isArray(value)) return value.map(beatValueText).filter(Boolean).join("，");
+  if (typeof value !== "object") return zhMemory(value);
+  const preferredKeys = [
+    "label",
+    "name",
+    "action_id",
+    "action_mode",
+    "expression_id",
+    "expression_mode",
+    "surface_signal",
+    "outcome",
+    "reason",
+    "type",
+    "threshold_label",
+    "state",
+    "description",
+    "summary",
+    "relation_claim",
+    "id",
+  ];
+  for (const key of preferredKeys) {
+    if (value[key] !== undefined && value[key] !== null && value[key] !== "") {
+      return zhMemory(value[key]);
+    }
+  }
+  const compact = Object.entries(value)
+    .filter(([, item]) => item === null || ["string", "number", "boolean"].includes(typeof item))
+    .slice(0, 4)
+    .map(([key, item]) => `${zhKey(key)}：${zhMemory(item)}`)
+    .join("；");
+  if (compact) return compact;
+  return short(JSON.stringify(localizePayload(value)), 80);
+}
+
+function beatParticipants(participants) {
+  const values = Array.isArray(participants)
+    ? participants
+    : Object.values(participants || {});
+  const names = values
+    .map((item) => typeof item === "string" ? item : item?.name || item?.process_id || item?.id)
+    .map(zhMemory)
+    .filter(Boolean);
+  return escapeHtml(names.length ? names.join(" / ") : "-");
 }
 
 function renderLiveStory() {

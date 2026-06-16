@@ -712,6 +712,7 @@ h3 {
 .text-list,
 .trace-list,
 .event-list,
+.beat-list,
 .story-list {
   display: grid;
   gap: 9px;
@@ -789,11 +790,65 @@ h3 {
 .trace,
 .event,
 .tick-detail,
+.beat-card,
 .story-card {
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 10px;
   background: #fbfcfb;
+}
+
+.narrative-beat-panel {
+  margin-top: 12px;
+}
+
+.beat-card {
+  display: grid;
+  gap: 8px;
+}
+
+.beat-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.beat-head span,
+.beat-line {
+  color: var(--muted);
+}
+
+.beat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.beat-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 8px;
+  background: #fff;
+  min-width: 0;
+}
+
+.beat-grid label {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+
+.beat-grid b {
+  display: block;
+  font-weight: 650;
+  word-break: break-word;
+}
+
+.beat-card p {
+  color: #26342f;
+  line-height: 1.6;
 }
 
 .story-card {
@@ -1295,6 +1350,7 @@ h3 {
     .local-world-grid,
     .paper-grid,
     .layer-list,
+    .beat-grid,
     .tick-detail {
     grid-template-columns: 1fr;
   }
