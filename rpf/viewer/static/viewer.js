@@ -41,6 +41,7 @@ const ZH = {
   classification: "关系命名",
   irreversibility: "不可逆",
   memory: "记忆重构",
+  local_world: "本地世界",
   aggregation: "聚合",
   projection: "投影",
   diagnostic: "诊断",
@@ -84,6 +85,42 @@ const ZH = {
   DerivedDramaticTensionEvent: "派生戏剧张力",
   CommonGroundEvent: "共同现实更新",
   WitnessStrategyEvent: "证人策略",
+  LocalWorldUpdateEvent: "本地世界更新",
+  LocationSelectionEvent: "地点选择",
+  RouteSelectionEvent: "路线选择",
+  SceneAudienceContextEvent: "场景观众",
+  RhythmActivationEvent: "地方节律",
+  RouteAccessEvent: "路线可达性",
+  LocationStateEvent: "地点状态",
+  AudienceExposureEvent: "观众暴露",
+  MemorySiteActivationEvent: "记忆地点激活",
+  ResourceStateEvent: "资源状态",
+  LocalWorldConstraintIntegrationEvent: "本地约束整合",
+  BlockedCapacityEvent: "能力阻断",
+  CapacityDemandEvent: "能力需求",
+  open: "开放",
+  costly: "有代价",
+  exposed: "暴露",
+  dangerous: "危险",
+  possible: "可能",
+  likely: "很可能",
+  observed: "已被看见",
+  reported: "已被传播",
+  institutionalized: "已制度化",
+  morning: "上午",
+  midday: "正午",
+  afternoon: "下午",
+  evening: "傍晚",
+  night: "夜晚",
+  exit: "退出能力",
+  care: "照护能力",
+  evidence_access: "证据可达性",
+  private_speech: "私下言说",
+  memory_integration: "记忆整合",
+  resource_scarcity: "资源稀缺",
+  route_access: "路线可达性",
+  public_visibility: "公共可见性",
+  memory_site: "记忆地点",
   material_pressure_intrusion: "物质压力闯入",
   unacknowledged_contribution_claim: "未被承认的付出索取",
   practical_repair_offer: "实际帮助式修复",
@@ -339,6 +376,7 @@ function renderAll() {
   renderCaseLedger();
   renderCanon();
   renderStory();
+  renderLocalWorld();
   renderLiveStory();
   renderEvolution();
   renderViabilityDynamics();
@@ -601,6 +639,130 @@ function renderLiveStory() {
     return;
   }
   if (stream) $("llmOutput").innerHTML = markdownToHtml(stream);
+}
+
+function renderLocalWorld() {
+  const target = $("localWorldPanel");
+  if (!target) return;
+  const view = DATA.local_world_view || {};
+  if (!view.world_id && !view.active_location?.location_id) {
+    target.innerHTML = "<div class=\"panel\"><small>当前运行没有本地世界数据。</small></div>";
+    return;
+  }
+  const location = view.active_location || {};
+  const route = view.route || {};
+  target.innerHTML = `
+    <div class="panel local-world-summary">
+      <div>
+        <label>当前地点</label>
+        <strong>${escapeHtml(location.location_label || location.location_id || "-")}</strong>
+        <small>${escapeHtml(location.why_here || "本地世界候选评分决定此处。")}</small>
+      </div>
+      <div>
+        <label>当前路线</label>
+        <strong>${escapeHtml(route.route_id || "-")}</strong>
+        <small>${escapeHtml(route.from_location || "-")} → ${escapeHtml(route.to_location || "-")} / ${zh(route.access_status || "-")}</small>
+      </div>
+      <div>
+        <label>时间窗口</label>
+        <strong>${zh(view.time_window || "-")}</strong>
+        <small>本地压力 ${fmt(view.local_world_pressure)}</small>
+      </div>
+      <div>
+        <label>可追溯事件</label>
+        <strong>${(location.source_event_ids || []).length + (route.source_event_ids || []).length}</strong>
+        <small>地点与路线的来源链接数</small>
+      </div>
+    </div>
+    <div class="local-world-grid">
+      ${localWorldGroup("活跃节律", view.rhythms || [], rhythmCard)}
+      ${localWorldGroup("可能观众", view.audiences || [], audienceCard)}
+      ${localWorldGroup("记忆地点", view.memory_sites || [], memorySiteCard)}
+      ${localWorldGroup("阻断路线", view.blocked_routes || [], blockedRouteCard)}
+      ${localWorldGroup("资源压力", view.resources || [], resourceCard)}
+      ${localWorldGroup("本地约束", view.local_constraints || [], constraintCard)}
+    </div>
+  `;
+}
+
+function localWorldGroup(title, rows, mapper) {
+  return `
+    <div class="panel local-world-group">
+      <h3>${title}</h3>
+      ${rows.length ? rows.map(mapper).join("") : "<small>暂无</small>"}
+    </div>
+  `;
+}
+
+function localWorldCard(title, body, tags, links) {
+  return `
+    <article class="local-world-card">
+      <strong>${escapeHtml(title || "-")}</strong>
+      <small>${escapeHtml(body || "")}</small>
+      <div class="tags">${(tags || []).filter(Boolean).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>
+      ${sourceLinks(links)}
+    </article>
+  `;
+}
+
+function rhythmCard(item) {
+  return localWorldCard(
+    zh(item.rhythm_id),
+    `Tick ${item.tick ?? "-"} / ${zh(item.event_type)}`,
+    ["地方节律"],
+    item.source_event_ids,
+  );
+}
+
+function audienceCard(item) {
+  return localWorldCard(
+    item.label || item.audience_id,
+    `${zh(item.exposure_state)} / 暴露 ${fmt(item.exposure_level)}`,
+    [`谣言 ${fmt(item.rumor_risk)}`, `制裁 ${fmt(item.sanction_risk)}`, item.location_id],
+    item.source_event_ids,
+  );
+}
+
+function memorySiteCard(item) {
+  return localWorldCard(
+    item.site_id,
+    `${item.location_id || "-"} / 显著性 ${fmt(item.salience)}`,
+    [`回避 ${fmt(item.avoidance_pressure)}`, `吸引 ${fmt(item.attraction_pressure)}`, ...(item.future_scene_biases || []).map(zh)],
+    item.source_event_ids,
+  );
+}
+
+function blockedRouteCard(item) {
+  return localWorldCard(
+    item.route_id,
+    `${zh(item.access_after)} / 可达 ${fmt(item.accessibility)} / 预计 ${item.travel_time_after ?? "-"} 分钟`,
+    [...(item.blocking_conditions || []).map(zh), `危险 ${fmt(item.danger)}`, `暴露 ${fmt(item.exposure)}`],
+    item.source_event_ids,
+  );
+}
+
+function resourceCard(item) {
+  return localWorldCard(
+    item.resource_id,
+    `可用 ${fmt(item.availability)} / 稀缺 ${fmt(item.scarcity_level)}`,
+    [...(item.linked_capacities || []).map(zh), `冲突 ${fmt(item.conflict_potential)}`],
+    item.source_event_ids,
+  );
+}
+
+function constraintCard(item) {
+  return localWorldCard(
+    zh(item.capacity_id || item.demand_source || item.event_type),
+    `${zh(item.blockage_source || item.demand_source || "-")} / 强度 ${fmt(item.intensity)}`,
+    [item.route_id, item.site_id, item.resource_id, item.audience_id, ...(item.linked_capacities || []).map(zh)],
+    item.source_event_ids,
+  );
+}
+
+function sourceLinks(ids) {
+  const values = (ids || []).slice(0, 4);
+  if (!values.length) return "<small class=\"source-links\">来源事件：-</small>";
+  return `<small class="source-links">来源事件：${values.map((id) => `<code>${escapeHtml(short(id, 12))}</code>`).join(" ")}</small>`;
 }
 
 function renderEvolution() {

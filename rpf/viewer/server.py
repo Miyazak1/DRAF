@@ -204,6 +204,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "rendered_story_stream": _read_text(run_dir / "rendered_story_stream.md"),
     }
     payload["story"] = build_story_frames(payload)
+    payload["local_world_view"] = build_local_world_view(payload)
     payload["summary"] = {
         "event_count": metrics.get("event_count", len(timeline)),
         "phase": payload["derived_views"].get("relationship_view", {}).get("phase_label", "unknown"),
@@ -280,6 +281,7 @@ def build_viewer_payload_from_database_records(data: dict[str, Any]) -> dict[str
         "rendered_story_stream": _db_rendered_story_stream(render_canon, rendered_segments),
     }
     payload["story"] = build_story_frames(payload)
+    payload["local_world_view"] = build_local_world_view(payload)
     payload["summary"] = {
         "event_count": metrics.get("event_count", len(events)),
         "phase": payload["derived_views"].get("relationship_view", {}).get("phase_label", "unknown"),
@@ -858,6 +860,234 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return frames
+
+
+def build_local_world_view(payload: dict[str, Any]) -> dict[str, Any]:
+    local_world = payload.get("local_world", []) or []
+    location_selection = payload.get("location_selection", []) or []
+    route_selection = payload.get("route_selection", []) or []
+    audience_exposure = payload.get("audience_exposure", []) or []
+    timeline = payload.get("timeline", []) or []
+    update = _last_trace(local_world, "LocalWorldUpdateEvent")
+    latest_location = location_selection[-1] if location_selection else {}
+    latest_route = route_selection[-1] if route_selection else {}
+    latest_audience = audience_exposure[-1] if audience_exposure else {}
+    latest_constraints = _last_trace(local_world, "LocalWorldConstraintIntegrationEvent")
+    route_states = _latest_by_key(local_world, "RouteAccessEvent", "route_id")
+    memory_sites = _latest_by_key(local_world, "MemorySiteActivationEvent", "site_id")
+    resources = _latest_by_key(local_world, "ResourceStateEvent", "resource_id")
+    return {
+        "world_id": update.get("world_id"),
+        "time_window": update.get("current_time_window"),
+        "local_world_pressure": update.get("local_world_pressure"),
+        "active_location": _active_location_view(latest_location, timeline),
+        "route": _active_route_view(latest_route, timeline),
+        "rhythms": [
+            _with_source_links(
+                {"rhythm_id": rhythm_id, "event_type": "RhythmActivationEvent", "tick": update.get("tick")},
+                timeline,
+                caused_by=update.get("caused_by_events", []),
+            )
+            for rhythm_id in update.get("active_rhythms", [])
+        ],
+        "audiences": _audience_views(latest_audience, timeline),
+        "memory_sites": [_memory_site_view(item, timeline) for item in memory_sites.values()],
+        "blocked_routes": [
+            _route_state_view(item, timeline)
+            for item in route_states.values()
+            if item.get("access_after") in {"blocked", "dangerous", "costly", "exposed"}
+        ],
+        "resources": [_resource_view(item, timeline) for item in resources.values()],
+        "local_constraints": _constraint_views(latest_constraints, timeline),
+        "boundary_rules": update.get("boundary_rules", {}),
+    }
+
+
+def _active_location_view(selection: dict[str, Any], timeline: list[dict[str, Any]]) -> dict[str, Any]:
+    if not selection:
+        return {}
+    top = (selection.get("candidate_scores") or [{}])[0]
+    return _with_source_links(
+        {
+            "tick": selection.get("tick"),
+            "event_type": selection.get("event_type", "LocationSelectionEvent"),
+            "location_id": selection.get("selected_location"),
+            "location_label": selection.get("selected_location_label") or selection.get("selected_location"),
+            "scene_type": selection.get("scene_type"),
+            "score": top.get("score"),
+            "why_here": selection.get("why_here"),
+            "why_not_elsewhere": selection.get("why_not_elsewhere"),
+            "candidate_count": len(selection.get("candidate_scores") or []),
+            "rejected_count": len(selection.get("rejected_locations") or []),
+        },
+        timeline,
+        caused_by=selection.get("caused_by_events", []),
+    )
+
+
+def _active_route_view(selection: dict[str, Any], timeline: list[dict[str, Any]]) -> dict[str, Any]:
+    if not selection:
+        return {}
+    route = selection.get("route_context") or {}
+    return _with_source_links(
+        {
+            "tick": selection.get("tick"),
+            "event_type": selection.get("event_type", "RouteSelectionEvent"),
+            "route_id": route.get("route_id") or selection.get("selected_route"),
+            "from_location": route.get("from_location"),
+            "to_location": route.get("to_location"),
+            "access_status": route.get("access_status"),
+            "travel_time_minutes": route.get("travel_time_minutes"),
+            "route_score": route.get("route_score"),
+            "route_costs": route.get("route_costs", {}),
+        },
+        timeline,
+        caused_by=selection.get("caused_by_events", []),
+    )
+
+
+def _audience_views(selection: dict[str, Any], timeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not selection:
+        return []
+    caused_by = selection.get("caused_by_events", [])
+    return [
+        _with_source_links(
+            {
+                "tick": selection.get("tick"),
+                "event_type": "SceneAudienceContextEvent",
+                "location_id": selection.get("location_id"),
+                "audience_id": audience.get("audience_id"),
+                "label": audience.get("label"),
+                "exposure_state": audience.get("exposure_state"),
+                "exposure_level": audience.get("exposure_level"),
+                "rumor_risk": audience.get("rumor_risk"),
+                "sanction_risk": audience.get("sanction_risk"),
+            },
+            timeline,
+            caused_by=caused_by,
+        )
+        for audience in selection.get("possible_audiences", [])
+    ]
+
+
+def _memory_site_view(item: dict[str, Any], timeline: list[dict[str, Any]]) -> dict[str, Any]:
+    return _with_source_links(
+        {
+            "tick": item.get("tick"),
+            "event_type": item.get("event_type"),
+            "site_id": item.get("site_id"),
+            "location_id": item.get("location_id"),
+            "salience": item.get("salience"),
+            "avoidance_pressure": item.get("avoidance_pressure"),
+            "attraction_pressure": item.get("attraction_pressure"),
+            "affected_processes": item.get("affected_processes", []),
+            "future_scene_biases": item.get("future_scene_biases", []),
+        },
+        timeline,
+        caused_by=item.get("caused_by_events", []),
+    )
+
+
+def _route_state_view(item: dict[str, Any], timeline: list[dict[str, Any]]) -> dict[str, Any]:
+    return _with_source_links(
+        {
+            "tick": item.get("tick"),
+            "event_type": item.get("event_type"),
+            "route_id": item.get("route_id"),
+            "access_after": item.get("access_after"),
+            "accessibility": item.get("accessibility"),
+            "travel_time_after": item.get("travel_time_after"),
+            "blocking_conditions": item.get("blocking_conditions", []),
+            "affected_processes": item.get("affected_processes", []),
+            "danger": item.get("danger"),
+            "exposure": item.get("exposure"),
+        },
+        timeline,
+        caused_by=item.get("caused_by_events", []),
+    )
+
+
+def _resource_view(item: dict[str, Any], timeline: list[dict[str, Any]]) -> dict[str, Any]:
+    return _with_source_links(
+        {
+            "tick": item.get("tick"),
+            "event_type": item.get("event_type"),
+            "resource_id": item.get("resource_id"),
+            "availability": item.get("availability"),
+            "scarcity_level": item.get("scarcity_level"),
+            "linked_capacities": item.get("linked_capacities", []),
+            "conflict_potential": item.get("conflict_potential"),
+        },
+        timeline,
+        caused_by=item.get("caused_by_events", []),
+    )
+
+
+def _constraint_views(trace: dict[str, Any], timeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    constraints = trace.get("constraints", []) if trace else []
+    result = []
+    for constraint in constraints:
+        event_type = "CapacityDemandEvent" if constraint.get("demand_source") == "resource_scarcity" else "BlockedCapacityEvent"
+        result.append(
+            _with_source_links(
+                {
+                    "tick": trace.get("tick"),
+                    "event_type": event_type,
+                    **constraint,
+                },
+                timeline,
+                caused_by=trace.get("caused_by_events", []),
+            )
+        )
+    return result
+
+
+def _with_source_links(item: dict[str, Any], timeline: list[dict[str, Any]], *, caused_by: list[str] | None = None) -> dict[str, Any]:
+    caused_by = list(caused_by or item.get("caused_by_events") or [])
+    source_event_ids = _matching_event_ids(item, timeline)
+    linked = sorted({str(value) for value in [*source_event_ids, *caused_by] if value})
+    item["source_event_ids"] = linked
+    item["caused_by_events"] = caused_by
+    return item
+
+
+def _matching_event_ids(item: dict[str, Any], timeline: list[dict[str, Any]]) -> list[str]:
+    event_type = item.get("event_type")
+    tick = item.get("tick")
+    identities = [
+        "route_id",
+        "location_id",
+        "audience_id",
+        "site_id",
+        "resource_id",
+        "capacity_id",
+        "demand_source",
+    ]
+    matches = []
+    for event in timeline:
+        if event.get("event_type") != event_type:
+            continue
+        if tick is not None and event.get("tick") != tick:
+            continue
+        payload = event.get("payload") or {}
+        if any(item.get(key) is not None and payload.get(key) == item.get(key) for key in identities):
+            matches.append(str(event.get("event_id")))
+    return matches
+
+
+def _last_trace(rows: list[dict[str, Any]], event_type: str) -> dict[str, Any]:
+    for row in reversed(rows):
+        if row.get("event_type") == event_type:
+            return row
+    return {}
+
+
+def _latest_by_key(rows: list[dict[str, Any]], event_type: str, key: str) -> dict[str, dict[str, Any]]:
+    result = {}
+    for row in rows:
+        if row.get("event_type") == event_type and row.get(key):
+            result[str(row.get(key))] = row
+    return result
 
 
 def _viability_summary(trace: dict[str, Any], scheduler_tick: dict[str, Any]) -> dict[str, Any]:

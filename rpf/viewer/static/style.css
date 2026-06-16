@@ -826,6 +826,81 @@ h3 {
   color: #26342f;
 }
 
+.local-world-layout {
+  display: grid;
+  gap: 12px;
+}
+
+.local-world-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.local-world-summary > div {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfcfb;
+  padding: 10px;
+  min-width: 0;
+}
+
+.local-world-summary label {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.local-world-summary strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.local-world-summary small {
+  display: block;
+  color: var(--muted);
+  margin-top: 5px;
+  line-height: 1.45;
+}
+
+.local-world-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.local-world-group {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.local-world-card {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfcfb;
+  padding: 9px;
+  display: grid;
+  gap: 6px;
+}
+
+.local-world-card strong,
+.local-world-card small {
+  overflow-wrap: anywhere;
+}
+
+.source-links {
+  color: var(--muted);
+}
+
+.source-links code {
+  background: #eef3f0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 4px;
+}
+
 .canon-box {
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -1216,6 +1291,8 @@ h3 {
     .cast-grid,
     .case-summary,
     .case-grid,
+    .local-world-summary,
+    .local-world-grid,
     .paper-grid,
     .layer-list,
     .tick-detail {

@@ -116,6 +116,7 @@ def test_viewer_payload_contains_local_world(tmp_path):
     payload = build_viewer_payload(output_dir)
 
     assert payload["local_world"]
+    assert payload["local_world_view"]
     assert any(item["event_type"] == "LocalWorldUpdateEvent" for item in payload["local_world"])
 
 
@@ -273,6 +274,33 @@ def test_local_world_constraints_feed_affordance_selection(tmp_path):
         for key in candidate.get("evidence", {})
     )
     assert any(selection["payload"].get("local_world_context") for selection in selections)
+
+
+def test_viewer_shows_active_location_and_route(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    payload = build_viewer_payload(output_dir)
+    view = payload["local_world_view"]
+    html = Path("rpf/viewer/static/index.html").read_text(encoding="utf-8")
+    js = Path("rpf/viewer/static/viewer.js").read_text(encoding="utf-8")
+
+    assert view["active_location"]["location_id"]
+    assert view["active_location"]["location_label"]
+    assert view["route"]["route_id"]
+    assert view["route"]["access_status"] in {"open", "costly", "exposed", "dangerous", "blocked", "unknown"}
+    assert "本地世界" in html
+    assert "localWorldPanel" in html
+    assert "renderLocalWorld" in js
+
+
+def test_viewer_links_local_world_items_to_source_events(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    payload = build_viewer_payload(output_dir)
+    view = payload["local_world_view"]
+
+    assert view["active_location"]["source_event_ids"]
+    assert view["route"]["source_event_ids"]
+    assert any(item["source_event_ids"] for item in view["blocked_routes"])
+    assert any(item["source_event_ids"] for item in view["local_constraints"])
 
 
 def _run_yellow_sign(tmp_path, *, steps: int) -> Path:
