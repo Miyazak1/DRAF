@@ -194,6 +194,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "relation": _read_json(run_dir / "relation_trace.json", []),
         "rpp_activation": _read_json(run_dir / "rpp_activation_trace.json", []),
         "rpp_dynamics": _read_json(run_dir / "rpp_dynamics_trace.json", []),
+        "local_world": _read_json(run_dir / "local_world_trace.json", []),
         "irreversibility": _read_json(run_dir / "irreversibility_report.json", {}),
         "timeline": timeline,
         "rendered_segments": _read_json(run_dir / "rendered_segments.json", []),
@@ -266,6 +267,7 @@ def build_viewer_payload_from_database_records(data: dict[str, Any]) -> dict[str
         "relation": traces.get("relation", []),
         "rpp_activation": traces.get("rpp_activation", []),
         "rpp_dynamics": traces.get("rpp_dynamics", []),
+        "local_world": traces.get("local_world", []),
         "irreversibility": {},
         "timeline": events,
         "rendered_segments": rendered_segments,
@@ -635,6 +637,7 @@ def _database_export_files(payload: dict[str, Any], report: str) -> dict[str, st
         "relation_trace.json": payload.get("relation", []),
         "rpp_activation_trace.json": payload.get("rpp_activation", []),
         "rpp_dynamics_trace.json": payload.get("rpp_dynamics", []),
+        "local_world_trace.json": payload.get("local_world", []),
     }
     files: dict[str, str] = {
         "run_report.md": report,
@@ -697,6 +700,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "relation_trace.json",
         "rpp_activation_trace.json",
         "rpp_dynamics_trace.json",
+        "local_world_trace.json",
         "irreversibility_report.json",
         "aggregation_traces.json",
     ]

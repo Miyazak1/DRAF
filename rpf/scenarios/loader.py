@@ -5,6 +5,8 @@ from typing import Any
 
 import yaml
 
+from rpf.core.local_world import LocalWorldSpec
+
 
 def load_scenario(path: Path) -> dict[str, Any]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -13,4 +15,6 @@ def load_scenario(path: Path) -> dict[str, Any]:
     for key in ("id", "processes", "bindings"):
         if key not in data:
             raise ValueError(f"Scenario missing required key: {key}")
+    if "local_world" in data:
+        data["local_world"] = LocalWorldSpec.model_validate(data["local_world"]).model_dump(mode="json")
     return data

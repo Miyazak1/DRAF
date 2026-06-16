@@ -180,6 +180,503 @@ case_ledger:
       ambiguity: 0.91
       may_not_be_supernatural: true
 
+local_world:
+  id: yellow_sign_town
+  name: 黄印镇
+  scale: town
+  description: 一个被旧案、雨季、熟人网络和基层制度共同压住的小镇。
+  boundary_rules:
+    max_scene_scope: local_world_only
+    new_location_policy: discovery_required
+    offscreen_event_policy: trace_required
+    route_required: true
+    travel_time_required: true
+    audience_required_for_public_reclassification: true
+    institution_required_for_record_change: true
+    memory_site_required_for_place_based_reconstruction: true
+  locations:
+    - location_id: police_archive
+      label: 派出所档案室
+      location_type: police_archive
+      access_level: restricted
+      controlling_institution: local_police_station
+      public_visibility: low
+      crowd_density: low
+      rumor_density: medium
+      surveillance_level: medium
+      memory_charge: high
+      material_conditions:
+        contamination: 0.62
+      allowed_scene_types: [evidence_review, controlled_disclosure, procedural_conflict]
+      forbidden_topics: [unofficial_accusation, family_secret]
+      linked_processes: [p1, p2]
+      evidence_refs: [yellow_paint_mark, water_damaged_child_drawing, old_tape_yellow_bleed]
+    - location_id: police_front_office
+      label: 派出所前厅
+      location_type: institution
+      access_level: restricted
+      controlling_institution: local_police_station
+      public_visibility: medium
+      crowd_density: medium
+      rumor_density: medium
+      surveillance_level: high
+      memory_charge: medium
+      allowed_scene_types: [procedural_conflict, public_performance]
+      linked_processes: [p1, p2]
+    - location_id: market_street
+      label: 早市街
+      location_type: market
+      access_level: open
+      public_visibility: high
+      crowd_density: high
+      rumor_density: high
+      surveillance_level: low
+      memory_charge: medium
+      allowed_scene_types: [public_performance, accidental_encounter, rumor_exchange]
+      blocked_scene_types: [private_confession]
+    - location_id: bus_stop
+      label: 镇口车站
+      location_type: station
+      access_level: open
+      public_visibility: high
+      crowd_density: medium
+      rumor_density: medium
+      surveillance_level: low
+      memory_charge: low
+      allowed_scene_types: [exit_attempt, delayed_return]
+    - location_id: clinic_corridor
+      label: 镇卫生院走廊
+      location_type: hospital
+      access_level: open
+      controlling_institution: town_clinic
+      public_visibility: medium
+      crowd_density: medium
+      rumor_density: medium
+      surveillance_level: medium
+      memory_charge: medium
+      allowed_scene_types: [care_conflict, unstable_testimony_probe]
+    - location_id: river_bridge
+      label: 旧河桥
+      location_type: bridge
+      access_level: open
+      public_visibility: low
+      crowd_density: low
+      rumor_density: medium
+      surveillance_level: low
+      memory_charge: high
+      allowed_scene_types: [testimony_gap, delayed_return]
+      linked_processes: [p1]
+    - location_id: abandoned_factory
+      label: 废弃炼油厂
+      location_type: ruin
+      access_level: dangerous
+      public_visibility: low
+      crowd_density: low
+      rumor_density: medium
+      surveillance_level: low
+      memory_charge: high
+      material_conditions:
+        contamination: 0.78
+      allowed_scene_types: [forbidden_symbol_confrontation, evidence_contamination]
+      linked_processes: [p1, p2]
+      evidence_refs: [refinery_map_gap]
+    - location_id: old_residential_lane
+      label: 老居民巷
+      location_type: street
+      access_level: open
+      public_visibility: medium
+      crowd_density: medium
+      rumor_density: high
+      surveillance_level: low
+      memory_charge: medium
+    - location_id: town_school_gate
+      label: 镇小学门口
+      location_type: school
+      access_level: open
+      controlling_institution: town_school
+      public_visibility: high
+      crowd_density: high
+      rumor_density: high
+      surveillance_level: medium
+      memory_charge: high
+      allowed_scene_types: [public_performance, witness_pressure]
+    - location_id: lin_ya_room
+      label: 林鸦临时住处
+      location_type: private_room
+      access_level: private
+      public_visibility: low
+      crowd_density: low
+      rumor_density: low
+      surveillance_level: low
+      memory_charge: medium
+      allowed_scene_types: [private_recovery, limited_disclosure]
+      linked_processes: [p1]
+    - location_id: zhou_jibai_office
+      label: 周既白临时办公室
+      location_type: private_room
+      access_level: restricted
+      controlling_institution: county_investigation_team
+      public_visibility: low
+      crowd_density: low
+      rumor_density: low
+      surveillance_level: medium
+      memory_charge: medium
+      allowed_scene_types: [evidence_review, controlled_disclosure]
+      linked_processes: [p2]
+  routes:
+    - route_id: archive_to_front_office
+      from_location: police_archive
+      to_location: police_front_office
+      travel_time_minutes: 2
+      access_level: restricted
+      exposure_level: medium
+      danger_level: low
+      surveillance_points: [duty_desk]
+    - route_id: front_office_to_market
+      from_location: police_front_office
+      to_location: market_street
+      travel_time_minutes: 7
+      access_level: open
+      exposure_level: high
+      danger_level: low
+    - route_id: market_to_bus_stop
+      from_location: market_street
+      to_location: bus_stop
+      travel_time_minutes: 6
+      access_level: open
+      exposure_level: high
+      danger_level: low
+    - route_id: market_to_clinic
+      from_location: market_street
+      to_location: clinic_corridor
+      travel_time_minutes: 9
+      access_level: open
+      exposure_level: medium
+      danger_level: low
+    - route_id: market_to_old_lane
+      from_location: market_street
+      to_location: old_residential_lane
+      travel_time_minutes: 5
+      access_level: open
+      exposure_level: medium
+      danger_level: low
+    - route_id: old_lane_to_river_bridge
+      from_location: old_residential_lane
+      to_location: river_bridge
+      travel_time_minutes: 14
+      access_level: open
+      exposure_level: low
+      danger_level: medium
+      weather_sensitivity: high
+      blocked_by_conditions: [heavy_rain, river_rise]
+      memory_charge: high
+    - route_id: river_bridge_to_abandoned_factory
+      from_location: river_bridge
+      to_location: abandoned_factory
+      travel_time_minutes: 22
+      access_level: dangerous
+      exposure_level: low
+      danger_level: high
+      weather_sensitivity: high
+      blocked_by_conditions: [heavy_rain, river_rise]
+      memory_charge: high
+    - route_id: archive_to_zhou_office
+      from_location: police_archive
+      to_location: zhou_jibai_office
+      travel_time_minutes: 4
+      access_level: restricted
+      exposure_level: low
+      danger_level: low
+      surveillance_points: [archive_register]
+  rhythms:
+    - rhythm_id: morning_market
+      label: 早市
+      time_window: morning
+      recurrence: daily
+      active_locations: [market_street, bus_stop]
+      crowd_density_delta: 0.45
+      rumor_pressure_delta: 0.55
+      mobility_cost_delta: 0.1
+      available_scene_types: [public_performance, accidental_encounter, rumor_exchange]
+    - rhythm_id: school_dismissal
+      label: 放学
+      time_window: afternoon
+      recurrence: weekday
+      active_locations: [town_school_gate, old_residential_lane]
+      crowd_density_delta: 0.5
+      rumor_pressure_delta: 0.48
+      available_scene_types: [public_performance, witness_pressure]
+    - rhythm_id: clinic_queue
+      label: 卫生院排队
+      time_window: morning
+      recurrence: daily
+      active_locations: [clinic_corridor]
+      crowd_density_delta: 0.42
+      rumor_pressure_delta: 0.32
+    - rhythm_id: police_shift_change
+      label: 派出所换班
+      time_window: evening
+      recurrence: daily
+      active_locations: [police_front_office, police_archive]
+      crowd_density_delta: 0.22
+      rumor_pressure_delta: 0.28
+      institutional_pressure_delta: 0.46
+    - rhythm_id: night_rain
+      label: 夜雨
+      time_window: night
+      recurrence: seasonal
+      active_locations: [river_bridge, abandoned_factory, old_residential_lane]
+      crowd_density_delta: -0.2
+      rumor_pressure_delta: 0.2
+      mobility_cost_delta: 0.4
+      available_scene_types: [delayed_return, private_confession]
+    - rhythm_id: last_bus
+      label: 末班车
+      time_window: evening
+      recurrence: daily
+      active_locations: [bus_stop]
+      crowd_density_delta: 0.3
+      rumor_pressure_delta: 0.25
+      mobility_cost_delta: 0.18
+    - rhythm_id: case_anniversary
+      label: 旧案周年
+      time_window: any
+      recurrence: annual
+      active_locations: [town_school_gate, river_bridge, police_archive]
+      crowd_density_delta: 0.2
+      rumor_pressure_delta: 0.62
+      institutional_pressure_delta: 0.38
+    - rhythm_id: county_inspection_day
+      label: 县里检查日
+      time_window: midday
+      recurrence: scheduled
+      active_locations: [police_front_office, zhou_jibai_office]
+      crowd_density_delta: 0.18
+      rumor_pressure_delta: 0.3
+      institutional_pressure_delta: 0.7
+  audiences:
+    - audience_id: market_neighbors
+      label: 早市熟人
+      audience_type: neighbor
+      usual_locations: [market_street]
+      rumor_power: 0.72
+      sanction_power: 0.35
+      affected_topics: [old_case, lin_ya_return, new_body]
+      relationship_to_processes:
+        p1: remembered_witness
+        p2: outsider_investigator
+    - audience_id: police_colleagues
+      label: 派出所同事
+      audience_type: police
+      usual_locations: [police_front_office, police_archive]
+      rumor_power: 0.48
+      sanction_power: 0.62
+      legitimacy_power: 0.7
+      affected_topics: [procedural_gap, missing_records]
+    - audience_id: victim_families
+      label: 受害者家属
+      audience_type: victim_family
+      usual_locations: [police_front_office, town_school_gate, market_street]
+      rumor_power: 0.62
+      sanction_power: 0.58
+      legitimacy_power: 0.74
+      affected_topics: [official_closed_case, new_body, testimony_gap]
+    - audience_id: clinic_staff
+      label: 卫生院职工
+      audience_type: doctor
+      usual_locations: [clinic_corridor]
+      rumor_power: 0.36
+      sanction_power: 0.3
+    - audience_id: school_parents
+      label: 学校家长
+      audience_type: family
+      usual_locations: [town_school_gate]
+      rumor_power: 0.68
+      sanction_power: 0.42
+    - audience_id: county_reporters
+      label: 县里记者
+      audience_type: reporter
+      usual_locations: [police_front_office, market_street]
+      visibility_pattern: episodic
+      rumor_power: 0.55
+      sanction_power: 0.5
+      legitimacy_power: 0.4
+    - audience_id: retired_factory_workers
+      label: 退休炼油厂工人
+      audience_type: local_elder
+      usual_locations: [old_residential_lane, market_street]
+      rumor_power: 0.64
+      sanction_power: 0.38
+      affected_topics: [abandoned_factory, missing_children_list]
+    - audience_id: imagined_town_public
+      label: 想象中的全镇目光
+      audience_type: imagined_audience
+      usual_locations: [market_street, police_front_office, town_school_gate]
+      rumor_power: 0.8
+      sanction_power: 0.55
+      legitimacy_power: 0.5
+  institutions:
+    - institution_id: local_police_station
+      label: 黄印镇派出所
+      domain: police
+      locations: [police_archive, police_front_office]
+      recognized_roles: [local_officer, outside_investigator, witness_assistant]
+      records: [old_case_file, archive_register, evidence_room_log]
+      sanction_rules: [procedural_reprimand, access_revocation]
+      silence_rules: [missing_page_minimization, unofficial_accusation_suppression]
+      legitimacy_rules: [chain_of_custody, county_order]
+      corruption_or_decay: 0.74
+    - institution_id: town_clinic
+      label: 镇卫生院
+      domain: hospital
+      locations: [clinic_corridor]
+      recognized_roles: [doctor, patient, witness]
+      records: [clinic_unfiled_report]
+      corruption_or_decay: 0.36
+    - institution_id: town_school
+      label: 镇小学
+      domain: school
+      locations: [town_school_gate]
+      recognized_roles: [teacher, parent, former_student]
+      records: [old_attendance_book]
+      corruption_or_decay: 0.32
+    - institution_id: county_investigation_team
+      label: 县调查组
+      domain: legal
+      locations: [zhou_jibai_office, police_front_office]
+      recognized_roles: [outside_investigator]
+      records: [reopen_order, county_report]
+      corruption_or_decay: 0.22
+  memory_sites:
+    - site_id: factory_missing_child_case
+      location_id: abandoned_factory
+      memory_type: disappearance_site
+      source_events: [night_of_old_case]
+      affected_processes: [p1, p2]
+      salience: 0.88
+      contamination: 0.5
+      avoidance_pressure: 0.66
+      attraction_pressure: 0.38
+      future_scene_biases: [testimony_gap, forbidden_symbol_confrontation]
+    - site_id: river_bridge_last_seen
+      location_id: river_bridge
+      memory_type: disappearance_site
+      source_events: [night_of_old_case]
+      affected_processes: [p1]
+      salience: 0.78
+      contamination: 0.42
+      avoidance_pressure: 0.58
+      attraction_pressure: 0.3
+      future_scene_biases: [testimony_gap, delayed_return]
+    - site_id: archive_missing_record_shelf
+      location_id: police_archive
+      memory_type: evidence_site
+      source_events: [file_room_flood]
+      affected_processes: [p1, p2]
+      salience: 0.82
+      contamination: 0.64
+      avoidance_pressure: 0.35
+      attraction_pressure: 0.62
+      future_scene_biases: [contaminated_evidence_review, controlled_disclosure]
+    - site_id: market_rumor_corner
+      location_id: market_street
+      memory_type: public_humiliation_site
+      affected_processes: [p1]
+      salience: 0.56
+      contamination: 0.28
+      avoidance_pressure: 0.44
+      attraction_pressure: 0.18
+      future_scene_biases: [public_performance, rumor_exchange]
+    - site_id: clinic_unfiled_report_window
+      location_id: clinic_corridor
+      memory_type: evidence_site
+      affected_processes: [p1, p2]
+      salience: 0.52
+      contamination: 0.36
+      avoidance_pressure: 0.26
+      attraction_pressure: 0.34
+      future_scene_biases: [unstable_testimony_probe]
+    - site_id: school_gate_old_witness_spot
+      location_id: town_school_gate
+      memory_type: witness_site
+      source_events: [night_of_old_case]
+      affected_processes: [p1]
+      salience: 0.72
+      contamination: 0.4
+      avoidance_pressure: 0.6
+      attraction_pressure: 0.2
+      future_scene_biases: [witness_pressure, public_performance]
+  ecological_conditions:
+    - condition_id: heavy_rain
+      label: 大雨
+      condition_type: heavy_rain
+      active_time_window: always
+      affected_routes: [old_lane_to_river_bridge, river_bridge_to_abandoned_factory]
+      affected_locations: [river_bridge, abandoned_factory, old_residential_lane]
+      mobility_delta: 0.62
+      visibility_delta: 0.28
+      bodily_cost_delta: 0.34
+      evidence_degradation_delta: 0.5
+      audience_density_delta: -0.18
+    - condition_id: yellow_fog
+      label: 黄雾
+      condition_type: fog
+      active_time_window: morning
+      affected_routes: [river_bridge_to_abandoned_factory]
+      affected_locations: [river_bridge, abandoned_factory]
+      mobility_delta: 0.24
+      visibility_delta: 0.58
+      bodily_cost_delta: 0.16
+      evidence_degradation_delta: 0.22
+    - condition_id: power_flicker
+      label: 电灯闪烁
+      condition_type: power_outage
+      active_time_window: evening
+      affected_locations: [police_archive, police_front_office, zhou_jibai_office]
+      mobility_delta: 0.08
+      visibility_delta: 0.38
+      evidence_degradation_delta: 0.18
+    - condition_id: river_rise
+      label: 河水上涨
+      condition_type: flood
+      active_time_window: night
+      affected_routes: [old_lane_to_river_bridge, river_bridge_to_abandoned_factory]
+      affected_locations: [river_bridge]
+      mobility_delta: 0.7
+      visibility_delta: 0.18
+      bodily_cost_delta: 0.42
+    - condition_id: mildew_season
+      label: 霉季
+      condition_type: pollution
+      active_time_window: always
+      affected_locations: [police_archive, abandoned_factory]
+      bodily_cost_delta: 0.24
+      evidence_degradation_delta: 0.46
+    - condition_id: road_mud
+      label: 泥路
+      condition_type: road_closure
+      active_time_window: always
+      affected_routes: [old_lane_to_river_bridge]
+      mobility_delta: 0.36
+      bodily_cost_delta: 0.2
+  resources:
+    - resource_id: archive_record_access
+      label: 旧档案调阅权限
+      resource_type: record_access
+      controller: local_police_station
+      scarcity_level: 0.58
+      replacement_access: 0.18
+      linked_capacities: [evidence_access, truth_disclosure]
+      conflict_potential: 0.72
+    - resource_id: last_bus_out
+      label: 离镇末班车
+      resource_type: transport
+      controller: town_transport
+      scarcity_level: 0.46
+      replacement_access: 0.2
+      linked_capacities: [exit, survival]
+      conflict_potential: 0.5
+
 field_state:
   material_pressures:
     material_urgency: 0.24

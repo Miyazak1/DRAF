@@ -22,6 +22,7 @@ from rpf.core.models import (
     TickContext,
     clamp,
 )
+from rpf.core.local_world import LocalWorldSpec
 from rpf.engine.aggregation import aggregate_views
 from rpf.engine.actions import ActionSelectionEngine
 from rpf.engine.account import AccountPressureEngine
@@ -37,6 +38,7 @@ from rpf.engine.expectation import ExpectationSedimentationEngine
 from rpf.engine.fate import FateTransitionEngine
 from rpf.engine.inquiry import InquiryEngine
 from rpf.engine.interaction_frame import InteractionFrameEngine
+from rpf.engine.local_world import LocalWorldEngine
 from rpf.engine.memory import MemoryReconstructionEngine
 from rpf.engine.metrics import compute_metrics
 from rpf.engine.normativity import NormativePressureEngine
@@ -75,6 +77,7 @@ class Simulator:
         config: dict[str, Any],
         render_canon: dict[str, Any] | None = None,
         case_ledger: dict[str, Any] | None = None,
+        local_world: dict[str, Any] | None = None,
         steps: int | None = None,
         run_store: RunStore | None = None,
         run_id: str | None = None,
@@ -84,6 +87,9 @@ class Simulator:
         self.config = config
         self.render_canon = render_canon or {}
         self.case_ledger = case_ledger or {}
+        self.local_world_spec = local_world or {}
+        local_world_spec = LocalWorldSpec.model_validate(local_world) if local_world else None
+        self.local_world = LocalWorldEngine(local_world_spec)
         self.steps = steps
         self.run_id = run_id or str(uuid.uuid4())
         self.run_store = run_store or configured_run_store()
@@ -152,6 +158,7 @@ class Simulator:
         self.rpp_activation_trace: list[dict[str, Any]] = []
         self.rpp_dynamics_trace: list[dict[str, Any]] = []
         self.projection_trace: list[dict[str, Any]] = []
+        self.local_world_trace: list[dict[str, Any]] = []
         self._order = 0
 
     @classmethod
@@ -195,6 +202,7 @@ class Simulator:
             config=effective_config(scenario),
             render_canon=_render_canon_for_scenario(scenario),
             case_ledger=scenario.get("case_ledger", {}),
+            local_world=scenario.get("local_world"),
             run_store=run_store,
             run_id=run_id,
         )
@@ -368,6 +376,7 @@ class Simulator:
         (output_dir / "rpp_activation_trace.json").write_text(json.dumps(self.rpp_activation_trace, indent=2), encoding="utf-8")
         (output_dir / "rpp_dynamics_trace.json").write_text(json.dumps(self.rpp_dynamics_trace, indent=2), encoding="utf-8")
         (output_dir / "projection_trace.json").write_text(json.dumps(self.projection_trace, indent=2), encoding="utf-8")
+        (output_dir / "local_world_trace.json").write_text(json.dumps(self.local_world_trace, indent=2), encoding="utf-8")
         (output_dir / "irreversibility_report.json").write_text(self.state.irreversibility_register.model_dump_json(indent=2), encoding="utf-8")
         (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
         self._persist_outputs(metrics=metrics, completed=completed)
@@ -453,6 +462,7 @@ class Simulator:
             ("rpp_activation", self.rpp_activation_trace),
             ("rpp_dynamics", self.rpp_dynamics_trace),
             ("projection", self.projection_trace),
+            ("local_world", self.local_world_trace),
         ]
 
     def tick(self, max_delta_seconds: int | None = None) -> TickContext:
@@ -476,6 +486,7 @@ class Simulator:
             },
         )
         local: list[Event] = [tick_event]
+        local.extend(self._update_local_world(context, [tick_event.event_id]))
         local.extend(self._field_and_binding_events(context))
         viability_history = local + self._recent_relation_sedimentation_events()
         viability_pre = self.viability.evaluate_pre_response(self.state, context, viability_history)
@@ -589,6 +600,16 @@ class Simulator:
                 continue
             emitted.append(self._event(event_type, "viability", payload, evidence_refs))
         return emitted
+
+    def _update_local_world(self, context: TickContext, causal_refs: list[str]) -> list[Event]:
+        update = self.local_world.advance(context, causal_refs=causal_refs)
+        if not update.traces:
+            return []
+        self.local_world_trace.extend(update.traces)
+        return [
+            self._event(event_type, "local_world", payload, refs)
+            for event_type, payload, refs in update.events
+        ]
 
     def _field_and_binding_events(self, context: TickContext) -> list[Event]:
         events: list[Event] = []
