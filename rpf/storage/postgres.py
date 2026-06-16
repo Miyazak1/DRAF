@@ -189,6 +189,75 @@ class PostgresRunStore:
                 )
             conn.commit()
 
+    def read_viewer_run(self, *, run_id: str) -> dict[str, Any]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select r.*, s.title as scenario_title, s.render_canon, s.case_ledger, s.source_path
+                    from runs r
+                    join scenarios s on s.scenario_id = r.scenario_id
+                    where r.run_id = %s
+                    """,
+                    (run_id,),
+                )
+                run = self._row_dict(cur.fetchone(), cur)
+                if not run:
+                    return {}
+                cur.execute(
+                    """
+                    select event_id, tick, event_order, event_type, source_layer, payload, causal_refs
+                    from events
+                    where run_id = %s
+                    order by tick, event_order
+                    """,
+                    (run_id,),
+                )
+                events = [self._row_dict(row, cur) for row in cur.fetchall()]
+                cur.execute(
+                    """
+                    select tick, layer, event_type, payload
+                    from traces
+                    where run_id = %s
+                    order by tick, trace_id
+                    """,
+                    (run_id,),
+                )
+                traces = [self._row_dict(row, cur) for row in cur.fetchall()]
+                cur.execute(
+                    """
+                    select segment_id, segment_index, tick_start, tick_end, source_ticks, boundary_reason, mode, text, model
+                    from render_segments
+                    where run_id = %s
+                    order by segment_index
+                    """,
+                    (run_id,),
+                )
+                render_segments = [self._row_dict(row, cur) for row in cur.fetchall()]
+        return {
+            "run": self._json_ready(run),
+            "events": [self._json_ready(event) for event in events],
+            "traces": [self._json_ready(trace) for trace in traces],
+            "render_segments": [self._json_ready(segment) for segment in render_segments],
+        }
+
+    def list_runs(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select r.run_id, r.scenario_id, r.title, r.output_dir, r.mode, r.seed,
+                           r.tick_count, r.event_count, r.status, r.started_at, r.completed_at,
+                           coalesce(r.final_state_hash, '') as final_state_hash
+                    from runs r
+                    order by r.started_at desc
+                    limit %s
+                    """,
+                    (limit,),
+                )
+                rows = [self._row_dict(row, cur) for row in cur.fetchall()]
+        return [self._json_ready(row) for row in rows]
+
     def complete_run(
         self,
         *,
@@ -231,3 +300,18 @@ class PostgresRunStore:
         except ImportError as exc:
             raise RuntimeError("Install psycopg to use PostgreSQL JSONB support.") from exc
         return Jsonb(value if value is not None else {})
+
+    def _row_dict(self, row: Any, cursor: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        columns = [column.name for column in cursor.description]
+        return dict(zip(columns, row))
+
+    def _json_ready(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: self._json_ready(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._json_ready(item) for item in value]
+        if hasattr(value, "isoformat"):
+            return value.isoformat()
+        return value

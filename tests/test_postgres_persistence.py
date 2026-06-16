@@ -8,6 +8,7 @@ from rpf.llm import segments
 from rpf.scenarios.loader import load_scenario
 from rpf.storage.base import NullRunStore
 from rpf.storage.postgres import DEFAULT_MIGRATIONS_DIR, PostgresRunStore
+from rpf.viewer.server import build_viewer_payload_from_database_records
 
 
 class RecordingStore:
@@ -150,3 +151,73 @@ def test_segment_renderer_writes_render_segment_to_store(tmp_path, monkeypatch):
     assert store.render_segments
     assert store.render_segments[0]["run_id"] == "00000000-0000-0000-0000-000000000001"
     assert store.render_segments[0]["segment"]["segment_id"] == "seg-0001"
+
+
+def test_database_records_build_viewer_payload():
+    data = {
+        "run": {
+            "run_id": "00000000-0000-0000-0000-000000000001",
+            "output_dir": "",
+            "metadata": {"seed": 42},
+            "render_canon": {"title": "数据库运行", "cast": {}},
+            "case_ledger": {},
+        },
+        "events": [
+            {
+                "event_id": "tick-1",
+                "tick": 1,
+                "event_order": 1,
+                "event_type": "TickStartedEvent",
+                "source_layer": "diagnostic",
+                "payload": {"tick_type": "latent"},
+                "causal_refs": [],
+            }
+        ],
+        "traces": [
+            {
+                "tick": 1,
+                "layer": "scheduler",
+                "event_type": None,
+                "payload": {
+                    "tick_index": 1,
+                    "selected_tick_type": "latent",
+                    "input_factors": {},
+                    "simulated_time_delta_seconds": 60,
+                    "time_mapping_reason": "db test",
+                },
+            },
+            {
+                "tick": 1,
+                "layer": "projection",
+                "event_type": None,
+                "payload": {
+                    "tick": 1,
+                    "relationship_phase": "db-phase",
+                    "person_labels": {},
+                    "evidence_refs": [],
+                },
+            },
+        ],
+        "render_segments": [
+            {
+                "segment_id": "seg-0001",
+                "segment_index": 1,
+                "tick_start": 1,
+                "tick_end": 1,
+                "source_ticks": [1],
+                "boundary_reason": "测试",
+                "mode": "deterministic",
+                "text": "数据库段落",
+            }
+        ],
+    }
+
+    payload = build_viewer_payload_from_database_records(data)
+
+    assert payload["storage_backend"] == "postgres"
+    assert payload["run_id"] == "00000000-0000-0000-0000-000000000001"
+    assert payload["render_canon"]["title"] == "数据库运行"
+    assert payload["summary"]["event_count"] == 1
+    assert payload["summary"]["phase"] == "db-phase"
+    assert payload["story"][0]["tick"] == 1
+    assert "数据库段落" in payload["rendered_story_stream"]

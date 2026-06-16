@@ -522,18 +522,18 @@ function renderRunHistory(currentOutputDir) {
     ? RUNS.slice(0, 12).map((run) => `
       <article class="run-item ${samePath(run.output_dir, currentOutputDir) ? "active" : ""}">
         <strong>${escapeHtml(run.title || run.scenario_id || run.run_id)}</strong>
-        <small>${escapeHtml(run.scenario_id || "-")} / ${escapeHtml(run.mode || "-")} / seed ${escapeHtml(run.seed ?? "-")}</small>
+        <small>${escapeHtml(run.scenario_id || "-")} / ${escapeHtml(run.mode || "-")} / ${escapeHtml(run.storage_backend || "file")} / seed ${escapeHtml(run.seed ?? "-")}</small>
         <small>${escapeHtml(run.created_at || "-")} / Tick ${escapeHtml(run.tick ?? "-")} / 事件 ${escapeHtml(run.event_count ?? "-")} / 阶段 ${escapeHtml(zh(run.phase || "-"))}</small>
-        <small>${escapeHtml(run.output_dir || "")}</small>
+        <small>${escapeHtml(run.output_dir || run.run_id || "")}</small>
         <div class="run-actions">
-          <button type="button" data-run-dir="${escapeAttr(run.output_dir)}">打开</button>
-          <button type="button" data-compare-dir="${escapeAttr(run.output_dir)}">对比当前</button>
+          <button type="button" data-run-dir="${escapeAttr(run.output_dir || "")}" data-run-id="${escapeAttr(run.storage_backend === "postgres" ? run.run_id : "")}">打开</button>
+          ${run.output_dir ? `<button type="button" data-compare-dir="${escapeAttr(run.output_dir)}">对比当前</button>` : ""}
         </div>
       </article>
     `).join("")
     : "<div class=\"trace\"><small>暂无运行档案。载入案例或开始持续模拟后会生成。</small></div>";
   target.querySelectorAll("button[data-run-dir]").forEach((button) => {
-    button.addEventListener("click", () => openRun(button.dataset.runDir));
+    button.addEventListener("click", () => openRun(button.dataset.runDir, button.dataset.runId));
   });
   target.querySelectorAll("button[data-compare-dir]").forEach((button) => {
     button.addEventListener("click", () => compareRun(button.dataset.compareDir));
@@ -1304,19 +1304,19 @@ function collectScenarioDraft() {
   };
 }
 
-async function openRun(outputDir) {
+async function openRun(outputDir, runId = "") {
   $("scenarioStatus").textContent = "正在打开历史运行...";
   try {
     const res = await fetch("/api/runs/open", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({output_dir: outputDir}),
+      body: JSON.stringify(runId ? {run_id: runId} : {output_dir: outputDir}),
     });
     const payload = await res.json();
     if (!res.ok || payload.error) throw new Error(payload.error || `请求失败：${res.status}`);
     DATA = payload.payload;
     selectedTick = DATA.scheduler[0]?.tick_index || 1;
-    $("scenarioStatus").textContent = `已打开：${DATA.render_canon?.title || outputDir}`;
+    $("scenarioStatus").textContent = `已打开：${DATA.render_canon?.title || outputDir || runId}`;
     await loadRuns();
     renderAll();
     await pollSimulationStatus();

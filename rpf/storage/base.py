@@ -47,6 +47,12 @@ class RunStore(Protocol):
     def write_render_segment(self, *, run_id: str, segment: dict[str, Any]) -> None:
         ...
 
+    def read_viewer_run(self, *, run_id: str) -> dict[str, Any]:
+        ...
+
+    def list_runs(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        ...
+
     def complete_run(
         self,
         *,
@@ -79,6 +85,12 @@ class NullRunStore:
 
     def write_render_segment(self, **_: Any) -> None:
         return None
+
+    def read_viewer_run(self, **_: Any) -> dict[str, Any]:
+        return {}
+
+    def list_runs(self, **_: Any) -> list[dict[str, Any]]:
+        return []
 
     def complete_run(self, **_: Any) -> None:
         return None

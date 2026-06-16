@@ -13,8 +13,11 @@ from urllib.parse import urlparse
 
 import yaml
 
+from rpf.core.events import Event
 from rpf.engine.simulator import Simulator
+from rpf.engine.metrics import compute_metrics
 from rpf.scenarios.loader import load_scenario
+from rpf.storage import RunStore, configured_run_store
 
 
 STATIC_DIR = Path(__file__).with_name("static")
@@ -210,6 +213,134 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
     return payload
 
 
+def build_viewer_payload_from_database(run_id: str, store: RunStore | None = None) -> dict[str, Any]:
+    resolved_store = store or configured_run_store()
+    data = resolved_store.read_viewer_run(run_id=run_id)
+    if not data:
+        raise ValueError(f"Cannot find database run: {run_id}")
+    return build_viewer_payload_from_database_records(data)
+
+
+def build_viewer_payload_from_database_records(data: dict[str, Any]) -> dict[str, Any]:
+    run = data.get("run", {}) or {}
+    events = [_db_event_to_timeline(event) for event in data.get("events", [])]
+    event_models = [_db_event_to_model(event) for event in data.get("events", [])]
+    metrics = compute_metrics(event_models)
+    traces = _db_traces_by_payload_key(data.get("traces", []))
+    render_canon = run.get("render_canon") or {}
+    case_ledger = run.get("case_ledger") or {}
+    rendered_segments = data.get("render_segments", []) or []
+    payload = {
+        "run_id": str(run.get("run_id") or ""),
+        "run_dir": str(run.get("output_dir") or ""),
+        "storage_backend": "postgres",
+        "manifest": run.get("metadata") or {},
+        "render_canon": render_canon,
+        "case_ledger": case_ledger,
+        "derived_views": _db_derived_views(traces),
+        "metrics": metrics,
+        "scheduler": traces.get("scheduler", []),
+        "projection": traces.get("projection", []),
+        "affordance": traces.get("affordance", []),
+        "action": traces.get("action", []),
+        "expression": traces.get("expression", []),
+        "recognition": traces.get("recognition", []),
+        "viability": traces.get("viability", []),
+        "inquiry": traces.get("inquiry", []),
+        "fate": traces.get("fate", []),
+        "frame_definition": traces.get("frame_definition", []),
+        "account": traces.get("account", []),
+        "normativity": traces.get("normativity", []),
+        "relevance": traces.get("relevance", []),
+        "attention": traces.get("attention", []),
+        "opportunity": traces.get("opportunity", []),
+        "reversibility": traces.get("reversibility", []),
+        "position": traces.get("position", []),
+        "expectation": traces.get("expectation", []),
+        "memory": traces.get("memory", []),
+        "binding": traces.get("binding", []),
+        "common_ground": traces.get("common_ground", []),
+        "epistemic": traces.get("epistemic", []),
+        "environment": traces.get("environment", []),
+        "disposition": traces.get("disposition", []),
+        "relation": traces.get("relation", []),
+        "rpp_activation": traces.get("rpp_activation", []),
+        "rpp_dynamics": traces.get("rpp_dynamics", []),
+        "irreversibility": {},
+        "timeline": events,
+        "rendered_segments": rendered_segments,
+        "rendered_story_stream": _db_rendered_story_stream(render_canon, rendered_segments),
+    }
+    payload["story"] = build_story_frames(payload)
+    payload["summary"] = {
+        "event_count": metrics.get("event_count", len(events)),
+        "phase": payload["derived_views"].get("relationship_view", {}).get("phase_label", "unknown"),
+        "trust": payload["derived_views"].get("trust_view", {}),
+        "resentment": payload["derived_views"].get("resentment_pressure_view", {}),
+        "repair": payload["derived_views"].get("repair_capacity_view", {}),
+        "top_events": _top_counts(metrics.get("event_type_counts", {}), 8),
+        "top_rpps": _top_counts(metrics.get("rpp_activation_score_sums", {}), 5),
+        "top_compositions": _top_counts(metrics.get("rpp_composition_score_sums", {}), 5),
+    }
+    return payload
+
+
+def _db_event_to_model(event: dict[str, Any]) -> Event:
+    return Event(
+        event_id=str(event.get("event_id")),
+        tick=int(event.get("tick") or 0),
+        event_type=str(event.get("event_type")),
+        source_layer=str(event.get("source_layer")),
+        payload=event.get("payload") or {},
+        causal_refs=list(event.get("causal_refs") or []),
+        deterministic_order=int(event.get("event_order") or event.get("deterministic_order") or 0),
+    )
+
+
+def _db_event_to_timeline(event: dict[str, Any]) -> dict[str, Any]:
+    model = _db_event_to_model(event)
+    return model.model_dump(mode="json")
+
+
+def _db_traces_by_payload_key(traces: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    layer_map = {
+        "fate_transition": "fate",
+        "frame": "frame_definition",
+    }
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for trace in traces:
+        key = layer_map.get(str(trace.get("layer")), str(trace.get("layer")))
+        payload = trace.get("payload") or {}
+        grouped.setdefault(key, []).append(payload)
+    return grouped
+
+
+def _db_derived_views(traces: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    projection = traces.get("projection", [])
+    latest = projection[-1] if projection else {}
+    return {
+        "relationship_view": {
+            "phase_label": latest.get("relationship_phase", "unknown"),
+            "evidence_refs": latest.get("evidence_refs", []),
+        },
+        "person_views": latest.get("person_labels", {}),
+        "trust_view": {},
+        "resentment_pressure_view": {},
+        "repair_capacity_view": {},
+    }
+
+
+def _db_rendered_story_stream(render_canon: dict[str, Any], segments: list[dict[str, Any]]) -> str:
+    if not segments:
+        return ""
+    title = render_canon.get("title") or "RPF 持续故事"
+    lines = [f"# {title}", "", "## 持续渲染", ""]
+    for segment in segments:
+        lines.append(str(segment.get("text", "")).strip())
+        lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
 def scenario_catalog(examples_dir: Path = DEFAULT_EXAMPLES_DIR) -> list[dict[str, Any]]:
     if not examples_dir.exists():
         return []
@@ -236,8 +367,9 @@ def scenario_catalog(examples_dir: Path = DEFAULT_EXAMPLES_DIR) -> list[dict[str
 
 
 def run_catalog(experience_dir: Path = DEFAULT_EXPERIENCE_DIR) -> list[dict[str, Any]]:
+    database_runs = _database_run_catalog()
     if not experience_dir.exists():
-        return []
+        return database_runs
     runs: list[dict[str, Any]] = []
     for manifest_path in sorted(experience_dir.rglob("timeline_manifest.json"), key=lambda item: item.stat().st_mtime, reverse=True):
         output_dir = manifest_path.parent
@@ -257,6 +389,34 @@ def run_catalog(experience_dir: Path = DEFAULT_EXPERIENCE_DIR) -> list[dict[str,
                 "tick": metrics.get("event_type_counts", {}).get("TickStartedEvent", manifest.get("steps")),
                 "event_count": metrics.get("event_count", 0),
                 "phase": _read_json(output_dir / "derived_views.json", {}).get("relationship_view", {}).get("phase_label", "-"),
+                "storage_backend": "file",
+            }
+        )
+    return database_runs + runs
+
+
+def _database_run_catalog() -> list[dict[str, Any]]:
+    try:
+        store = configured_run_store()
+        rows = store.list_runs(limit=50)
+    except Exception:
+        return []
+    runs: list[dict[str, Any]] = []
+    for row in rows:
+        runs.append(
+            {
+                "run_id": str(row.get("run_id", "")),
+                "scenario_id": row.get("scenario_id"),
+                "title": row.get("title"),
+                "output_dir": row.get("output_dir") or "",
+                "created_at": row.get("started_at"),
+                "mode": row.get("mode"),
+                "seed": row.get("seed"),
+                "tick": row.get("tick_count"),
+                "event_count": row.get("event_count"),
+                "phase": "-",
+                "status": row.get("status"),
+                "storage_backend": "postgres",
             }
         )
     return runs
@@ -1083,6 +1243,7 @@ def _fmt_report(value: Any) -> str:
 class ViewerServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int], output_dir: Path) -> None:
         self.output_dir = output_dir.resolve()
+        self.current_run_id: str | None = None
         self.examples_dir = DEFAULT_EXAMPLES_DIR.resolve()
         self.experience_dir = DEFAULT_EXPERIENCE_DIR.resolve()
         self.session_lock = threading.Lock()
@@ -1104,7 +1265,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
             self._send_json(_health_payload(self.server.output_dir, self.server.examples_dir))
             return
         if parsed.path == "/api/run":
-            self._send_json(build_viewer_payload(self.server.output_dir))
+            self._send_json(self._current_payload())
             return
         if parsed.path == "/api/scenarios":
             self._send_json(
@@ -1118,6 +1279,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "current_output_dir": str(self.server.output_dir),
+                    "current_run_id": self.server.current_run_id,
                     "runs": run_catalog(self.server.experience_dir),
                 }
             )
@@ -1201,6 +1363,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
             )
             with self.server.session_lock:
                 self.server.output_dir = output_dir.resolve()
+                self.server.current_run_id = None
                 self.server.session_stop.clear()
                 self.server.session_status = {
                     "state": "idle",
@@ -1240,6 +1403,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
             )
             with self.server.session_lock:
                 self.server.output_dir = output_dir.resolve()
+                self.server.current_run_id = None
                 self.server.session_stop.clear()
                 self.server.session_status = {
                     "state": "idle",
@@ -1266,22 +1430,29 @@ class ViewerHandler(BaseHTTPRequestHandler):
     def _handle_run_open(self) -> None:
         try:
             request = self._read_json_body()
-            output_dir = _resolve_run_dir(request.get("output_dir"), self.server.experience_dir)
+            run_id = str(request.get("run_id") or "").strip()
+            output_dir = None if run_id else _resolve_run_dir(request.get("output_dir"), self.server.experience_dir)
             with self.server.session_lock:
                 running = self.server.session_thread and self.server.session_thread.is_alive()
                 if running:
                     self._send_json({"error": "持续模拟运行中，停止后才能打开历史运行"}, status=409)
                     return
-                self.server.output_dir = output_dir.resolve()
+                if run_id:
+                    self.server.current_run_id = run_id
+                else:
+                    self.server.current_run_id = None
+                    self.server.output_dir = output_dir.resolve()  # type: ignore[union-attr]
                 self.server.session_status = {
                     "state": "idle",
-                    "message": "已打开历史运行",
+                    "message": "已打开数据库运行" if run_id else "已打开历史运行",
                     "output_dir": str(self.server.output_dir),
+                    "run_id": run_id or None,
                     "render_mode": "none",
                     "last_render_output": None,
                     "last_render_error": None,
                 }
-            self._send_json({"ok": True, "output_dir": str(self.server.output_dir), "payload": build_viewer_payload(self.server.output_dir)})
+            payload = build_viewer_payload_from_database(run_id) if run_id else build_viewer_payload(self.server.output_dir)
+            self._send_json({"ok": True, "output_dir": str(self.server.output_dir), "run_id": run_id or None, "payload": payload})
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=400)
 
@@ -1376,6 +1547,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
                     "_run_title": render_canon.get("title") or scenario.get("name", str(scenario["id"])),
                 }
                 self.server.output_dir = output_dir.resolve()
+                self.server.current_run_id = None
                 self.server.session_status = _initial_session_status(request, self.server.output_dir)
             thread = threading.Thread(
                 target=_run_session,
@@ -1391,6 +1563,11 @@ class ViewerHandler(BaseHTTPRequestHandler):
     def _session_status(self) -> dict[str, Any]:
         with self.server.session_lock:
             return dict(self.server.session_status)
+
+    def _current_payload(self) -> dict[str, Any]:
+        if self.server.current_run_id:
+            return build_viewer_payload_from_database(self.server.current_run_id)
+        return build_viewer_payload(self.server.output_dir)
 
     def log_message(self, format: str, *args: Any) -> None:
         return

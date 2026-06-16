@@ -432,6 +432,106 @@ def test_viewer_can_select_scenario_from_web(tmp_path):
     assert compare_payload["delta"]["event_count"] == 0
 
 
+def test_viewer_can_open_database_run_from_web(tmp_path, monkeypatch):
+    import rpf.viewer.server as viewer_server
+
+    class FakeStore:
+        def list_runs(self, *, limit=50):
+            return [
+                {
+                    "run_id": "00000000-0000-0000-0000-000000000001",
+                    "scenario_id": "db_case",
+                    "title": "数据库运行",
+                    "output_dir": "",
+                    "mode": "db",
+                    "seed": 42,
+                    "tick_count": 1,
+                    "event_count": 1,
+                    "status": "completed",
+                    "started_at": "2026-06-16T00:00:00",
+                }
+            ]
+
+        def read_viewer_run(self, *, run_id):
+            return {
+                "run": {
+                    "run_id": run_id,
+                    "output_dir": "",
+                    "metadata": {"seed": 42},
+                    "render_canon": {"title": "数据库运行", "cast": {}},
+                    "case_ledger": {},
+                },
+                "events": [
+                    {
+                        "event_id": "tick-1",
+                        "tick": 1,
+                        "event_order": 1,
+                        "event_type": "TickStartedEvent",
+                        "source_layer": "diagnostic",
+                        "payload": {"tick_type": "latent"},
+                        "causal_refs": [],
+                    }
+                ],
+                "traces": [
+                    {
+                        "tick": 1,
+                        "layer": "scheduler",
+                        "event_type": None,
+                        "payload": {
+                            "tick_index": 1,
+                            "selected_tick_type": "latent",
+                            "input_factors": {},
+                            "simulated_time_delta_seconds": 60,
+                            "time_mapping_reason": "db test",
+                        },
+                    },
+                    {
+                        "tick": 1,
+                        "layer": "projection",
+                        "event_type": None,
+                        "payload": {"tick": 1, "relationship_phase": "db-phase", "person_labels": {}, "evidence_refs": []},
+                    },
+                ],
+                "render_segments": [],
+            }
+
+    monkeypatch.setattr(viewer_server, "configured_run_store", lambda: FakeStore())
+    scenario_path = Path("examples/shared_apartment_unresolved_sacrifice.yaml")
+    sim = Simulator.from_scenario(load_scenario(scenario_path), scenario_path, seed=42)
+    output_dir = tmp_path / "run"
+    sim.run(steps=2, output_dir=output_dir)
+    server = ViewerServer(("127.0.0.1", 0), output_dir)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        conn.request("GET", "/api/runs")
+        runs_response = conn.getresponse()
+        runs_payload = json.loads(runs_response.read().decode("utf-8"))
+
+        body = json.dumps({"run_id": "00000000-0000-0000-0000-000000000001"}).encode("utf-8")
+        conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        conn.request(
+            "POST",
+            "/api/runs/open",
+            body=body,
+            headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+        )
+        open_response = conn.getresponse()
+        open_payload = json.loads(open_response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert runs_response.status == 200
+    assert any(run["storage_backend"] == "postgres" for run in runs_payload["runs"])
+    assert open_response.status == 200
+    assert open_payload["run_id"] == "00000000-0000-0000-0000-000000000001"
+    assert open_payload["payload"]["storage_backend"] == "postgres"
+    assert open_payload["payload"]["render_canon"]["title"] == "数据库运行"
+
+
 def test_viewer_can_create_custom_scenario_from_web(tmp_path):
     scenario_path = Path("examples/shared_apartment_unresolved_sacrifice.yaml")
     sim = Simulator.from_scenario(load_scenario(scenario_path), scenario_path, seed=42)
