@@ -8,7 +8,11 @@ from rpf.llm import segments
 from rpf.scenarios.loader import load_scenario
 from rpf.storage.base import NullRunStore
 from rpf.storage.postgres import DEFAULT_MIGRATIONS_DIR, PostgresRunStore
-from rpf.viewer.server import build_viewer_payload_from_database_records
+from rpf.viewer.server import (
+    build_run_report_from_database,
+    build_viewer_payload_from_database_records,
+    export_database_run_bundle,
+)
 
 
 class RecordingStore:
@@ -41,6 +45,69 @@ class RecordingStore:
 
     def complete_run(self, **kwargs):
         self.calls.append(("complete_run", kwargs))
+
+
+class ViewerReadStore:
+    backend_name = "viewer-read"
+
+    def read_viewer_run(self, *, run_id):
+        return {
+            "run": {
+                "run_id": run_id,
+                "output_dir": "",
+                "metadata": {"seed": 42, "mode": "db"},
+                "render_canon": {"title": "数据库运行", "cast": {}},
+                "case_ledger": {},
+            },
+            "events": [
+                {
+                    "event_id": "tick-1",
+                    "tick": 1,
+                    "event_order": 1,
+                    "event_type": "TickStartedEvent",
+                    "source_layer": "diagnostic",
+                    "payload": {"tick_type": "latent"},
+                    "causal_refs": [],
+                }
+            ],
+            "traces": [
+                {
+                    "tick": 1,
+                    "layer": "scheduler",
+                    "event_type": None,
+                    "payload": {
+                        "tick_index": 1,
+                        "selected_tick_type": "latent",
+                        "input_factors": {},
+                        "simulated_time_delta_seconds": 60,
+                        "time_mapping_reason": "db test",
+                    },
+                },
+                {
+                    "tick": 1,
+                    "layer": "projection",
+                    "event_type": None,
+                    "payload": {
+                        "tick": 1,
+                        "relationship_phase": "db-phase",
+                        "person_labels": {},
+                        "evidence_refs": [],
+                    },
+                },
+            ],
+            "render_segments": [
+                {
+                    "segment_id": "seg-0001",
+                    "segment_index": 1,
+                    "tick_start": 1,
+                    "tick_end": 1,
+                    "source_ticks": [1],
+                    "boundary_reason": "测试",
+                    "mode": "deterministic",
+                    "text": "数据库段落",
+                }
+            ],
+        }
 
 
 def test_database_settings_defaults_to_file_backend(tmp_path, monkeypatch):
@@ -221,3 +288,30 @@ def test_database_records_build_viewer_payload():
     assert payload["summary"]["phase"] == "db-phase"
     assert payload["story"][0]["tick"] == 1
     assert "数据库段落" in payload["rendered_story_stream"]
+
+
+def test_database_run_report_uses_store_records():
+    report = build_run_report_from_database(
+        "00000000-0000-0000-0000-000000000001",
+        store=ViewerReadStore(),
+    )
+
+    assert "# 数据库运行" in report
+    assert "运行来源：postgres:00000000-0000-0000-0000-000000000001" in report
+    assert "## 输出文件" in report
+    assert "不调用 LLM" in report
+
+
+def test_database_run_export_writes_bundle_from_records(tmp_path):
+    result = export_database_run_bundle(
+        "00000000-0000-0000-0000-000000000001",
+        store=ViewerReadStore(),
+        export_dir=tmp_path,
+    )
+
+    assert result["ok"] is True
+    assert "run_report.md" in result["files"]
+    assert "timeline.jsonl" in result["files"]
+    assert "rendered_story_stream.md" in result["files"]
+    assert "rendered_segments.json" in result["files"]
+    assert (tmp_path / "00000000-0000-0000-0000-000000000001_bundle.zip").exists()

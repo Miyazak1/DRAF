@@ -454,11 +454,21 @@ def _health_payload(output_dir: Path, examples_dir: Path = DEFAULT_EXAMPLES_DIR)
 
 def build_run_report(output_dir: Path) -> str:
     payload = build_viewer_payload(output_dir)
+    metadata = _read_json(output_dir / "run_metadata.json", {})
+    comparison = _comparison_summary_from_payload(payload, run_label=str(output_dir.resolve()), metadata=metadata)
+    return build_run_report_from_payload(payload, comparison=comparison)
+
+
+def build_run_report_from_database(run_id: str, store: RunStore | None = None) -> str:
+    payload = build_viewer_payload_from_database(run_id, store=store)
+    comparison = _comparison_summary_from_payload(payload, run_label=f"postgres:{run_id}", metadata={"run_id": run_id, "mode": "postgres"})
+    return build_run_report_from_payload(payload, comparison=comparison)
+
+
+def build_run_report_from_payload(payload: dict[str, Any], *, comparison: dict[str, Any]) -> str:
     summary = payload.get("summary", {})
     canon = payload.get("render_canon", {})
     case_ledger = payload.get("case_ledger", {})
-    metadata = _read_json(output_dir / "run_metadata.json", {})
-    comparison = _comparison_summary(output_dir)
     story = payload.get("story", [])
     last_frame = story[-1] if story else {}
     pressure = last_frame.get("pressure", {}) if isinstance(last_frame, dict) else {}
@@ -475,12 +485,12 @@ def build_run_report(output_dir: Path) -> str:
         "",
         "## 运行档案",
         "",
-        f"- 运行目录：{output_dir.resolve()}",
-        f"- 运行 ID：{metadata.get('run_id', output_dir.name)}",
+        f"- 运行来源：{comparison.get('output_dir') or comparison.get('run_id') or '-'}",
+        f"- 运行 ID：{comparison.get('run_id', '-')}",
         f"- 案例：{comparison.get('scenario_id', '-')}",
         f"- 模式：{comparison.get('mode', '-')}",
         f"- 随机种子：{comparison.get('seed', '-')}",
-        f"- 创建时间：{metadata.get('created_at', '-')}",
+        f"- 创建时间：{comparison.get('created_at', '-')}",
         "",
         "## 总览",
         "",
@@ -575,6 +585,75 @@ def export_run_bundle(output_dir: Path) -> dict[str, Any]:
         "file_count": len(files),
         "files": [str(path.relative_to(output_dir)) for path in files if path.exists()],
     }
+
+
+def export_database_run_bundle(run_id: str, store: RunStore | None = None, export_dir: Path | None = None) -> dict[str, Any]:
+    payload = build_viewer_payload_from_database(run_id, store=store)
+    comparison = _comparison_summary_from_payload(payload, run_label=f"postgres:{run_id}", metadata={"run_id": run_id, "mode": "postgres"})
+    report = build_run_report_from_payload(payload, comparison=comparison)
+    export_dir = export_dir or (DEFAULT_EXPERIENCE_DIR / "exports")
+    export_dir.mkdir(parents=True, exist_ok=True)
+    safe_run_id = _safe_filename_part(run_id)
+    bundle_path = export_dir / f"{safe_run_id}_bundle.zip"
+    files = _database_export_files(payload, report)
+    with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in files.items():
+            archive.writestr(name, content)
+    return {
+        "ok": True,
+        "output": str(bundle_path),
+        "file_count": len(files),
+        "files": list(files),
+    }
+
+
+def _database_export_files(payload: dict[str, Any], report: str) -> dict[str, str]:
+    trace_exports = {
+        "scheduler_diagnostics.json": payload.get("scheduler", []),
+        "inquiry_trace.json": payload.get("inquiry", []),
+        "projection_trace.json": payload.get("projection", []),
+        "affordance_trace.json": payload.get("affordance", []),
+        "action_trace.json": payload.get("action", []),
+        "expression_trace.json": payload.get("expression", []),
+        "recognition_trace.json": payload.get("recognition", []),
+        "fate_transition_trace.json": payload.get("fate", []),
+        "frame_trace.json": payload.get("frame_definition", []),
+        "account_trace.json": payload.get("account", []),
+        "normativity_trace.json": payload.get("normativity", []),
+        "relevance_trace.json": payload.get("relevance", []),
+        "attention_trace.json": payload.get("attention", []),
+        "opportunity_trace.json": payload.get("opportunity", []),
+        "reversibility_trace.json": payload.get("reversibility", []),
+        "position_trace.json": payload.get("position", []),
+        "expectation_trace.json": payload.get("expectation", []),
+        "memory_trace.json": payload.get("memory", []),
+        "binding_trace.json": payload.get("binding", []),
+        "common_ground_trace.json": payload.get("common_ground", []),
+        "epistemic_trace.json": payload.get("epistemic", []),
+        "environment_trace.json": payload.get("environment", []),
+        "disposition_trace.json": payload.get("disposition", []),
+        "relation_trace.json": payload.get("relation", []),
+        "rpp_activation_trace.json": payload.get("rpp_activation", []),
+        "rpp_dynamics_trace.json": payload.get("rpp_dynamics", []),
+    }
+    files: dict[str, str] = {
+        "run_report.md": report,
+        "timeline_manifest.json": json.dumps(payload.get("manifest", {}), ensure_ascii=False, indent=2),
+        "render_canon.json": json.dumps(payload.get("render_canon", {}), ensure_ascii=False, indent=2),
+        "case_ledger.json": json.dumps(payload.get("case_ledger", {}), ensure_ascii=False, indent=2),
+        "metrics.json": json.dumps(payload.get("metrics", {}), ensure_ascii=False, indent=2),
+        "derived_views.json": json.dumps(payload.get("derived_views", {}), ensure_ascii=False, indent=2),
+        "timeline.jsonl": "\n".join(json.dumps(event, ensure_ascii=False) for event in payload.get("timeline", [])) + "\n",
+        "rendered_story_stream.md": payload.get("rendered_story_stream", ""),
+        "rendered_segments.json": json.dumps(payload.get("rendered_segments", []), ensure_ascii=False, indent=2),
+    }
+    files.update({name: json.dumps(value, ensure_ascii=False, indent=2) for name, value in trace_exports.items()})
+    return files
+
+
+def _safe_filename_part(value: str) -> str:
+    safe = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in value)
+    return safe or "run"
 
 
 def _exportable_files(output_dir: Path) -> list[Path]:
@@ -1508,16 +1587,22 @@ class ViewerHandler(BaseHTTPRequestHandler):
 
     def _handle_report(self) -> None:
         try:
-            report = build_run_report(self.server.output_dir)
-            output = self.server.output_dir / "run_report.md"
-            output.write_text(report, encoding="utf-8")
+            if self.server.current_run_id:
+                report = build_run_report_from_database(self.server.current_run_id)
+                output = DEFAULT_EXPERIENCE_DIR / "exports" / f"{_safe_filename_part(self.server.current_run_id)}_run_report.md"
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(report, encoding="utf-8")
+            else:
+                report = build_run_report(self.server.output_dir)
+                output = self.server.output_dir / "run_report.md"
+                output.write_text(report, encoding="utf-8")
             self._send_json({"ok": True, "output": str(output), "text": report})
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=500)
 
     def _handle_export(self) -> None:
         try:
-            result = export_run_bundle(self.server.output_dir)
+            result = export_database_run_bundle(self.server.current_run_id) if self.server.current_run_id else export_run_bundle(self.server.output_dir)
             self._send_json(result)
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=500)
@@ -2009,18 +2094,23 @@ def _resolve_run_dir(value: Any, experience_dir: Path) -> Path:
 
 def _comparison_summary(output_dir: Path) -> dict[str, Any]:
     payload = build_viewer_payload(output_dir)
+    metadata = _read_json(output_dir / "run_metadata.json", {})
+    return _comparison_summary_from_payload(payload, run_label=str(output_dir.resolve()), metadata=metadata)
+
+
+def _comparison_summary_from_payload(payload: dict[str, Any], *, run_label: str, metadata: dict[str, Any]) -> dict[str, Any]:
     story = payload.get("story", [])
     last_frame = story[-1] if story else {}
     pressure = last_frame.get("pressure", {}) if isinstance(last_frame, dict) else {}
     summary = payload.get("summary", {})
-    metadata = _read_json(output_dir / "run_metadata.json", {})
     return {
-        "output_dir": str(output_dir.resolve()),
-        "run_id": metadata.get("run_id") or output_dir.name,
-        "title": metadata.get("title") or payload.get("render_canon", {}).get("title") or output_dir.name,
+        "output_dir": run_label,
+        "run_id": metadata.get("run_id") or payload.get("run_id") or run_label,
+        "title": metadata.get("title") or payload.get("render_canon", {}).get("title") or run_label,
         "scenario_id": metadata.get("scenario_id") or Path(str(payload.get("manifest", {}).get("scenario_path", ""))).stem,
         "mode": metadata.get("mode") or "unknown",
         "seed": metadata.get("seed") or payload.get("manifest", {}).get("seed"),
+        "created_at": metadata.get("created_at") or payload.get("manifest", {}).get("started_at", "-"),
         "event_count": summary.get("event_count", 0),
         "tick_count": len(payload.get("scheduler", [])),
         "phase": summary.get("phase", "-"),

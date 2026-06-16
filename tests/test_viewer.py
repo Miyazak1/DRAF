@@ -435,6 +435,8 @@ def test_viewer_can_select_scenario_from_web(tmp_path):
 def test_viewer_can_open_database_run_from_web(tmp_path, monkeypatch):
     import rpf.viewer.server as viewer_server
 
+    monkeypatch.setattr(viewer_server, "DEFAULT_EXPERIENCE_DIR", tmp_path / "experience")
+
     class FakeStore:
         def list_runs(self, *, limit=50):
             return [
@@ -492,7 +494,18 @@ def test_viewer_can_open_database_run_from_web(tmp_path, monkeypatch):
                         "payload": {"tick": 1, "relationship_phase": "db-phase", "person_labels": {}, "evidence_refs": []},
                     },
                 ],
-                "render_segments": [],
+                "render_segments": [
+                    {
+                        "segment_id": "seg-0001",
+                        "segment_index": 1,
+                        "tick_start": 1,
+                        "tick_end": 1,
+                        "source_ticks": [1],
+                        "boundary_reason": "测试闭合",
+                        "mode": "deterministic",
+                        "text": "数据库渲染段落",
+                    }
+                ],
             }
 
     monkeypatch.setattr(viewer_server, "configured_run_store", lambda: FakeStore())
@@ -519,6 +532,26 @@ def test_viewer_can_open_database_run_from_web(tmp_path, monkeypatch):
         )
         open_response = conn.getresponse()
         open_payload = json.loads(open_response.read().decode("utf-8"))
+
+        conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        conn.request(
+            "POST",
+            "/api/report",
+            body=b"{}",
+            headers={"Content-Type": "application/json", "Content-Length": "2"},
+        )
+        report_response = conn.getresponse()
+        report_payload = json.loads(report_response.read().decode("utf-8"))
+
+        conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        conn.request(
+            "POST",
+            "/api/export",
+            body=b"{}",
+            headers={"Content-Type": "application/json", "Content-Length": "2"},
+        )
+        export_response = conn.getresponse()
+        export_payload = json.loads(export_response.read().decode("utf-8"))
     finally:
         server.shutdown()
         server.server_close()
@@ -530,6 +563,15 @@ def test_viewer_can_open_database_run_from_web(tmp_path, monkeypatch):
     assert open_payload["run_id"] == "00000000-0000-0000-0000-000000000001"
     assert open_payload["payload"]["storage_backend"] == "postgres"
     assert open_payload["payload"]["render_canon"]["title"] == "数据库运行"
+    assert report_response.status == 200
+    assert report_payload["ok"] is True
+    assert "运行来源：postgres:00000000-0000-0000-0000-000000000001" in report_payload["text"]
+    assert Path(report_payload["output"]).parent == (tmp_path / "experience" / "exports")
+    assert export_response.status == 200
+    assert export_payload["ok"] is True
+    assert "run_report.md" in export_payload["files"]
+    assert "rendered_story_stream.md" in export_payload["files"]
+    assert Path(export_payload["output"]).parent == (tmp_path / "experience" / "exports")
 
 
 def test_viewer_can_create_custom_scenario_from_web(tmp_path):
