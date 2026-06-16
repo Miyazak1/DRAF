@@ -196,6 +196,7 @@ Rendering may not introduce:
 - new causal events
 - new facts not present in source events
 - new names, genders, occupations, locations, or relationships not present in render_canon
+- new durable objects, records, evidence, messages, access tokens, or custody changes not present in the registry excerpt
 - hidden motives outside perspective limits
 - causes not present in viability, action, expression, or recognition evidence
 - future predictions
@@ -348,6 +349,7 @@ Prompts must include:
 - allowed task
 - forbidden outputs
 - available facts
+- active registry excerpt when durable objects, records, or evidence are relevant
 - perspective limits
 - schema
 - examples of invalid output
@@ -363,6 +365,7 @@ Reject LLM output if:
 - invents unavailable scene facts
 - introduces hidden motive as fact
 - creates irreversible consequence
+- invents durable objects, records, evidence, messages, access tokens, or custody changes
 - uses high-level aggregate as causal explanation
 - violates perspective limits
 - ignores forbidden speech/action constraints

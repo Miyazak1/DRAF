@@ -75,7 +75,47 @@ rpf-bounded-local-world.md
 
 Defines the finite physical-social field: locations, routes, rhythms, resources, audiences, institutions, memory sites, ecological constraints, and boundary rules.
 
-### 5. Formal Data Model
+### 5. Object, Record, and Evidence Registry
+
+Read before implementing narrative beats, evidence scenes, or object-grounded rendering:
+
+```text
+rpf-object-record-evidence-registry.md
+```
+
+Defines durable material anchors: world objects, records, evidence, messages, access tokens, custody, object state, record authority, and evidence access.
+
+### 6. Attention-Gated World Elaboration
+
+Read before using LLMs to generate local environmental details:
+
+```text
+rpf-attention-gated-world-elaboration.md
+```
+
+Defines attention-gated local detail generation, persistence policy, soft world profiles, causal world details, and controlled prompt injection.
+
+### 7. Narrative Event Realization
+
+Read before trying to render novel-like scenes:
+
+```text
+rpf-narrative-event-realization.md
+```
+
+Defines the middle layer from causal events to concrete narrative beats: intended action, obstruction, realized action, observation, consequence, and pattern continuation.
+
+### 8. Storyteller Outline Rendering
+
+Read before implementing user-facing story rendering:
+
+```text
+rpf-storyteller-outline-rendering.md
+```
+
+Defines the intermediate rendering mode between diagnostics and novel prose: narrated outline segments that explain what happened, why it mattered, what changed, and what pressure carries forward.
+
+### 9. Formal Data Model
 
 Read before writing code:
 
@@ -85,7 +125,7 @@ rpf-formal-data-model.md
 
 Defines the implementable objects: `SimulationState`, `FieldState`, `ProcessState`, `RPP`, `SceneState`, `Event`, `PersonView`, and `RelationshipView`.
 
-### 6. Runtime
+### 10. Runtime
 
 Read before implementing the engine:
 
@@ -95,7 +135,7 @@ rpf-simulation-runtime.md
 
 Defines tick lifecycle, episode lifecycle, scene crystallization, RPP activation, recognition evaluation, stabilization, irreversibility, and replay.
 
-### 7. RPP Library
+### 11. RPP Library
 
 Read before authoring dynamics:
 
@@ -105,7 +145,7 @@ rpf-rpp-library.md
 
 Defines how relational process patterns are structured and gives the initial required pattern library.
 
-### 8. Aggregation and Projection
+### 12. Aggregation and Projection
 
 Read before implementing derived views:
 
@@ -115,7 +155,7 @@ rpf-aggregation-projection.md
 
 Defines how lower-level process data aggregates into `TrustView`, `IntimacyView`, `DependencyView`, `PersonView`, and `RelationshipView`.
 
-### 9. Event System
+### 13. Event System
 
 Read before implementing persistence:
 
@@ -125,7 +165,7 @@ rpf-event-taxonomy.md
 
 Defines event schemas, event categories, payload contracts, timeline requirements, and invalid event patterns.
 
-### 10. LLM Boundary
+### 14. LLM Boundary
 
 Read before connecting any model:
 
@@ -135,7 +175,7 @@ rpf-llm-contract.md
 
 Defines what the LLM may and may not do, prompt contracts, output schemas, validation rules, and failure handling.
 
-### 11. Scenario Authoring
+### 15. Scenario Authoring
 
 Read before writing simulations:
 
@@ -145,7 +185,7 @@ rpf-scenario-authoring.md
 
 Defines how to author scenarios without predefined personalities or plots.
 
-### 12. Validation and Evaluation
+### 16. Validation and Evaluation
 
 Read before declaring the simulator successful:
 
@@ -155,7 +195,7 @@ rpf-validation-evaluation.md
 
 Defines ontological integrity tests, runtime integrity tests, emergence metrics, relational plausibility checks, and MVP acceptance thresholds.
 
-### 13. MVP Build Plan
+### 17. MVP Build Plan
 
 Read immediately before writing code:
 
@@ -165,7 +205,7 @@ rpf-mvp-build-plan.md
 
 Defines the first executable implementation slice: exact MVP scope, initial file tree, model subset, three initial RPPs, one demonstration scenario, CLI commands, tests, milestones, and acceptance criteria.
 
-### 14. Implementation Readiness Audit
+### 18. Implementation Readiness Audit
 
 Read when deciding whether to code or continue documenting:
 
@@ -175,7 +215,7 @@ rpf-implementation-readiness-audit.md
 
 Identifies which documents are sufficient for MVP implementation and which non-blocking documents should be added before research-grade or user-facing expansion.
 
-### 15. Expression and Personhood Extensions
+### 19. Expression and Personhood Extensions
 
 Read after the MVP architecture is understood:
 
@@ -185,7 +225,7 @@ rpf-expression-and-personhood-extensions.md
 
 Defines post-MVP mechanisms for generating concrete person-like expression: language style, bodily expression, habits, rituals, desire, taste, relation-specific selves, and expressive continuity.
 
-### 16. Temporal Scheduler and Scene Selection
+### 20. Temporal Scheduler and Scene Selection
 
 Read before implementing tick scheduling:
 
@@ -195,7 +235,7 @@ rpf-temporal-scheduler-and-scene-selection.md
 
 Defines how the simulator chooses latent, micro-interaction, or scene ticks; how simulated time maps to each tick; and how scenes crystallize from field pressure, bindings, relevance, RPP dynamics, and spatial/temporal constraints.
 
-### 17. Cloud Deployment
+### 21. Cloud Deployment
 
 Read before putting the web workbench on a cloud server:
 
@@ -218,17 +258,26 @@ Recommended build sequence:
 4. Trace-only relational viability kernel
 5. Trace-only conflict evidence kernel
 6. Trace-only local world
-7. RPP eligibility and activation
-8. Scene crystallization
-9. Recognition and misrecognition engine
-10. Recognition-conflict integration
-11. Local-world constraint integration
-12. Stabilization and irreversibility engine
-13. Aggregation and projection
-14. Scenario loader
-15. LLM rendering boundary
-16. Metrics and validation
-17. Inspector UI
+7. Read-only object, record, and evidence registry
+8. Segment protocol guard and render repetition trace
+9. Deterministic storyteller outline renderer
+10. Deterministic narrative beat builder
+11. Pattern continuation and narrative beat compression
+12. Render-only attention-gated detail elaboration
+13. LLM outline renderer with contract guard
+14. RPP eligibility and activation
+15. Scene crystallization
+16. Recognition and misrecognition engine
+17. Recognition-conflict integration
+18. Local-world constraint integration
+19. Registry access events and active object/evidence projection
+20. Soft world profiles and causal detail activation
+21. Stabilization and irreversibility engine
+22. Aggregation and projection
+23. Scenario loader
+24. LLM rendering boundary
+25. Metrics and validation
+26. Inspector UI
 ```
 
 ---
@@ -362,5 +411,16 @@ The `导出运行包` action writes a zip archive in the current run directory. 
 12. Drama is derived from constrained relational viability.
 13. Every simulation must define a bounded local world.
 14. New locations, public consequences, and offscreen events require traceable local-world evidence.
+15. Durable objects, records, evidence, messages, and custody changes require registry refs or events.
+16. Object access is separate from object existence.
+17. Record authority is separate from record existence.
+18. Evidence access is separate from evidence truth.
+19. LLM-generated details are proposals, not causal facts.
+20. No attention, no world elaboration.
+21. Narrative beats may realize but not change causal outcomes.
+22. Narrative beats using durable things should cite registry refs.
+23. Novel-like rendering must be grounded in validated narrative beats.
+24. Storyteller outline is the default near-term user-facing rendering target.
+25. Literary prose must not be the default until detail and beat layers are mature.
 ```
 

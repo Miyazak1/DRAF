@@ -26,6 +26,7 @@ The primitive objects are:
 SimulationState
 FieldState
 ProcessState
+ObjectRegistry
 RelationalProcessPattern
 SceneState
 Event
@@ -129,6 +130,7 @@ SimulationState
 - clock: SimulationClock
 - seed: int
 - field_state: FieldState
+- object_registry: ObjectRegistry
 - process_states: dict[ProcessId, ProcessState]
 - active_bindings: list[CoPresenceBinding]
 - active_rpps: list[ActiveRPP]
@@ -227,6 +229,37 @@ AudienceNetwork
 ```
 
 The audience network matters even when no third person is physically present.
+
+---
+
+## 4.4 ObjectRegistry
+
+`ObjectRegistry` stores durable material anchors that can constrain action, evidence access, memory, recognition, and rendering.
+
+It is causal state, not a derived view.
+
+```text
+ObjectRegistry
+- world_objects: dict[ObjectId, WorldObject]
+- record_objects: dict[RecordId, RecordObject]
+- evidence_objects: dict[EvidenceId, EvidenceObject]
+- message_objects: dict[MessageId, MessageObject]
+- access_tokens: dict[AccessTokenId, AccessToken]
+- object_links: list[ObjectLink]
+- custody_log: list[CustodyRecord]
+- state_history: list[ObjectStateRef]
+```
+
+The full registry contract is defined in `rpf-object-record-evidence-registry.md`.
+
+Rules:
+
+- object existence is separate from object access
+- record existence is separate from record authority
+- evidence access is separate from evidence truth
+- custody is separate from ownership
+- durable objects may not be created by LLM prose
+- object state changes must be event-backed
 
 ---
 
@@ -682,6 +715,7 @@ All derived views must include evidence references.
 Writable causal state:
 - FieldState
 - ProcessState
+- ObjectRegistry
 - CoPresenceBinding
 - ActiveRPP
 - SceneState
@@ -715,6 +749,8 @@ The implementation must reject:
 - RPP activation without eligibility evidence
 - LLM output that proposes causal mutation outside event schemas
 - viability trace that cannot cite lower-layer event evidence
+- durable object, record, evidence, message, or custody changes created by prose alone
+- narrative beats that use durable things without registry refs
 
 ---
 
@@ -726,6 +762,7 @@ class SimulationState(BaseModel):
     clock: SimulationClock
     seed: int
     field_state: FieldState
+    object_registry: ObjectRegistry
     process_states: dict[str, ProcessState]
     active_bindings: list[CoPresenceBinding] = []
     active_rpps: list[ActiveRPP] = []
