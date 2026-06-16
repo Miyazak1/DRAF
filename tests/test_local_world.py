@@ -209,6 +209,72 @@ def test_viewer_story_frames_include_locality(tmp_path):
     assert "场景被本地世界限定在" in situated_frames[0]["summary"]
 
 
+def test_blocked_route_feeds_blocked_capacity(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    events = _read_events(output_dir)
+    blocked_capacity = [
+        event
+        for event in events
+        if event["event_type"] == "BlockedCapacityEvent"
+        and event["payload"].get("blockage_source") == "route_access"
+    ]
+
+    assert blocked_capacity
+    assert blocked_capacity[0]["payload"]["route_id"]
+    assert blocked_capacity[0]["payload"]["capacity_id"] in {"exit", "care", "evidence_access"}
+    assert blocked_capacity[0]["payload"]["intensity"] > 0
+
+
+def test_active_memory_site_feeds_memory_pressure(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    events = _read_events(output_dir)
+    memory_pressure_events = [
+        event
+        for event in events
+        if event["event_type"] == "BlockedCapacityEvent"
+        and event["payload"].get("blockage_source") == "memory_site"
+    ]
+    trace = _read_trace(output_dir)
+
+    assert memory_pressure_events
+    assert memory_pressure_events[0]["payload"]["capacity_id"] == "memory_integration"
+    assert memory_pressure_events[0]["payload"]["site_id"]
+    assert any(item["event_type"] == "LocalWorldConstraintIntegrationEvent" for item in trace)
+
+
+def test_resource_scarcity_feeds_capacity_demand_not_direct_drama(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    events = _read_events(output_dir)
+    demands = [
+        event
+        for event in events
+        if event["event_type"] == "CapacityDemandEvent"
+        and event["payload"].get("demand_source") == "resource_scarcity"
+    ]
+    scenes = [event for event in events if event["event_type"] == "SceneCrystallizationEvent"]
+
+    assert demands
+    assert demands[0]["payload"]["linked_capacities"]
+    assert all(scene["payload"].get("affordance_id") != "resource_scarcity" for scene in scenes)
+
+
+def test_local_world_constraints_feed_affordance_selection(tmp_path):
+    output_dir = _run_yellow_sign(tmp_path, steps=6)
+    affordance_trace = json.loads((output_dir / "affordance_trace.json").read_text(encoding="utf-8"))
+    events = _read_events(output_dir)
+    selections = [event for event in events if event["event_type"] == "AffordanceSelectionEvent"]
+
+    assert affordance_trace
+    assert any(item.get("local_world_context") for item in affordance_trace)
+    assert any(
+        key.startswith("local_world.")
+        for item in affordance_trace
+        for candidate in item.get("candidates", [])
+        for key in candidate.get("evidence", {})
+    )
+    assert any(selection["payload"].get("local_world_context") for selection in selections)
+
+
 def _run_yellow_sign(tmp_path, *, steps: int) -> Path:
     scenario = load_scenario(SCENARIO)
     output_dir = tmp_path / "run"

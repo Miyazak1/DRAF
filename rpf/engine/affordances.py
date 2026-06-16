@@ -31,6 +31,7 @@ class AffordanceEngine:
         self.last_diagnostics = {
             "tick": state.tick,
             "tick_type": context.tick_type,
+            "local_world_context": self._local_world_context(state),
             "selected_affordance": selected.__dict__,
             "candidates": [candidate.__dict__ for candidate in sorted(candidates, key=lambda item: item.score, reverse=True)],
         }
@@ -110,6 +111,11 @@ class AffordanceEngine:
         attention_repair_opportunity = self._attention_focus(state, "repair_opportunity")
         attention_avoidance_route = self._attention_focus(state, "avoidance_route")
         attention_memory_intrusion = self._attention_focus(state, "memory_intrusion")
+        local_world_context = self._local_world_context(state)
+        local_route_blockage = local_world_context["blocked_route_pressure"]
+        local_public_visibility = local_world_context["public_visibility_pressure"]
+        local_memory_site_pressure = local_world_context["memory_site_pressure"]
+        local_resource_scarcity = local_world_context["resource_scarcity_pressure"]
         remembered_history = memory_pressure(state)
         injury_history = injury_memory(state)
         defensive_history = defensive_memory(state)
@@ -137,6 +143,7 @@ class AffordanceEngine:
                 "low_ambiguity_tolerance": (1.0 - p1.ambiguity_tolerance) * 0.1,
                 "injury_memory": injury_history * 0.02,
                 "sedimented_avoidance_paths": avoidance_paths * 0.055,
+                "local_world.route_blockage": local_route_blockage * 0.035,
                 "relation_repair_access_narrowing": repair_access_narrowing * 0.06,
                 "frame_avoidance_scene": frame["avoidance_scene"] * 0.07,
                 "relevance_delayed_reply": relevance["delayed_reply"] * 0.08,
@@ -160,6 +167,8 @@ class AffordanceEngine:
                 "daily_unfinished_tasks": daily_unfinished_tasks * 0.08,
                 "daily_object_friction": daily_object_friction * 0.08,
                 "attention_repair_opportunity": attention_repair_opportunity * 0.08,
+                "local_world.resource_scarcity": local_resource_scarcity * 0.045,
+                "local_world.route_blockage": local_route_blockage * 0.025,
                 "defensive_memory": defensive_history * 0.02,
                 "sedimented_charged_objects": charged_objects * 0.04,
                 "relation_repair_access_narrowing": repair_access_narrowing * 0.05,
@@ -181,6 +190,7 @@ class AffordanceEngine:
                 "contribution": contribution * 0.34,
                 "recognition": recognition * 0.22,
                 "material_urgency": urgency * 0.16,
+                "local_world.resource_scarcity": local_resource_scarcity * 0.06,
                 "debt_lock": (0.18 if composition == "debt_lock" else 0.0),
                 "resentment": p1.resentment_pressure * 0.1,
                 "injury_memory": injury_history * 0.025,
@@ -211,6 +221,7 @@ class AffordanceEngine:
                 "public_private_gap": state.relation_metrics.get("public_private_gap", 0.0) * 0.3,
                 "face_risk": state.relation_metrics.get("face_risk_pressure", 0.0) * 0.2,
                 "audience": audience * 0.22,
+                "local_world.public_visibility": local_public_visibility * 0.08,
                 "public_face_split": (0.22 if composition == "public_face_split" else 0.0),
                 "fate_memory": fate_history * 0.02,
                 "sedimented_imagined_audience": imagined_audience * 0.055,
@@ -234,6 +245,8 @@ class AffordanceEngine:
                 "fatigue": (p1.fatigue + p2.fatigue) / 2 * 0.14,
                 "daily_body_load": daily_body_load * 0.08,
                 "daily_routine_overlap": daily_routine_overlap * 0.06,
+                "local_world.resource_scarcity": local_resource_scarcity * 0.04,
+                "local_world.route_blockage": local_route_blockage * 0.035,
                 "attention_body_management": attention_body_management * 0.08,
                 "care_bind_double_bind": (0.24 if composition == "care_bind_double_bind" else 0.0),
                 "dependency_inhibition": p2.speech_inhibition.get("dependency_admission", 0.0) * 0.12,
@@ -261,6 +274,8 @@ class AffordanceEngine:
                 "conflict": conflict * 0.1,
                 "fate_memory": fate_history * 0.025,
                 "memory_saturated_space": memory_saturated_space * 0.03,
+                "local_world.public_visibility": local_public_visibility * 0.035,
+                "local_world.memory_site": local_memory_site_pressure * 0.04,
                 "relation_asymmetry_load": asymmetry_load * 0.05,
                 "frame_double_bind": frame["double_bind"] * 0.08,
                 "relevance_double_bind": relevance["double_bind"] * 0.15,
@@ -284,6 +299,7 @@ class AffordanceEngine:
                 "daily_routine_overlap": daily_routine_overlap * 0.1,
                 "daily_object_friction": daily_object_friction * 0.1,
                 "attention_body_management": attention_body_management * 0.08,
+                "local_world.resource_scarcity": local_resource_scarcity * 0.12,
                 "remembered_history": remembered_history * 0.01,
                 "sedimented_charged_objects": charged_objects * 0.06,
                 "relation_symbolic_accounting": symbolic_accounting * 0.04,
@@ -308,6 +324,8 @@ class AffordanceEngine:
                 "daily_body_load": daily_body_load * 0.08,
                 "daily_waiting_pressure": daily_waiting_pressure * 0.08,
                 "attention_avoidance_route": attention_avoidance_route * 0.09,
+                "local_world.route_blockage": local_route_blockage * 0.065,
+                "local_world.memory_site": local_memory_site_pressure * 0.035,
                 "attention_threat_monitoring": attention_threat_monitoring * 0.06,
                 "recognition_trap": (0.2 if composition == "recognition_trap" else 0.0),
                 "pursuit_withdrawal": active.get("pursuit_withdrawal", 0.0) * 0.1,
@@ -343,6 +361,8 @@ class AffordanceEngine:
                 "relation_public_definition": public_definition * 0.03,
                 "inquiry_progress_pressure": inquiry_progress * 0.22,
                 "inquiry_contamination_load": inquiry_contamination * 0.16,
+                "local_world.route_blockage": local_route_blockage * 0.055,
+                "local_world.resource_scarcity": local_resource_scarcity * 0.035,
                 "institutional_public_exposure": institutional_exposure * 0.18,
                 "institutional_gatekeeping": institutional_gatekeeping * 0.1,
                 "witness_strategy_disclosure_width": witness_disclosure_width * 0.12,
@@ -364,6 +384,8 @@ class AffordanceEngine:
                 "local_silence": institutional_silence * 0.12,
                 "double_bind_pressure": state.relation_metrics.get("double_bind_pressure", 0.0) * 0.12,
                 "memory_saturated_space": memory_saturated_space * 0.04,
+                "local_world.memory_site": local_memory_site_pressure * 0.075,
+                "local_world.public_visibility": local_public_visibility * 0.035,
                 "relation_recognition_debt": recognition_debt * 0.05,
                 "frame_recognition_trial": frame["recognition_trial"] * 0.08,
                 "frame_double_bind": frame["double_bind"] * 0.05,
@@ -394,6 +416,8 @@ class AffordanceEngine:
                 "pattern_attraction": p2.threat_sensitivity.get("pattern_attraction", 0.0) * 0.08,
                 "fate_memory": fate_history * 0.03,
                 "relation_memory_saturation": memory_saturation * 0.05,
+                "local_world.memory_site": local_memory_site_pressure * 0.08,
+                "local_world.route_blockage": local_route_blockage * 0.03,
                 "frame_double_bind": frame["double_bind"] * 0.07,
                 "relevance_double_bind": relevance["double_bind"] * 0.05,
                 "inquiry_contamination_load": inquiry_contamination * 0.24,
@@ -497,6 +521,14 @@ class AffordanceEngine:
             basal = max((process.relevance_triggers.get(marker, 0.0) for process in state.processes.values()), default=0.0)
             result[marker] = max(dynamic, basal)
         return result
+
+    def _local_world_context(self, state: SimulationState) -> dict[str, float]:
+        return {
+            "blocked_route_pressure": state.relation_metrics.get("local_world.blocked_route_pressure", 0.0),
+            "public_visibility_pressure": state.relation_metrics.get("local_world.public_visibility_pressure", 0.0),
+            "memory_site_pressure": state.relation_metrics.get("local_world.memory_site_pressure", 0.0),
+            "resource_scarcity_pressure": state.relation_metrics.get("local_world.resource_scarcity_pressure", 0.0),
+        }
 
     def _attention_focus(self, state: SimulationState, focus: str) -> float:
         return max(

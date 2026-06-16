@@ -32,6 +32,12 @@ class SceneLocalitySelection:
     audience_trace: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class LocalWorldConstraintIntegration:
+    traces: list[dict[str, Any]] = field(default_factory=list)
+    events: list[tuple[str, dict[str, Any], list[str]]] = field(default_factory=list)
+
+
 class LocalWorldEngine:
     def __init__(self, spec: LocalWorldSpec | None) -> None:
         self.spec = spec
@@ -84,6 +90,43 @@ class LocalWorldEngine:
         ]
         return update
 
+    def pressure_snapshot(self) -> dict[str, Any]:
+        if not self.spec or not self.state:
+            return {}
+        blocked_routes = [
+            route
+            for route in self.state.route_states.values()
+            if route.access_status in {"blocked", "dangerous", "costly"}
+        ]
+        public_audiences = [
+            audience
+            for audience in self.state.audience_exposure_states.values()
+            if audience.exposure_state != "none"
+        ]
+        active_memory_sites = [
+            site
+            for site in self.state.active_memory_sites.values()
+            if site.active or site.salience >= 0.5
+        ]
+        scarce_resources = [
+            resource
+            for resource in self.state.resource_states.values()
+            if resource.scarcity_level >= 0.45
+        ]
+        return {
+            "world_id": self.spec.id,
+            "blocked_route_pressure": max([1.0 - route.accessibility for route in blocked_routes] or [0.0]),
+            "public_visibility_pressure": max([audience.exposure_level for audience in public_audiences] or [0.0]),
+            "memory_site_pressure": max([site.salience for site in active_memory_sites] or [0.0]),
+            "resource_scarcity_pressure": max([resource.scarcity_level for resource in scarce_resources] or [0.0]),
+            "route_blockage_refs": [route.route_id for route in blocked_routes],
+            "audience_refs": [audience.audience_id for audience in public_audiences],
+            "memory_site_refs": [site.site_id for site in active_memory_sites],
+            "resource_refs": [resource.resource_id for resource in scarce_resources],
+            "current_time_window": self.state.current_time_window,
+            "active_rhythms": list(self.state.active_rhythms),
+        }
+
     def select_scene_locality(
         self,
         context: TickContext,
@@ -113,6 +156,7 @@ class LocalWorldEngine:
         scene_context = {
             "location_id": selected["location_id"],
             "location_label": selected["label"],
+            "scene_type": scene_type,
             "route_context": route,
             "time_window": self.state.current_time_window,
             "active_rhythm": self.state.active_rhythms[0] if self.state.active_rhythms else None,
@@ -162,6 +206,102 @@ class LocalWorldEngine:
             "caused_by_events": causal_refs,
         }
         return SceneLocalitySelection(scene_context, location_trace, route_trace, audience_trace)
+
+    def derive_capacity_constraints(
+        self,
+        context: TickContext,
+        scene_context: dict[str, Any],
+        *,
+        causal_refs: list[str] | None = None,
+    ) -> LocalWorldConstraintIntegration:
+        if not self.spec or not self.state or not scene_context:
+            return LocalWorldConstraintIntegration()
+        causal_refs = causal_refs or []
+        integration = LocalWorldConstraintIntegration()
+        route_context = scene_context.get("route_context") or {}
+        location_id = str(scene_context.get("location_id") or "")
+        emitted: list[dict[str, Any]] = []
+
+        if route_context.get("access_status") in {"blocked", "dangerous", "costly"}:
+            intensity = clamp(1.0 - float(route_context.get("route_score", 0.0)))
+            route_payload = {
+                "capacity_id": _route_capacity_for_scene(str(scene_context.get("scene_type") or "")),
+                "blockage_source": "route_access",
+                "route_id": route_context.get("route_id"),
+                "location_id": location_id,
+                "access_status": route_context.get("access_status"),
+                "intensity": intensity,
+                "affected_processes": self._route_affected_processes_by_id(str(route_context.get("route_id") or "")),
+            }
+            integration.events.append(("BlockedCapacityEvent", route_payload, causal_refs))
+            emitted.append(route_payload)
+
+        for audience in scene_context.get("possible_audiences", []):
+            exposure_level = float(audience.get("exposure_level") or 0.0)
+            if audience.get("exposure_state") in {"likely", "observed", "reported", "institutionalized"} or exposure_level >= 0.66:
+                public_payload = {
+                    "capacity_id": "private_speech",
+                    "blockage_source": "public_visibility",
+                    "audience_id": audience.get("audience_id"),
+                    "location_id": location_id,
+                    "exposure_state": audience.get("exposure_state"),
+                    "intensity": clamp(exposure_level),
+                    "affected_processes": ["p1", "p2"],
+                }
+                integration.events.append(("BlockedCapacityEvent", public_payload, causal_refs))
+                emitted.append(public_payload)
+                break
+
+        for site_id in scene_context.get("memory_site_refs", []):
+            site = self._memory_site_by_id(str(site_id))
+            runtime = self.state.active_memory_sites.get(str(site_id))
+            if not site or not runtime or runtime.salience < 0.5:
+                continue
+            memory_payload = {
+                "capacity_id": "memory_integration",
+                "blockage_source": "memory_site",
+                "site_id": site.site_id,
+                "location_id": site.location_id,
+                "memory_type": site.memory_type,
+                "intensity": clamp(max(runtime.salience, normalized_pressure(site.avoidance_pressure))),
+                "affected_processes": list(site.affected_processes),
+            }
+            integration.events.append(("BlockedCapacityEvent", memory_payload, causal_refs))
+            emitted.append(memory_payload)
+            break
+
+        resource_payloads = []
+        for resource in self.spec.resources:
+            runtime = self.state.resource_states[resource.resource_id]
+            if runtime.scarcity_level < 0.45:
+                continue
+            payload = {
+                "demand_source": "resource_scarcity",
+                "resource_id": resource.resource_id,
+                "resource_label": resource.label,
+                "linked_capacities": list(resource.linked_capacities or ["survival", "care", "repair"]),
+                "scarcity_level": runtime.scarcity_level,
+                "availability": runtime.availability,
+                "conflict_potential": normalized_pressure(resource.conflict_potential),
+                "intensity": clamp(runtime.scarcity_level * 0.68 + normalized_pressure(resource.conflict_potential) * 0.32),
+            }
+            integration.events.append(("CapacityDemandEvent", payload, causal_refs))
+            resource_payloads.append(payload)
+        emitted.extend(resource_payloads)
+
+        if emitted:
+            integration.traces.append(
+                {
+                    "tick": context.tick_index,
+                    "event_type": "LocalWorldConstraintIntegrationEvent",
+                    "location_id": location_id,
+                    "route_id": route_context.get("route_id"),
+                    "constraints": emitted,
+                    "feeds": ["BlockedCapacityEvent", "CapacityDemandEvent", "AffordanceSelectionEvent"],
+                    "caused_by_events": causal_refs,
+                }
+            )
+        return integration
 
     def _active_rhythms(self) -> list[RhythmSpec]:
         assert self.spec is not None
@@ -444,6 +584,17 @@ class LocalWorldEngine:
             if location.location_id in {route.from_location, route.to_location}:
                 linked.update(location.linked_processes)
         return sorted(linked)
+
+    def _route_affected_processes_by_id(self, route_id: str) -> list[str]:
+        assert self.spec is not None
+        route = next((item for item in self.spec.routes if item.route_id == route_id), None)
+        if not route:
+            return []
+        return self._route_affected_processes(route)
+
+    def _memory_site_by_id(self, site_id: str) -> MemorySiteSpec | None:
+        assert self.spec is not None
+        return next((item for item in self.spec.memory_sites if item.site_id == site_id), None)
 
     def _location_candidate(self, context: TickContext, location: LocationSpec, scene_type: str, evidence: dict[str, Any]) -> dict[str, Any]:
         assert self.spec is not None and self.state is not None
@@ -758,6 +909,14 @@ def _capacity_match(scene_type: str, location: LocationSpec) -> float:
     required = capacity_by_scene.get(scene_type, {"repair", "truth_disclosure"})
     available = set(_capacities_for_location(location))
     return len(required & available) / max(1, len(required))
+
+
+def _route_capacity_for_scene(scene_type: str) -> str:
+    if scene_type in {"care_intervention", "practical_repair_offer", "material_pressure_intrusion"}:
+        return "care"
+    if scene_type in {"contaminated_evidence_review", "unstable_testimony_probe", "forbidden_symbol_confrontation"}:
+        return "evidence_access"
+    return "exit"
 
 
 def _rejected_reasons(location: LocationSpec, scene_type: str, components: dict[str, float]) -> list[str]:

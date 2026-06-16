@@ -614,11 +614,33 @@ class Simulator:
         update = self.local_world.advance(context, causal_refs=causal_refs)
         if not update.traces:
             return []
+        self._apply_local_world_pressure_snapshot()
         self.local_world_trace.extend(update.traces)
         return [
             self._event(event_type, "local_world", payload, refs)
             for event_type, payload, refs in update.events
         ]
+
+    def _apply_local_world_pressure_snapshot(self) -> None:
+        snapshot = self.local_world.pressure_snapshot()
+        if not snapshot:
+            return
+        route_pressure = clamp(float(snapshot.get("blocked_route_pressure") or 0.0))
+        public_pressure = clamp(float(snapshot.get("public_visibility_pressure") or 0.0))
+        memory_pressure_value = clamp(float(snapshot.get("memory_site_pressure") or 0.0))
+        resource_pressure = clamp(float(snapshot.get("resource_scarcity_pressure") or 0.0))
+        self.state.relation_metrics.update(
+            {
+                "local_world.blocked_route_pressure": route_pressure,
+                "local_world.public_visibility_pressure": public_pressure,
+                "local_world.memory_site_pressure": memory_pressure_value,
+                "local_world.resource_scarcity_pressure": resource_pressure,
+            }
+        )
+        self.state.field_state.spatial_constraints["local_world_route_blockage"] = route_pressure
+        self.state.field_state.spatial_constraints["local_world_memory_site"] = memory_pressure_value
+        self.state.field_state.audience_pressure["local_world_public_visibility"] = public_pressure
+        self.state.field_state.material_pressures["local_world_resource_scarcity"] = resource_pressure
 
     def _field_and_binding_events(self, context: TickContext) -> list[Event]:
         events: list[Event] = []
@@ -818,6 +840,7 @@ class Simulator:
                 "frame": affordance.frame,
                 "score": affordance.score,
                 "evidence": affordance.evidence,
+                "local_world_context": self.affordances.last_diagnostics.get("local_world_context", {}),
                 "tick_type": context.tick_type,
             },
         )
@@ -914,6 +937,18 @@ class Simulator:
             self.route_selection_trace.append(locality.route_trace)
         if locality.audience_trace:
             self.audience_exposure_trace.append(locality.audience_trace)
+        local_constraint_events: list[Event] = []
+        local_constraints = self.local_world.derive_capacity_constraints(
+            context,
+            locality.scene_context,
+            causal_refs=[affordance_event.event_id, action_event.event_id, expression_event.event_id],
+        )
+        if local_constraints.traces:
+            self.local_world_trace.extend(local_constraints.traces)
+        for event_type, payload, refs in local_constraints.events:
+            local_constraint_events.append(self._event(event_type, "local_world", payload, refs))
+        events.extend(local_constraint_events)
+        local_constraint_refs = [event.event_id for event in local_constraint_events]
         if context.tick_type == "scene":
             events.append(
                 self._event(
@@ -938,11 +973,12 @@ class Simulator:
                         "possible_audiences": locality.scene_context.get("possible_audiences", []),
                         "local_constraints": locality.scene_context.get("local_constraints", []),
                         "memory_site_refs": locality.scene_context.get("memory_site_refs", []),
+                        "local_world_constraint_refs": local_constraint_refs,
                         "affordance_id": affordance.affordance_id,
                         "action_id": action.action_id,
                         "expression_id": expression.expression_id,
                     },
-                    [affordance_event.event_id, action_event.event_id, expression_event.event_id],
+                    [affordance_event.event_id, action_event.event_id, expression_event.event_id] + local_constraint_refs,
                 )
             )
         events.append(
@@ -967,8 +1003,9 @@ class Simulator:
                     "scene_context": locality.scene_context,
                     "location_id": locality.scene_context.get("location_id"),
                     "route_context": locality.scene_context.get("route_context", {}),
+                    "local_world_constraint_refs": local_constraint_refs,
                 },
-                [expression_event.event_id],
+                [expression_event.event_id] + local_constraint_refs,
             )
         )
         events.append(
