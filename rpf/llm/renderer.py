@@ -558,6 +558,8 @@ def llm_markdown(
                 "world_detail_context.attention_focuses",
                 "world_detail_context.ephemeral_details",
                 "world_detail_context.soft_world_profiles",
+                "world_detail_context.active_soft_profiles",
+                "world_detail_context.soft_profile_history",
                 "world_detail_context.rules",
             ],
             "must_not_invent": [
@@ -645,6 +647,8 @@ def llm_markdown(
                 "world_detail_context is attention-gated and non-causal",
                 "ephemeral_details may color only current perception and must not become plot facts",
                 "soft_world_profiles are compact atmosphere tags, not prose archives",
+                "active_soft_profiles may be reused only when their scope matches the current scene and freshness is above threshold",
+                "soft_profile_history explains reinforcement and decay; it is not a sequence of plot events",
                 "causal_world_details are unavailable unless explicitly present and validated",
             ],
         },

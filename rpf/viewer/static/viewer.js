@@ -375,6 +375,8 @@ const ZH = {
   charged: "带电",
   emergent: "刚浮现",
   recurring: "反复出现",
+  reinforced: "被强化",
+  decayed: "已衰减",
   sight: "视觉",
   sound: "声音",
   distance: "距离",
@@ -854,7 +856,8 @@ function renderWorldDetails() {
   const context = DATA.world_detail_context || {};
   const focuses = context.attention_focuses || [];
   const details = context.ephemeral_details || [];
-  const profiles = context.soft_world_profiles || [];
+  const profiles = context.active_soft_profiles || context.soft_world_profiles || [];
+  const profileHistory = context.soft_profile_history || [];
   if (!focuses.length && !details.length && !profiles.length) {
     target.innerHTML = "<div class=\"trace\"><small>当前没有达到门控条件的世界细节。没有注意力，就不展开世界。</small></div>";
     return;
@@ -887,12 +890,21 @@ function renderWorldDetails() {
         ${profiles.slice(-4).map((item) => `
           <article class="world-detail-card">
             <strong>${escapeHtml(item.scope_id || "-")} · ${escapeHtml(zh(item.stability))}</strong>
-            <small>新鲜度 ${fmt(item.freshness)}</small>
+            <small>新鲜度 ${fmt(item.freshness)} / 强化 ${fmt(item.reinforcement_count)} 次 / 最近 tick ${fmt(item.last_reinforced_tick)}</small>
             <div class="tags">
               ${(item.sensory_tags || []).concat(item.atmosphere_tags || []).slice(0, 8).map((tag) => `<span class="tag">${escapeHtml(zh(tag))}</span>`).join("")}
             </div>
           </article>
         `).join("")}
+      </div>
+      <div>
+        <h4>质地衰减</h4>
+        ${profileHistory.slice(-6).map((item) => `
+          <article class="world-detail-card">
+            <strong>第 ${escapeHtml(item.tick ?? "-")} 步 · ${escapeHtml(zh(item.update_type))}</strong>
+            <small>${escapeHtml(item.scope_id || "-")} / 新鲜度 ${fmt(item.freshness)}</small>
+          </article>
+        `).join("") || "<small>暂无衰减记录</small>"}
       </div>
     </div>
   `;

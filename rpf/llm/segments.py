@@ -81,7 +81,11 @@ def next_render_segment(
         "memory_trace": payload.get("memory", []),
         "local_world_view": payload.get("local_world_view", {}),
         "object_registry_view": payload.get("object_registry_view", {}),
-        "world_detail_context": _world_detail_context_for_ticks(payload.get("world_detail_context", {}), source_ticks),
+        "world_detail_context": _world_detail_context_for_ticks(
+            payload.get("world_detail_context", {}),
+            source_ticks,
+            frames,
+        ),
         "summary": payload.get("summary", {}),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
         "person_views": payload.get("derived_views", {}).get("person_views", {}),
@@ -923,17 +927,22 @@ def _beats_for_ticks(beats: list[dict[str, Any]], source_ticks: list[Any]) -> li
     return selected
 
 
-def _world_detail_context_for_ticks(context: dict[str, Any], source_ticks: list[Any]) -> dict[str, Any]:
+def _world_detail_context_for_ticks(
+    context: dict[str, Any],
+    source_ticks: list[Any],
+    frames: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     wanted = {int(tick) for tick in source_ticks if str(tick).isdigit()}
     if not context:
         return {}
+    frame_scope_ids = _frame_scope_ids(frames or [])
     focuses = [
         item
         for item in context.get("attention_focuses", []) or []
         if int(item.get("tick", 0) or 0) in wanted
     ]
     focus_ids = {item.get("focus_id") for item in focuses}
-    scope_ids = {item.get("scope_id") for item in focuses}
+    scope_ids = {item.get("scope_id") for item in focuses} | frame_scope_ids
     details = [
         item
         for item in context.get("ephemeral_details", []) or []
@@ -946,18 +955,41 @@ def _world_detail_context_for_ticks(context: dict[str, Any], source_ticks: list[
     ]
     profiles = [
         item
-        for item in context.get("soft_world_profiles", []) or []
+        for item in (
+            context.get("active_soft_profiles", [])
+            or context.get("soft_world_profiles", [])
+            or []
+        )
         if item.get("scope_id") in scope_ids
     ]
+    history = [
+        item
+        for item in context.get("soft_profile_history", []) or []
+        if item.get("scope_id") in scope_ids
+        and (not wanted or int(item.get("tick", 0) or 0) <= max(wanted))
+    ][-12:]
     return {
         "rules": context.get("rules", {}),
         "attention_focuses": focuses,
         "detail_gaps": gaps,
         "ephemeral_details": details,
         "soft_world_profiles": profiles,
+        "active_soft_profiles": profiles,
+        "soft_profile_history": history,
         "causal_world_details": [],
         "rejected_details": context.get("rejected_details", []),
     }
+
+
+def _frame_scope_ids(frames: list[dict[str, Any]]) -> set[str]:
+    scope_ids: set[str] = set()
+    for frame in frames:
+        locality = frame.get("locality", {}) or {}
+        if locality.get("location_id"):
+            scope_ids.add(str(locality["location_id"]))
+        if locality.get("route_id"):
+            scope_ids.add(str(locality["route_id"]))
+    return scope_ids
 
 
 def _minimum_segment_reached(frames: list[dict[str, Any]], policy: dict[str, Any]) -> bool:

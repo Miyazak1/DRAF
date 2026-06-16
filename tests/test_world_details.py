@@ -17,6 +17,8 @@ def test_world_detail_context_requires_attention():
     assert context["attention_focuses"] == []
     assert context["ephemeral_details"] == []
     assert context["soft_world_profiles"] == []
+    assert context["active_soft_profiles"] == []
+    assert context["soft_profile_history"] == []
     assert context["causal_world_details"] == []
     assert context["rules"]["no_attention_no_elaboration"] is True
 
@@ -30,8 +32,15 @@ def test_viewer_payload_builds_attention_gated_world_details(tmp_path):
     assert context["detail_gaps"]
     assert context["ephemeral_details"]
     assert context["soft_world_profiles"]
+    assert context["active_soft_profiles"]
+    assert context["soft_profile_history"]
     assert context["causal_world_details"] == []
     assert all(detail["discard_after_render"] is True for detail in context["ephemeral_details"])
+    profile = context["active_soft_profiles"][0]
+    assert profile["last_reinforced_tick"] >= profile["first_seen_tick"]
+    assert profile["reinforcement_count"] >= 1
+    assert profile["decay_policy"]["decays_when_scope_not_reinforced"] is True
+    assert all(0 <= item["freshness"] <= 1 for item in context["soft_profile_history"])
     assert any(
         ref.startswith("detail:")
         for beat in payload["narrative_beats"]
@@ -48,6 +57,8 @@ def test_render_payload_and_segment_include_world_detail_context(tmp_path):
 
     assert render_payload["world_detail_context"]["rules"]["ephemeral_details_are_render_only"] is True
     assert segment["world_detail_context"]["ephemeral_details"]
+    assert segment["world_detail_context"]["active_soft_profiles"]
+    assert segment["world_detail_context"]["soft_profile_history"]
     assert llm_payload["world_detail_context"]["ephemeral_details"]
     assert llm_payload["rules"]["world_detail_context_is_attention_gated"] is True
     assert "注意力只唤醒了当前可感知细节" in outline
@@ -60,6 +71,8 @@ def test_export_files_include_world_detail_context(tmp_path):
 
     assert "world_detail_context.json" in files
     assert "soft_world_profiles.json" in files
+    assert "active_soft_profiles.json" in files
+    assert "soft_profile_history.json" in files
     assert "detail_gap_trace.json" in files
     assert "ephemeral_details_are_render_only" in files["world_detail_context.json"]
 
@@ -70,4 +83,3 @@ def _run(tmp_path, *, steps: int) -> Path:
     sim = Simulator.from_scenario(scenario, SCENARIO, seed=42)
     sim.run(steps=steps, output_dir=output_dir)
     return output_dir
-

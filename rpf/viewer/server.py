@@ -665,6 +665,8 @@ def _database_export_files(payload: dict[str, Any], report: str) -> dict[str, st
         "narrative_beats.json": payload.get("narrative_beats", []),
         "world_detail_context.json": payload.get("world_detail_context", {}),
         "soft_world_profiles.json": payload.get("world_detail_context", {}).get("soft_world_profiles", []),
+        "active_soft_profiles.json": payload.get("world_detail_context", {}).get("active_soft_profiles", []),
+        "soft_profile_history.json": payload.get("world_detail_context", {}).get("soft_profile_history", []),
         "detail_gap_trace.json": payload.get("world_detail_context", {}).get("detail_gaps", []),
         "render_repetition_trace.json": payload.get("render_repetition", []),
     }
@@ -739,6 +741,8 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "narrative_beats.json",
         "world_detail_context.json",
         "soft_world_profiles.json",
+        "active_soft_profiles.json",
+        "soft_profile_history.json",
         "detail_gap_trace.json",
         "irreversibility_report.json",
         "aggregation_traces.json",

@@ -9,6 +9,8 @@ REPEATED_ATTENTION_INTENSITY_MIN = 0.08
 SAME_FOCUS_REPEAT_MIN = 2
 DETAIL_BUDGET_PER_SCOPE = 12
 EPHEMERAL_DETAIL_BUDGET = 5
+SOFT_PROFILE_FRESHNESS_MIN = 0.35
+SOFT_PROFILE_DECAY_PER_TICK = 0.035
 
 
 FOCUS_LABELS = {
@@ -83,6 +85,17 @@ def build_world_detail_context(payload: dict[str, Any]) -> dict[str, Any]:
     detail_gaps = _detail_gaps(focus_records)
     ephemeral = _ephemeral_details(focus_records, local_world)
     profiles = _soft_profiles(focus_records, local_world)
+    current_tick = max(
+        [int(frame.get("tick", 0) or 0) for frame in story]
+        + [int(record.get("tick", 0) or 0) for record in focus_records]
+        + [0]
+    )
+    profile_history = _soft_profile_history(profiles, focus_records, current_tick)
+    active_profiles = [
+        profile
+        for profile in profiles
+        if float(profile.get("freshness") or 0.0) >= SOFT_PROFILE_FRESHNESS_MIN
+    ]
     return {
         "rules": {
             "no_attention_no_elaboration": True,
@@ -95,11 +108,15 @@ def build_world_detail_context(payload: dict[str, Any]) -> dict[str, Any]:
             "same_focus_repeat_min": SAME_FOCUS_REPEAT_MIN,
             "detail_budget_per_scope": DETAIL_BUDGET_PER_SCOPE,
             "ephemeral_detail_budget": EPHEMERAL_DETAIL_BUDGET,
+            "soft_profile_freshness_min": SOFT_PROFILE_FRESHNESS_MIN,
+            "soft_profile_decay_per_tick": SOFT_PROFILE_DECAY_PER_TICK,
         },
         "attention_focuses": focus_records,
         "detail_gaps": detail_gaps,
         "ephemeral_details": ephemeral,
         "soft_world_profiles": profiles,
+        "active_soft_profiles": active_profiles,
+        "soft_profile_history": profile_history,
         "causal_world_details": [],
         "rejected_details": [],
     }
@@ -276,6 +293,9 @@ def _soft_profiles(focus_records: list[dict[str, Any]], local_world: dict[str, A
     for index, (scope_id, records) in enumerate(sorted(grouped.items()), start=1):
         focuses = [str(record.get("dominant_focus") or "") for record in records]
         max_intensity = max(float(record.get("intensity") or 0.0) for record in records)
+        last_reinforced_tick = max(int(record.get("tick", 0) or 0) for record in records)
+        first_seen_tick = min(int(record.get("tick", 0) or 0) for record in records)
+        base_freshness = min(1.0, 0.35 + len(records) * 0.08 + max_intensity * 0.32)
         sensory_tags = _unique(tag for focus in focuses for tag in SENSORY_TAGS.get(focus, []))
         atmosphere_tags = _unique(tag for focus in focuses for tag in ATMOSPHERE_TAGS.get(focus, []))
         profiles.append(
@@ -291,12 +311,83 @@ def _soft_profiles(focus_records: list[dict[str, Any]], local_world: dict[str, A
                 "smell_profile": None,
                 "tactile_profile": "body_pressure" if "body_management" in focuses else None,
                 "stability": "recurring" if len(records) >= 2 else "emergent",
-                "freshness": round(min(1.0, 0.35 + len(records) * 0.08 + max_intensity * 0.32), 4),
+                "freshness": round(base_freshness, 4),
+                "base_freshness": round(base_freshness, 4),
+                "first_seen_tick": first_seen_tick,
+                "last_reinforced_tick": last_reinforced_tick,
+                "reinforcement_count": len(records),
+                "decay_policy": {
+                    "decay_per_tick": SOFT_PROFILE_DECAY_PER_TICK,
+                    "minimum_freshness_for_injection": SOFT_PROFILE_FRESHNESS_MIN,
+                    "decays_when_scope_not_reinforced": True,
+                },
                 "source_focus_events": [record["focus_id"] for record in records],
                 "source_events": _unique(ref for record in records for ref in record.get("evidence", [])),
             }
         )
     return profiles
+
+
+def _soft_profile_history(
+    profiles: list[dict[str, Any]],
+    focus_records: list[dict[str, Any]],
+    current_tick: int,
+) -> list[dict[str, Any]]:
+    records_by_scope: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for record in focus_records:
+        records_by_scope[str(record.get("scope_id"))].append(record)
+    history: list[dict[str, Any]] = []
+    for profile in profiles:
+        scope_id = str(profile.get("scope_id") or "")
+        records = sorted(records_by_scope.get(scope_id, []), key=lambda item: int(item.get("tick", 0) or 0))
+        if not records:
+            continue
+        freshness = 0.0
+        last_tick = int(records[0].get("tick", 0) or 0)
+        for index, record in enumerate(records, start=1):
+            tick = int(record.get("tick", 0) or 0)
+            freshness = _decayed_freshness(freshness, tick - last_tick)
+            reinforcement = 0.22 + float(record.get("intensity") or 0.0) * 0.38
+            freshness = min(1.0, max(freshness, 0.28) + reinforcement)
+            history.append(
+                {
+                    "profile_id": profile.get("profile_id"),
+                    "scope_type": profile.get("scope_type"),
+                    "scope_id": scope_id,
+                    "tick": tick,
+                    "update_type": "reinforced",
+                    "freshness": round(freshness, 4),
+                    "reinforcement_count": index,
+                    "source_focus_event": record.get("focus_id"),
+                    "decay_policy": profile.get("decay_policy", {}),
+                }
+            )
+            last_tick = tick
+        if current_tick > last_tick:
+            decayed = _decayed_freshness(freshness, current_tick - last_tick)
+            history.append(
+                {
+                    "profile_id": profile.get("profile_id"),
+                    "scope_type": profile.get("scope_type"),
+                    "scope_id": scope_id,
+                    "tick": current_tick,
+                    "update_type": "decayed",
+                    "freshness": round(decayed, 4),
+                    "reinforcement_count": len(records),
+                    "source_focus_event": None,
+                    "decay_policy": profile.get("decay_policy", {}),
+                }
+            )
+            profile["freshness"] = round(decayed, 4)
+        else:
+            profile["freshness"] = round(min(1.0, freshness), 4)
+    return history
+
+
+def _decayed_freshness(freshness: float, tick_delta: int) -> float:
+    if tick_delta <= 0:
+        return freshness
+    return max(0.0, freshness - tick_delta * SOFT_PROFILE_DECAY_PER_TICK)
 
 
 def _material_cues(records: list[dict[str, Any]], local_world: dict[str, Any]) -> list[str]:
