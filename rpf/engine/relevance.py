@@ -208,6 +208,8 @@ class RelevanceLandscapeEngine:
                 updates.extend(self._attention_updates(state, event, refs))
             elif event_type == "OpportunityCostEvent":
                 updates.extend(self._opportunity_updates(state, event, refs))
+            elif event_type == "ActionReversibilityEvent":
+                updates.extend(self._reversibility_updates(state, event, refs))
         return [update for update in updates if update.previous_value != update.new_value]
 
     def _affordance_updates(
@@ -283,7 +285,7 @@ class RelevanceLandscapeEngine:
         event: Event,
         refs: list[str],
     ) -> list[RelevanceShift]:
-        result = str(event.payload.get("result", ""))
+        result = str(event.payload.get("outcome") or event.payload.get("result") or "")
         holder = str(event.payload.get("holder", "p1"))
         demanded_from = str(event.payload.get("demanded_from", "p2"))
         updates: list[RelevanceShift] = []
@@ -421,6 +423,53 @@ class RelevanceLandscapeEngine:
                 [event.event_type],
             )
         ]
+
+    def _reversibility_updates(
+        self,
+        state: SimulationState,
+        event: Event,
+        refs: list[str],
+    ) -> list[RelevanceShift]:
+        process_id = str(event.payload.get("process_id", ""))
+        if process_id not in state.processes:
+            return []
+        threshold_state = str(event.payload.get("threshold_state", ""))
+        pressure = self._payload_float(event, "threshold_proximity")
+        if pressure <= 0.0:
+            return []
+        marker = {
+            "recoverable": "repair_opening",
+            "narrowing": "delayed_reply",
+            "threshold_crossed": "recognition_claim",
+            "symbolic_only": "exit_threat",
+        }.get(threshold_state)
+        if not marker:
+            return []
+        updates = [
+            self._delta(
+                state,
+                process_id,
+                marker,
+                pressure * 0.15,
+                f"action reversibility state {threshold_state} makes {marker} more salient",
+                refs,
+                [event.event_type],
+            )
+        ]
+        if threshold_state in {"threshold_crossed", "symbolic_only"}:
+            for other in set(state.processes) - {process_id}:
+                updates.append(
+                    self._delta(
+                        state,
+                        other,
+                        "recognition_claim",
+                        pressure * 0.08,
+                        "crossed reversibility threshold makes counter-recognition salient",
+                        refs,
+                        [event.event_type],
+                    )
+                )
+        return updates
 
     def _coalesce(self, updates: list[RelevanceShift]) -> list[RelevanceShift]:
         grouped: dict[tuple[str, str, str], list[RelevanceShift]] = {}

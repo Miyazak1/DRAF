@@ -27,7 +27,7 @@ class FateTransitionEngine:
             return []
         source_event_id = local_events[-1].event_id if local_events else "unknown"
         affordance = self._latest_payload(local_events, "AffordanceSelectionEvent", "affordance_id", "none")
-        recognition = self._latest_payload(local_events, "RecognitionEvent", "result", "none")
+        recognition = self._latest_payload_any(local_events, "RecognitionEvent", ("outcome", "result"), "none")
         composition = self._dominant_composition(state)
         audience = max(state.field_state.audience_pressure.values(), default=0.0)
         repair_debt = state.relation_metrics.get("repair_debt", 0.0)
@@ -45,6 +45,9 @@ class FateTransitionEngine:
         shared_fate = state.relation_metrics.get("relation_sediment.shared_fate_load", 0.0)
         public_definition = state.relation_metrics.get("relation_sediment.public_definition_load", 0.0)
         asymmetry_load = state.relation_metrics.get("relation_sediment.asymmetry_load", 0.0)
+        reversibility_pressure = state.relation_metrics.get("action_reversibility.pressure", 0.0)
+        reversibility_crossed = state.relation_metrics.get("action_reversibility.threshold_crossed", 0.0)
+        symbolic_only = state.relation_metrics.get("action_reversibility.symbolic_only", 0.0)
 
         evidence: dict[str, float | str] = {
             "affordance": affordance,
@@ -61,6 +64,9 @@ class FateTransitionEngine:
             "relation_shared_fate": round(shared_fate, 4),
             "relation_public_definition": round(public_definition, 4),
             "relation_asymmetry_load": round(asymmetry_load, 4),
+            "action_reversibility_pressure": round(reversibility_pressure, 4),
+            "action_reversibility_threshold_crossed": round(reversibility_crossed, 4),
+            "action_reversibility_symbolic_only": round(symbolic_only, 4),
         }
         results: list[FateTransitionResult] = []
         results.extend(
@@ -75,8 +81,8 @@ class FateTransitionEngine:
                     "debt_named": contribution * 0.28 + repair_debt * 0.22 + self._is(composition, {"debt_lock", "credit_recognition_lock"}) * 0.26 + self._is(recognition, {"refused", "misunderstood"}) * 0.12 + recognition_debt * 0.045 + symbolic_accounting * 0.04,
                     "controlling_care": care_dependency * 0.28 + double_bind * 0.2 + self._is(composition, {"care_bind_double_bind"}) * 0.28 + conflict * 0.12 + asymmetry_load * 0.04,
                     "public_mask": public_gap * 0.26 + face_risk * 0.2 + audience * 0.18 + self._is(composition, {"public_face_split"}) * 0.26 + public_definition * 0.045,
-                    "unreachable": silence_charge * 0.32 + self._is(composition, {"anxious_silence_circuit"}) * 0.28 + self._is(affordance, {"mediated_delay"}) * 0.2 + repair_debt * 0.08 + repair_access_narrowing * 0.04,
-                    "impossible_to_satisfy": double_bind * 0.34 + self._is(affordance, {"double_bind_response"}) * 0.24 + self._is(recognition, {"unspeakable", "misunderstood"}) * 0.16 + conflict * 0.1 + asymmetry_load * 0.04,
+                    "unreachable": silence_charge * 0.32 + self._is(composition, {"anxious_silence_circuit"}) * 0.28 + self._is(affordance, {"mediated_delay"}) * 0.2 + repair_debt * 0.08 + repair_access_narrowing * 0.04 + reversibility_pressure * 0.018,
+                    "impossible_to_satisfy": double_bind * 0.34 + self._is(affordance, {"double_bind_response"}) * 0.24 + self._is(recognition, {"unspeakable", "misunderstood"}) * 0.16 + conflict * 0.1 + asymmetry_load * 0.04 + reversibility_crossed * 0.02,
                 },
             )
         )
@@ -89,11 +95,11 @@ class FateTransitionEngine:
                 composition,
                 evidence,
                 {
-                    "symbolic_debt_lock": contribution * 0.24 + repair_debt * 0.24 + self._is(composition, {"credit_recognition_lock", "debt_lock"}) * 0.32 + conflict * 0.12 + recognition_debt * 0.04 + symbolic_accounting * 0.045,
-                    "public_exposure_risk": public_gap * 0.28 + audience * 0.22 + self._is(composition, {"public_face_split"}) * 0.26 + face_risk * 0.12 + public_definition * 0.04,
-                    "care_role_lock": care_dependency * 0.28 + double_bind * 0.18 + self._is(composition, {"care_bind_double_bind"}) * 0.28 + repair_debt * 0.12 + asymmetry_load * 0.035,
-                    "silence_becomes_history": silence_charge * 0.28 + self._is(composition, {"anxious_silence_circuit"}) * 0.3 + self._is(recognition, {"postponed", "refused"}) * 0.18 + repair_debt * 0.1 + repair_access_narrowing * 0.04,
-                    "double_bind_identity_mark": double_bind * 0.3 + self._is(affordance, {"double_bind_response"}) * 0.22 + self._is(recognition, {"unspeakable", "misunderstood"}) * 0.18 + conflict * 0.12 + future_lock * 0.03 + shared_fate * 0.03,
+                    "symbolic_debt_lock": contribution * 0.24 + repair_debt * 0.24 + self._is(composition, {"credit_recognition_lock", "debt_lock"}) * 0.32 + conflict * 0.12 + recognition_debt * 0.04 + symbolic_accounting * 0.045 + reversibility_crossed * 0.018,
+                    "public_exposure_risk": public_gap * 0.28 + audience * 0.22 + self._is(composition, {"public_face_split"}) * 0.26 + face_risk * 0.12 + public_definition * 0.04 + symbolic_only * 0.018,
+                    "care_role_lock": care_dependency * 0.28 + double_bind * 0.18 + self._is(composition, {"care_bind_double_bind"}) * 0.28 + repair_debt * 0.12 + asymmetry_load * 0.035 + reversibility_crossed * 0.014,
+                    "silence_becomes_history": silence_charge * 0.28 + self._is(composition, {"anxious_silence_circuit"}) * 0.3 + self._is(recognition, {"postponed", "refused"}) * 0.18 + repair_debt * 0.1 + repair_access_narrowing * 0.04 + reversibility_pressure * 0.028,
+                    "double_bind_identity_mark": double_bind * 0.3 + self._is(affordance, {"double_bind_response"}) * 0.22 + self._is(recognition, {"unspeakable", "misunderstood"}) * 0.18 + conflict * 0.12 + future_lock * 0.03 + shared_fate * 0.03 + symbolic_only * 0.02,
                 },
             )
         )
@@ -249,6 +255,16 @@ class FateTransitionEngine:
         for event in reversed(events):
             if event.event_type == event_type:
                 return str(event.payload.get(key, default))
+        return default
+
+    def _latest_payload_any(self, events: list[Event], event_type: str, keys: tuple[str, ...], default: str) -> str:
+        for event in reversed(events):
+            if event.event_type != event_type:
+                continue
+            for key in keys:
+                if key in event.payload:
+                    return str(event.payload.get(key, default))
+            return default
         return default
 
     def _is(self, value: str | None, options: set[str]) -> float:

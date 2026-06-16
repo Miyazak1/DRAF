@@ -29,6 +29,7 @@ def test_viewer_payload_contains_core_traces(tmp_path):
     assert payload["memory"]
     assert payload["environment"]
     assert payload["opportunity"]
+    assert payload["reversibility"]
     assert payload["recognition"]
     assert payload["summary"]["top_rpps"]
     assert payload["story"]
@@ -42,6 +43,7 @@ def test_viewer_payload_contains_core_traces(tmp_path):
     assert payload["viability"][0]["affordance_widths"]
     assert "future_constraints" in payload["viability"][0]
     assert any(frame["opportunity_cost"] for frame in payload["story"])
+    assert any(frame["reversibility"] for frame in payload["story"])
 
 
 def test_viewer_static_contains_viability_dynamics_panel():
@@ -103,10 +105,13 @@ def test_yellow_sign_payload_contains_case_ledger(tmp_path):
     assert payload["story"][-1]["attention_drift"]
     assert payload["attention"]
     assert payload["opportunity"]
+    assert payload["reversibility"]
     assert any(item.get("event_type") == "DailyEcologyEvent" for item in payload["environment"])
     assert any(item.get("event_type") == "OpportunityCostEvent" for item in payload["opportunity"])
+    assert any(item.get("event_type") == "ActionReversibilityEvent" for item in payload["reversibility"])
     assert any(item.get("event_type") == "WitnessStrategyEvent" for item in payload["inquiry"])
     assert any(frame["opportunity_cost"] for frame in payload["story"])
+    assert any(frame["reversibility"] for frame in payload["story"])
     assert any(frame["case_memory_count"] > 0 for frame in payload["story"])
     assert any(frame["case_memory_focuses"] for frame in payload["story"])
     assert "调查" in payload["story"][-1]["summary"] or "案件压力" in payload["story"][-1]["summary"]
@@ -260,6 +265,7 @@ def test_export_run_bundle_writes_zip(tmp_path):
     assert "case_ledger.json" in names
     assert "inquiry_trace.json" in names
     assert "opportunity_trace.json" in names
+    assert "reversibility_trace.json" in names
     assert "timeline.jsonl" in names
     assert "derived_views.json" in names
 

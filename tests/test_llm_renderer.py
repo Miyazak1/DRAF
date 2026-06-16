@@ -26,6 +26,7 @@ def test_deterministic_renderer_writes_story_markdown(tmp_path):
     assert "底层依据：" in text
     assert "可存续性压力" in text
     assert "机会成本" in text
+    assert "行动可逆性" in text
 
 
 def test_render_payload_contains_render_canon(tmp_path):
@@ -40,7 +41,9 @@ def test_render_payload_contains_render_canon(tmp_path):
     assert payload["render_canon"]["cast"]["p2"]["name"] == "沈砚"
     assert payload["story"][0]["viability"]
     assert payload["opportunity_trace"]
+    assert payload["reversibility_trace"]
     assert any(frame["opportunity_cost"] for frame in payload["story"])
+    assert any(frame["reversibility"] for frame in payload["story"])
     assert "affordance_width" in payload["story"][0]["viability"]
 
 
@@ -58,6 +61,7 @@ def test_yellow_sign_render_payload_inherits_case_ledger(tmp_path):
     assert payload["environment_trace"]
     assert payload["attention_trace"]
     assert payload["opportunity_trace"]
+    assert payload["reversibility_trace"]
     assert payload["memory_trace"]
     assert any("case_memory_contamination" in item["reconstruction_biases"] for item in payload["memory_trace"])
     assert any(item["label"] == "黄漆符号" for item in payload["case_ledger"]["evidence_items"])
@@ -69,6 +73,7 @@ def test_yellow_sign_render_payload_inherits_case_ledger(tmp_path):
     assert "日常生态" in text
     assert "注意力漂移" in text
     assert "机会成本" in text
+    assert "行动可逆性" in text
     assert "地点耦合" in text
     assert "证据可达性" in text
     assert "案件记忆" in text
@@ -150,6 +155,7 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert "environment_trace" in body
     assert "attention_trace" in body
     assert "opportunity_trace" in body
+    assert "reversibility_trace" in body
     assert "memory_trace" in body
     assert "changed evidence accessibility state" in body
     assert "changed location-evidence coupling state" in body
@@ -158,4 +164,5 @@ def test_deepseek_request_adds_thinking_control(monkeypatch):
     assert "changed daily ecology state" in body
     assert "changed attention drift state" in body
     assert "changed opportunity cost state" in body
+    assert "changed action reversibility state" in body
     assert "causes not present in viability/action/expression/recognition evidence" in body

@@ -41,6 +41,7 @@ from rpf.engine.opportunity import OpportunityCostEngine
 from rpf.engine.positioning import PositioningEngine
 from rpf.engine.recognition import RecognitionEngine
 from rpf.engine.relevance import RelevanceLandscapeEngine
+from rpf.engine.reversibility import ActionReversibilityEngine
 from rpf.engine.relation import RelationSedimentationEngine
 from rpf.engine.rpp_dynamics import RPPDynamics
 from rpf.engine.scheduler import TemporalScheduler
@@ -94,6 +95,7 @@ class Simulator:
         self.opportunity = OpportunityCostEngine()
         self.positioning = PositioningEngine()
         self.relevance = RelevanceLandscapeEngine()
+        self.reversibility = ActionReversibilityEngine()
         self.attention = AttentionDriftEngine()
         self.environment = EnvironmentSedimentationEngine()
         self.disposition = ProcessDispositionEngine()
@@ -128,6 +130,7 @@ class Simulator:
         self.opportunity_trace: list[dict[str, Any]] = []
         self.position_trace: list[dict[str, Any]] = []
         self.relevance_trace: list[dict[str, Any]] = []
+        self.reversibility_trace: list[dict[str, Any]] = []
         self.attention_trace: list[dict[str, Any]] = []
         self.environment_trace: list[dict[str, Any]] = []
         self.disposition_trace: list[dict[str, Any]] = []
@@ -330,6 +333,7 @@ class Simulator:
         (output_dir / "opportunity_trace.json").write_text(json.dumps(self.opportunity_trace, indent=2), encoding="utf-8")
         (output_dir / "position_trace.json").write_text(json.dumps(self.position_trace, indent=2), encoding="utf-8")
         (output_dir / "relevance_trace.json").write_text(json.dumps(self.relevance_trace, indent=2), encoding="utf-8")
+        (output_dir / "reversibility_trace.json").write_text(json.dumps(self.reversibility_trace, indent=2), encoding="utf-8")
         (output_dir / "attention_trace.json").write_text(json.dumps(self.attention_trace, indent=2), encoding="utf-8")
         (output_dir / "environment_trace.json").write_text(json.dumps(self.environment_trace, indent=2), encoding="utf-8")
         (output_dir / "disposition_trace.json").write_text(json.dumps(self.disposition_trace, indent=2), encoding="utf-8")
@@ -401,6 +405,7 @@ class Simulator:
         local.extend(self._update_attention(context, local))
         if context.tick_type != "latent":
             local.extend(self._update_opportunity_costs(context, local))
+            local.extend(self._update_action_reversibility(context, local))
         local.extend(self._update_relevance(local))
         local.extend(self._update_positions(local))
         views = aggregate_views(self.state, [e.event_id for e in self.events])
@@ -604,6 +609,21 @@ class Simulator:
                 )
             )
         return emitted
+
+    def _update_action_reversibility(self, context: TickContext, local_events: list[Event]) -> list[Event]:
+        update = self.reversibility.update(self.state, context, local_events)
+        if not update:
+            return []
+        payload = update.payload()
+        self.reversibility_trace.append({"tick": self.state.tick, "event_type": "ActionReversibilityEvent", **payload})
+        return [
+            self._event(
+                "ActionReversibilityEvent",
+                "reversibility",
+                payload,
+                update.causal_refs,
+            )
+        ]
 
     def _update_positions(self, local_events: list[Event]) -> list[Event]:
         emitted: list[Event] = []

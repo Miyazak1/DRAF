@@ -84,6 +84,15 @@ ZH = {
     "private_resolution_before_public_reading": "被公开解读前的私人解决",
     "low-cost_trust_update": "低成本信任更新",
     "ordinary_work_or_errand_completion": "普通工作或杂事完成",
+    "recoverable": "仍可修复",
+    "narrowing": "可逆性收窄",
+    "threshold_crossed": "越过阈值",
+    "symbolic_only": "只能象征性修复",
+    "ordinary_repair_still_available": "普通修复仍可用",
+    "direct_repair_still_possible": "直接修复仍可能",
+    "repair_requires_extra_cost": "修复需要额外代价",
+    "repair_requires_explicit_counter_history": "修复需要明确改写历史",
+    "only_symbolic_acknowledgement_remains": "只剩象征性承认",
     "body_management": "身体管理",
     "case_fixation": "案件固着",
     "threat_monitoring": "威胁监控",
@@ -160,6 +169,7 @@ def build_viewer_payload(output_dir: Path) -> dict[str, Any]:
         "relevance": _read_json(run_dir / "relevance_trace.json", []),
         "attention": _read_json(run_dir / "attention_trace.json", []),
         "opportunity": _read_json(run_dir / "opportunity_trace.json", []),
+        "reversibility": _read_json(run_dir / "reversibility_trace.json", []),
         "position": _read_json(run_dir / "position_trace.json", []),
         "expectation": _read_json(run_dir / "expectation_trace.json", []),
         "memory": _read_json(run_dir / "memory_trace.json", []),
@@ -424,6 +434,7 @@ def _exportable_files(output_dir: Path) -> list[Path]:
         "relevance_trace.json",
         "attention_trace.json",
         "opportunity_trace.json",
+        "reversibility_trace.json",
         "position_trace.json",
         "expectation_trace.json",
         "memory_trace.json",
@@ -460,6 +471,9 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
     opportunity_by_tick: dict[int, list[dict[str, Any]]] = {}
     for opportunity_update in payload.get("opportunity", []):
         opportunity_by_tick.setdefault(int(opportunity_update.get("tick", 0)), []).append(opportunity_update)
+    reversibility_by_tick: dict[int, list[dict[str, Any]]] = {}
+    for reversibility_update in payload.get("reversibility", []):
+        reversibility_by_tick.setdefault(int(reversibility_update.get("tick", 0)), []).append(reversibility_update)
     daily_ecology_by_tick = {
         int(item.get("tick", 0)): item
         for item in payload.get("environment", [])
@@ -486,6 +500,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
         position_field = _position_summary(positions_by_tick.get(tick_index, []))
         attention_drift = _attention_summary(attention_by_tick.get(tick_index, []))
         opportunity_cost = _opportunity_summary(opportunity_by_tick.get(tick_index, []))
+        reversibility = _reversibility_summary(reversibility_by_tick.get(tick_index, []))
         daily_ecology = daily_ecology_by_tick.get(tick_index, {})
         memories = memories_by_tick.get(tick_index, [])
         fates = fate_by_tick.get(tick_index, [])
@@ -507,6 +522,8 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
             summary_parts.append(_attention_sentence(attention_drift))
         if opportunity_cost:
             summary_parts.append(_opportunity_sentence(opportunity_cost))
+        if reversibility:
+            summary_parts.append(_reversibility_sentence(reversibility))
         if daily_ecology:
             summary_parts.append(_daily_ecology_sentence(daily_ecology))
         if recognition:
@@ -537,6 +554,7 @@ def build_story_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "position_field": position_field,
                 "attention_drift": attention_drift,
                 "opportunity_cost": opportunity_cost,
+                "reversibility": reversibility,
                 "daily_ecology": daily_ecology,
                 "memory_count": len(memories),
                 "case_memory_count": _case_memory_count(memories),
@@ -778,6 +796,32 @@ def _opportunity_sentence(opportunity: dict[str, Any]) -> str:
     window = opportunity.get("missed_window_label") or _zh(opportunity.get("missed_window", ""))
     intensity = _fmt_report(opportunity.get("intensity"))
     return f"这一步同时付出了{label}：错过{window}，强度 {intensity}。"
+
+
+def _reversibility_summary(updates: list[dict[str, Any]]) -> dict[str, Any]:
+    if not updates:
+        return {}
+    strongest = max(updates, key=lambda item: float(item.get("threshold_proximity") or 0.0))
+    return {
+        "process_id": strongest.get("process_id"),
+        "action_id": strongest.get("action_id"),
+        "threshold_state": strongest.get("threshold_state"),
+        "threshold_label": _zh(strongest.get("threshold_state", "")),
+        "reversibility_width": strongest.get("reversibility_width"),
+        "threshold_proximity": strongest.get("threshold_proximity"),
+        "recovery_route": strongest.get("recovery_route"),
+        "recovery_route_label": _zh(strongest.get("recovery_route", "")),
+        "lost_alternative": strongest.get("lost_alternative"),
+        "consequence": strongest.get("consequence"),
+        "affected_requirements": strongest.get("affected_requirements", []),
+    }
+
+
+def _reversibility_sentence(reversibility: dict[str, Any]) -> str:
+    label = reversibility.get("threshold_label") or _zh(reversibility.get("threshold_state", ""))
+    width = _fmt_report(reversibility.get("reversibility_width"))
+    route = reversibility.get("recovery_route_label") or _zh(reversibility.get("recovery_route", ""))
+    return f"行动可逆性进入{label}，剩余可逆宽度 {width}；修复路径变成{route}。"
 
 
 def _daily_ecology_sentence(daily: dict[str, Any]) -> str:

@@ -116,6 +116,8 @@ class SilenceInterpretationLoopRPP(BaseRPP):
             requirements={"presence_continuation", "repair_availability", "memory_integration"},
             type_terms={"absence", "unreachable", "memory"},
         )
+        reversibility_pressure = state.relation_metrics.get("action_reversibility.pressure", 0.0)
+        reversibility_crossed = state.relation_metrics.get("action_reversibility.threshold_crossed", 0.0)
         score = (
             state.relation_metrics.get("silence_charge", 0.0) * weights["silence_charge"]
             + p1.relevance_triggers.get("delayed_reply", 0.0) * weights["delay_relevance"]
@@ -124,6 +126,8 @@ class SilenceInterpretationLoopRPP(BaseRPP):
             + state.relation_metrics.get("repair_debt", 0.0) * weights["repair_debt"]
             + injury_memory(state) * weights.get("injury_memory", 0.0)
             + future_pressure * weights.get("future_constraint_pressure", 0.045)
+            + reversibility_pressure * weights.get("reversibility_pressure", 0.075)
+            + reversibility_crossed * weights.get("reversibility_crossed", 0.035)
         )
         if score >= self.config["threshold"]:  # type: ignore[operator]
             return Activation(self.rpp_id, clamp(score), ["p1", "p2"], activation_evidence(events, future_refs, window=3), "absence becomes communicative evidence")

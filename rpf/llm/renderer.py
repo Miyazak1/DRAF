@@ -78,6 +78,15 @@ LABELS = {
     "private_resolution_before_public_reading": "被公开解读前的私人解决",
     "low-cost_trust_update": "低成本信任更新",
     "ordinary_work_or_errand_completion": "普通工作或杂事完成",
+    "recoverable": "仍可修复",
+    "narrowing": "可逆性收窄",
+    "threshold_crossed": "越过阈值",
+    "symbolic_only": "只能象征性修复",
+    "ordinary_repair_still_available": "普通修复仍可用",
+    "direct_repair_still_possible": "直接修复仍可能",
+    "repair_requires_extra_cost": "修复需要额外代价",
+    "repair_requires_explicit_counter_history": "修复需要明确改写历史",
+    "only_symbolic_acknowledgement_remains": "只剩象征性承认",
     "body_management": "身体管理",
     "case_fixation": "案件固着",
     "threat_monitoring": "威胁监控",
@@ -118,6 +127,7 @@ def build_render_payload(output_dir: Path, max_frames: int | None = None) -> dic
         "environment_trace": payload.get("environment", []),
         "attention_trace": payload.get("attention", []),
         "opportunity_trace": payload.get("opportunity", []),
+        "reversibility_trace": payload.get("reversibility", []),
         "memory_trace": payload.get("memory", []),
         "summary": payload.get("summary"),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
@@ -136,6 +146,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
     environment_trace = render_payload.get("environment_trace", []) or []
     attention_trace = render_payload.get("attention_trace", []) or []
     opportunity_trace = render_payload.get("opportunity_trace", []) or []
+    reversibility_trace = render_payload.get("reversibility_trace", []) or []
     memory_trace = render_payload.get("memory_trace", []) or []
     title = canon.get("title") or "RPF 故事回放"
     lines = [
@@ -158,6 +169,7 @@ def deterministic_markdown(render_payload: dict[str, Any]) -> str:
         f"- 日常生态：{_daily_ecology_summary(environment_trace)}",
         f"- 注意力漂移：{_attention_drift_summary(attention_trace)}",
         f"- 机会成本：{_opportunity_cost_summary(opportunity_trace)}",
+        f"- 行动可逆性：{_reversibility_summary(reversibility_trace)}",
         f"- 地点耦合：{_location_coupling_summary(inquiry_trace)}",
         f"- 证据可达性：{_evidence_access_summary(inquiry_trace)}",
         f"- 案件记忆：{_case_memory_summary(memory_trace)}",
@@ -326,6 +338,18 @@ def _opportunity_cost_summary(opportunity_trace: list[dict[str, Any]]) -> str:
     )
 
 
+def _reversibility_summary(reversibility_trace: list[dict[str, Any]]) -> str:
+    if not reversibility_trace:
+        return "-"
+    latest = max(reversibility_trace[-10:], key=lambda item: float(item.get("threshold_proximity") or 0.0))
+    return (
+        f"{latest.get('process_id', '-')}：{_label(latest.get('threshold_state', '-'))}；"
+        f"可逆宽度 {_fmt(latest.get('reversibility_width'))}，"
+        f"阈值接近 {_fmt(latest.get('threshold_proximity'))}，"
+        f"修复路径 {_label(latest.get('recovery_route', '-'))}"
+    )
+
+
 def _case_memory_summary(memory_trace: list[dict[str, Any]]) -> str:
     case_memories = [
         item
@@ -427,6 +451,7 @@ def llm_markdown(
                 "environment_trace",
                 "attention_trace",
                 "opportunity_trace",
+                "reversibility_trace",
                 "memory_trace",
             ],
             "must_not_invent": [
@@ -451,6 +476,7 @@ def llm_markdown(
                 "changed daily ecology state",
                 "changed attention drift state",
                 "changed opportunity cost state",
+                "changed action reversibility state",
                 "changed case memory reconstruction",
                 "causes not present in viability/action/expression/recognition evidence",
             ],

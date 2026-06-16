@@ -23,6 +23,7 @@ class TemporalScheduler:
         daily_ecology_pressure = self._daily_ecology_pressure(state)
         attention_pressure = self._attention_pressure(state)
         opportunity_pressure = self._opportunity_pressure(state)
+        reversibility_pressure = self._reversibility_pressure(state)
         fatigue = sum(p.fatigue for p in state.processes.values()) / max(1, len(state.processes))
         recognition = max(
             (d.current_pressure for p in state.processes.values() for d in p.recognition_demands),
@@ -58,6 +59,7 @@ class TemporalScheduler:
             + daily_ecology_pressure * scene_weights.get("daily_ecology_pressure", 0.04)
             + attention_pressure * scene_weights.get("attention_pressure", 0.035)
             + opportunity_pressure * scene_weights.get("opportunity_pressure", 0.045)
+            + reversibility_pressure * scene_weights.get("reversibility_pressure", 0.025)
             + fatigue * scene_weights["mean_fatigue"]
             + scene_viability_bias
         )
@@ -72,6 +74,7 @@ class TemporalScheduler:
             + daily_ecology_pressure * micro_weights.get("daily_ecology_pressure", 0.06)
             + attention_pressure * micro_weights.get("attention_pressure", 0.04)
             + opportunity_pressure * micro_weights.get("opportunity_pressure", 0.032)
+            + reversibility_pressure * micro_weights.get("reversibility_pressure", 0.018)
             + (state.tick % 3 == 1) * micro_weights["routine_overlap_bonus"]
             + scene_score * micro_weights["scene_score"]
             + micro_viability_bias
@@ -109,6 +112,7 @@ class TemporalScheduler:
                 "daily_ecology_pressure": round(daily_ecology_pressure, 4),
                 "attention_pressure": round(attention_pressure, 4),
                 "opportunity_pressure": round(opportunity_pressure, 4),
+                "reversibility_pressure": round(reversibility_pressure, 4),
                 "mean_fatigue": round(fatigue, 4),
                 "recognition_pressure": round(recognition, 4),
                 "viability_pressure": round(viability_preview.get("viability_pressure", 0.0), 4),
@@ -196,3 +200,9 @@ class TemporalScheduler:
             if key.startswith("opportunity_cost.")
         ]
         return min(1.0, sum(values) * 0.42)
+
+    def _reversibility_pressure(self, state: SimulationState) -> float:
+        base = float(state.relation_metrics.get("action_reversibility.pressure", 0.0) or 0.0)
+        crossed = float(state.relation_metrics.get("action_reversibility.threshold_crossed", 0.0) or 0.0)
+        symbolic = float(state.relation_metrics.get("action_reversibility.symbolic_only", 0.0) or 0.0)
+        return min(1.0, base * 0.7 + crossed * 0.55 + symbolic * 0.75)

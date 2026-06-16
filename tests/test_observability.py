@@ -22,6 +22,7 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     relevance = json.loads((tmp_path / "run" / "relevance_trace.json").read_text())
     attention = json.loads((tmp_path / "run" / "attention_trace.json").read_text())
     opportunity = json.loads((tmp_path / "run" / "opportunity_trace.json").read_text())
+    reversibility = json.loads((tmp_path / "run" / "reversibility_trace.json").read_text())
     position = json.loads((tmp_path / "run" / "position_trace.json").read_text())
     binding_trace = json.loads((tmp_path / "run" / "binding_trace.json").read_text())
     expectation = json.loads((tmp_path / "run" / "expectation_trace.json").read_text())
@@ -51,9 +52,11 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert all("daily_ecology_pressure" in item["input_factors"] for item in scheduler)
     assert all("attention_pressure" in item["input_factors"] for item in scheduler)
     assert all("opportunity_pressure" in item["input_factors"] for item in scheduler)
+    assert all("reversibility_pressure" in item["input_factors"] for item in scheduler)
     assert any(item["input_factors"]["daily_ecology_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["attention_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["opportunity_pressure"] > 0 for item in scheduler[1:])
+    assert any(item["input_factors"]["reversibility_pressure"] > 0 for item in scheduler[1:])
     assert all("viability_rhythm" in item for item in scheduler)
     assert all("scene_readiness" in item["viability_rhythm"] for item in scheduler)
     assert any(item["viability_rhythm"]["scene_viability_bias"] > 0 for item in scheduler)
@@ -215,6 +218,7 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
     assert all(item["caused_by_events"] for item in relevance)
     assert any("AttentionDriftEvent" in item["evidence_event_types"] for item in relevance)
     assert any("OpportunityCostEvent" in item["evidence_event_types"] for item in relevance)
+    assert any("ActionReversibilityEvent" in item["evidence_event_types"] for item in relevance)
 
     assert attention
     assert all(item["event_type"] == "AttentionDriftEvent" for item in attention)
@@ -235,6 +239,13 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
         for item in opportunity
     )
     assert all(item["caused_by_events"] for item in opportunity)
+
+    assert reversibility
+    assert all(item["event_type"] == "ActionReversibilityEvent" for item in reversibility)
+    assert all(item["reversibility_id"] for item in reversibility)
+    assert any(item["threshold_state"] in {"recoverable", "narrowing", "threshold_crossed", "symbolic_only"} for item in reversibility)
+    assert any(item["threshold_state"] in {"narrowing", "threshold_crossed", "symbolic_only"} for item in reversibility)
+    assert all(item["caused_by_events"] for item in reversibility)
 
     assert position
     assert any(item["position_key"].startswith("position_field.") for item in position)
@@ -367,6 +378,11 @@ def test_observability_outputs_scheduler_rpp_and_projection_traces(tmp_path):
         for item in viability
         for constraint in item["future_constraints"]
     )
+    assert any(
+        constraint["source_layer"] == "action_reversibility"
+        for item in viability
+        for constraint in item["future_constraints"]
+    )
     assert any(item["dramatic_tension"] > 0 for item in viability)
     viability_event_types = {
         "ConstraintActivationEvent",
@@ -478,6 +494,7 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     affordance = json.loads((output_dir / "affordance_trace.json").read_text())
     attention = json.loads((output_dir / "attention_trace.json").read_text())
     opportunity = json.loads((output_dir / "opportunity_trace.json").read_text())
+    reversibility = json.loads((output_dir / "reversibility_trace.json").read_text())
     timeline_events = [
         json.loads(line)
         for line in (output_dir / "timeline.jsonl").read_text().splitlines()
@@ -546,15 +563,19 @@ def test_yellow_sign_outputs_inquiry_trace_and_events(tmp_path):
     assert all("daily_ecology_pressure" in item["input_factors"] for item in scheduler)
     assert all("attention_pressure" in item["input_factors"] for item in scheduler)
     assert all("opportunity_pressure" in item["input_factors"] for item in scheduler)
+    assert all("reversibility_pressure" in item["input_factors"] for item in scheduler)
     assert any(item["input_factors"]["inquiry_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["institutional_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["daily_ecology_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["attention_pressure"] > 0 for item in scheduler[1:])
     assert any(item["input_factors"]["opportunity_pressure"] > 0 for item in scheduler[1:])
+    assert any(item["input_factors"]["reversibility_pressure"] > 0 for item in scheduler[1:])
     assert attention
     assert any(item["dominant_focus"] in {"case_fixation", "threat_monitoring", "memory_intrusion"} for item in attention)
     assert opportunity
     assert any(item["cost_type"] in {"evidence_window_loss", "trust_window_loss", "repair_window_loss", "social_exposure_cost"} for item in opportunity)
+    assert reversibility
+    assert any(item["threshold_state"] in {"recoverable", "narrowing", "threshold_crossed", "symbolic_only"} for item in reversibility)
     assert any(
         key.startswith("inquiry_")
         for item in affordance

@@ -71,6 +71,7 @@ def next_render_segment(
         "environment_trace": payload.get("environment", []),
         "attention_trace": payload.get("attention", []),
         "opportunity_trace": payload.get("opportunity", []),
+        "reversibility_trace": payload.get("reversibility", []),
         "memory_trace": payload.get("memory", []),
         "summary": payload.get("summary", {}),
         "relationship_view": payload.get("derived_views", {}).get("relationship_view", {}),
@@ -172,6 +173,9 @@ def deterministic_segment_markdown(segment: dict[str, Any]) -> str:
         opportunity = _opportunity_brief(frame)
         if opportunity:
             lines.append(f"  - 机会成本：{opportunity}")
+        reversibility = _reversibility_brief(frame)
+        if reversibility:
+            lines.append(f"  - 行动可逆性：{reversibility}")
     return "\n".join(lines).strip() + "\n"
 
 
@@ -221,6 +225,19 @@ def _opportunity_brief(frame: dict[str, Any]) -> str:
     return f"{label}，错过{window}，强度 {intensity}"
 
 
+def _reversibility_brief(frame: dict[str, Any]) -> str:
+    reversibility = frame.get("reversibility", {}) or {}
+    if not reversibility:
+        return ""
+    label = reversibility.get("threshold_label") or reversibility.get("threshold_state")
+    route = reversibility.get("recovery_route_label") or reversibility.get("recovery_route")
+    try:
+        width = f"{float(reversibility.get('reversibility_width') or 0.0):.2f}"
+    except (TypeError, ValueError):
+        width = "-"
+    return f"{label}，剩余可逆宽度 {width}，修复路径：{route}"
+
+
 def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str, Any]:
     previous = load_render_segments(output_dir)[-2:]
     return {
@@ -252,6 +269,11 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
         "opportunity_trace": [
             item
             for item in segment.get("opportunity_trace", [])[-16:]
+            if int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
+        ],
+        "reversibility_trace": [
+            item
+            for item in segment.get("reversibility_trace", [])[-16:]
             if int(item.get("tick", 0) or 0) <= int(segment.get("tick_end", 0) or 0)
         ],
         "previous_story_tail": [
@@ -289,6 +311,7 @@ def _segment_llm_payload(segment: dict[str, Any], output_dir: Path) -> dict[str,
             "daily_ecology_trace_is_authoritative": True,
             "attention_trace_is_authoritative": True,
             "opportunity_trace_is_authoritative": True,
+            "reversibility_trace_is_authoritative": True,
             "case_memory_trace_is_authoritative": True,
             "do_not_add_case_facts_evidence_witnesses_or_culprits": True,
             "if_multiple_frames_have_the_same_summary": "write them as a sustained pattern with small pressure changes; do not restage the same dialogue or objects repeatedly",

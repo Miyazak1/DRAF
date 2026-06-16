@@ -550,6 +550,7 @@ class RelationalViabilityEngine:
                 )
             )
         traces.extend(self._opportunity_future_constraints(state))
+        traces.extend(self._action_reversibility_future_constraints(state))
         return traces
 
     def _opportunity_future_constraints(self, state: SimulationState) -> list[FutureConstraintTrace]:
@@ -607,6 +608,54 @@ class RelationalViabilityEngine:
                     intensity=clamp(value * 0.9),
                     persistence="decaying",
                     mechanism=f"missed {cost_type} window narrows future alternatives after the action path",
+                    downstream_effects=downstream,
+                    evidence_refs=[],
+                )
+            )
+        return traces
+
+    def _action_reversibility_future_constraints(self, state: SimulationState) -> list[FutureConstraintTrace]:
+        pressure = clamp(state.relation_metrics.get("action_reversibility.pressure", 0.0))
+        crossed = clamp(state.relation_metrics.get("action_reversibility.threshold_crossed", 0.0))
+        symbolic = clamp(state.relation_metrics.get("action_reversibility.symbolic_only", 0.0))
+        specs = [
+            (
+                "reversibility_pressure",
+                pressure,
+                "action_reversibility_pressure_constraint",
+                ["repair_availability", "recognition_access"],
+                ["future repair must address the action's residue before it can restore ordinary interaction"],
+            ),
+            (
+                "threshold_crossed",
+                crossed,
+                "action_threshold_crossed_future_constraint",
+                ["memory_integration", "relation_continuation", "repair_availability"],
+                ["the action can no longer be treated as a purely local disturbance"],
+            ),
+            (
+                "symbolic_only",
+                symbolic,
+                "symbolic_only_repair_future_constraint",
+                ["identity_continuity", "speech_access", "truth_integration"],
+                ["future repair can acknowledge the mark but cannot restore the lost alternative"],
+            ),
+        ]
+        traces: list[FutureConstraintTrace] = []
+        for index, (slug, value, constraint_type, requirements, downstream) in enumerate(specs, start=1):
+            if value <= 0.04:
+                continue
+            traces.append(
+                FutureConstraintTrace(
+                    constraint_id=f"fc-rev-{index:02d}-{slug}",
+                    constraint_type=constraint_type,
+                    source_layer="action_reversibility",
+                    source_ref_id=f"action_reversibility.{slug}",
+                    affected_processes=sorted(state.processes),
+                    constrained_requirements=requirements,
+                    intensity=clamp(value * 0.82),
+                    persistence="decaying" if slug == "reversibility_pressure" else "operative",
+                    mechanism=f"{slug} narrows what later action can still undo",
                     downstream_effects=downstream,
                     evidence_refs=[],
                 )

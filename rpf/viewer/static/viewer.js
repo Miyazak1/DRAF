@@ -132,6 +132,15 @@ const ZH = {
   private_resolution_before_public_reading: "被公开解读前的私人解决",
   "low-cost_trust_update": "低成本信任更新",
   ordinary_work_or_errand_completion: "普通工作或杂事完成",
+  recoverable: "仍可修复",
+  narrowing: "可逆性收窄",
+  threshold_crossed: "越过阈值",
+  symbolic_only: "只能象征性修复",
+  ordinary_repair_still_available: "普通修复仍可用",
+  direct_repair_still_possible: "直接修复仍可能",
+  repair_requires_extra_cost: "修复需要额外代价",
+  repair_requires_explicit_counter_history: "修复需要明确改写历史",
+  only_symbolic_acknowledgement_remains: "只剩象征性承认",
   body_management: "身体管理",
   case_fixation: "案件固着",
   threat_monitoring: "威胁监控",
@@ -541,6 +550,7 @@ function renderStory() {
           ${recognition.outcome ? `<span class="tag">承认：${zh(recognition.outcome)}</span>` : ""}
           ${frame.attention_drift?.dominant_focus ? `<span class="tag">注意：${zh(frame.attention_drift.dominant_focus)}</span>` : ""}
           ${frame.opportunity_cost?.cost_type ? `<span class="tag">机会成本：${zh(frame.opportunity_cost.cost_type)}</span>` : ""}
+          ${frame.reversibility?.threshold_state ? `<span class="tag">可逆性：${zh(frame.reversibility.threshold_state)}</span>` : ""}
           ${frame.daily_ecology?.routine_phase ? `<span class="tag">日常：${zh(frame.daily_ecology.routine_phase)}</span>` : ""}
           ${frame.memory_count ? `<span class="tag">记忆重构：${frame.memory_count}</span>` : ""}
           ${frame.fate_count ? `<span class="tag">命运转折：${frame.fate_count}</span>` : ""}
@@ -556,6 +566,7 @@ function renderStory() {
     <div class="state-row"><span>物质紧迫</span><b>${fmt(pressure.material_urgency)}</b></div>
     <div class="state-row"><span>日常压力</span><b>${fmt(pressure.daily_ecology_pressure)}</b></div>
     <div class="state-row"><span>机会成本</span><b>${fmt(pressure.opportunity_pressure)}</b></div>
+    <div class="state-row"><span>可逆性压力</span><b>${fmt(pressure.reversibility_pressure)}</b></div>
     <div class="state-row"><span>冲突压力</span><b>${fmt(pressure.conflict_pressure)}</b></div>
     <div class="state-row"><span>修复债</span><b>${fmt(pressure.repair_debt)}</b></div>
     <div class="state-row"><span>记忆压力</span><b>${fmt(pressure.memory_pressure)}</b></div>
@@ -608,6 +619,7 @@ function buildEvolutionPoints() {
       recognition_pressure: numberOrNull(pressure.recognition_pressure ?? recognition.demand_pressure),
       memory_pressure: numberOrNull(pressure.memory_pressure),
       opportunity_pressure: numberOrNull(pressure.opportunity_pressure),
+      reversibility_pressure: numberOrNull(pressure.reversibility_pressure),
     };
   }).filter((point) => point.tick > 0);
 }
@@ -639,6 +651,7 @@ function renderPressureChart(points) {
     {key: "recognition_pressure", label: "承认压力", color: "#315f8f"},
     {key: "memory_pressure", label: "记忆压力", color: "#6f5a8f"},
     {key: "opportunity_pressure", label: "机会成本", color: "#7a6a2d"},
+    {key: "reversibility_pressure", label: "可逆性压力", color: "#8b3d5b"},
   ];
   const width = Math.max(620, points.length * 26);
   const height = 260;
@@ -718,6 +731,7 @@ function renderEvolutionStats(points) {
     ["承认压力", trend(last.recognition_pressure, previous.recognition_pressure)],
     ["记忆压力", trend(last.memory_pressure, previous.memory_pressure)],
     ["机会成本", trend(last.opportunity_pressure, previous.opportunity_pressure)],
+    ["可逆性压力", trend(last.reversibility_pressure, previous.reversibility_pressure)],
   ];
   $("evolutionStats").innerHTML = rows.map(([label, value]) => `
     <div class="state-row"><span>${label}</span><b>${value}</b></div>
