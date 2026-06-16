@@ -27,6 +27,32 @@ def test_local_world_schema_loads():
     assert any(route.route_id == "river_bridge_to_abandoned_factory" for route in spec.routes)
 
 
+def test_loader_supplies_bounded_local_world_for_every_example():
+    for scenario_path in Path("examples").glob("*.yaml"):
+        scenario = load_scenario(scenario_path)
+        spec = LocalWorldSpec.model_validate(scenario["local_world"])
+
+        assert spec.id
+        assert spec.locations
+        assert spec.routes
+        assert spec.boundary_rules.max_scene_scope == "local_world_only"
+        assert spec.boundary_rules.new_location_policy == "discovery_required"
+        assert spec.boundary_rules.offscreen_event_policy == "trace_required"
+
+
+def test_generated_local_world_emits_trace_for_legacy_scenario(tmp_path):
+    scenario_path = Path("examples/shared_apartment_unresolved_sacrifice.yaml")
+    scenario = load_scenario(scenario_path)
+    output_dir = tmp_path / "run"
+    sim = Simulator.from_scenario(scenario, scenario_path, seed=42)
+    sim.run(steps=2, output_dir=output_dir)
+    trace = json.loads((output_dir / "local_world_trace.json").read_text(encoding="utf-8"))
+
+    assert trace
+    assert any(item["event_type"] == "LocalWorldUpdateEvent" for item in trace)
+    assert any(item["event_type"] == "RouteAccessEvent" for item in trace)
+
+
 def test_all_declared_routes_reference_valid_locations():
     spec = LocalWorldSpec.model_validate(load_scenario(SCENARIO)["local_world"])
     location_ids = {location.location_id for location in spec.locations}
